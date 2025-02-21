@@ -4,7 +4,7 @@ import { AuthModule } from './auth/auth.module';
 import { envs } from './config/envs';
 import { UsersModule } from './user/user.module';
 import { SeedModule } from './seed/seed.module';
-
+import * as crypto from 'crypto';
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({

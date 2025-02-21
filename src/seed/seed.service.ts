@@ -5,7 +5,7 @@ import { View } from 'src/user/entities/view.entity';
 import { User } from 'src/user/entities/user.entity';
 import { In, Repository } from 'typeorm';
 import { rolData, vistaData } from './data/auth.data';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { UsersData } from './data/user.data';
 
 @Injectable()

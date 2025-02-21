@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
@@ -15,6 +16,8 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
 import { UsersService } from './user.service';
+import { PaginatedResult } from 'src/common/helpers/pagination.helper';
+import { FindUsersDto } from './dto/find-users.dto';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -22,19 +25,22 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Roles('SYS')
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
 
   @Get()
-  @Roles('ADMIN', 'SUPER_ADMIN')
-  findAll(@GetUser() user: User) {
-    return this.usersService.findAll(user.id);
+  @Roles('SYS')
+  async findAll(
+    @GetUser() user: User,
+    @Query() findUsersDto: FindUsersDto,
+  ): Promise<PaginatedResult<User>> {
+    return this.usersService.findAll(user.id, findUsersDto);
   }
 
   @Patch(':id')
-  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Roles('SYS')
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);
   }
