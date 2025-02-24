@@ -44,4 +44,11 @@ export class UsersController {
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);
   }
+
+  //roles
+  @Get('roles')
+  @Roles('SYS')
+  allRoles() {
+    return this.usersService.allRoles();
+  }
 }

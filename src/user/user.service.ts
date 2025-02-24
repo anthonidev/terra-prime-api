@@ -1,48 +1,71 @@
 import {
   ConflictException,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
-import { Not, Repository } from 'typeorm';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { User } from './entities/user.entity';
 import {
   PaginatedResult,
   PaginationHelper,
 } from 'src/common/helpers/pagination.helper';
+import { Repository } from 'typeorm';
+import { CreateUserDto } from './dto/create-user.dto';
 import { FindUsersDto } from './dto/find-users.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { Role } from './entities/role.entity';
+import { User } from './entities/user.entity';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Role)
+    private readonly roleRepository: Repository<Role>,
   ) {}
 
   async create(
-    createUserDto: CreateUserDto,
+    dto: CreateUserDto,
   ): Promise<Omit<User, 'password' | 'emailToLowerCase' | 'fullName'>> {
     const existingUser = await this.userRepository.findOne({
-      where: { email: createUserDto.email },
+      where: { email: dto.email },
     });
 
     if (existingUser) {
       throw new ConflictException('EL correo electrónico ya existe');
     }
+    if (dto.roleId) {
+      const role = await this.roleRepository.findOne({
+        where: { id: dto.roleId, isActive: true },
+      });
 
-    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+      if (!role) {
+        throw new NotFoundException(
+          `El rol con ID ${dto.roleId} no existe o no está activo`,
+        );
+      }
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
 
     const user = this.userRepository.create({
-      ...createUserDto,
+      ...dto,
+      ...(dto.roleId && { role: { id: dto.roleId } }),
       password: hashedPassword,
     });
 
     const savedUser = await this.userRepository.save(user);
     const { password, ...result } = savedUser;
     return result;
+  }
+
+  async allRoles(): Promise<Role[]> {
+    return this.roleRepository.find({
+      where: { isActive: true },
+      select: ['id', 'code', 'name'],
+    });
   }
 
   async findAll(
@@ -115,20 +138,44 @@ export class UsersService {
     });
   }
 
-  async update(id: string, updateUserDto: UpdateUserDto) {
+  async update(id: string, dto: UpdateUserDto) {
     const user = await this.findOne(id);
+    if (!user) {
+      throw new NotFoundException(`Usuario con ID ${id} no encontrado`);
+    }
 
-    if (updateUserDto.email && updateUserDto.email !== user.email) {
+    if (dto.email && dto.email !== user.email) {
       const existingUser = await this.userRepository.findOne({
-        where: { email: updateUserDto.email },
+        where: { email: dto.email },
       });
 
       if (existingUser) {
-        throw new ConflictException('Email already exists');
+        throw new ConflictException('El email ya está en uso');
       }
     }
 
-    await this.userRepository.update(id, updateUserDto);
-    return this.findOne(id);
+    if (dto.roleId) {
+      const role = await this.roleRepository.findOne({
+        where: { id: dto.roleId, isActive: true },
+      });
+
+      if (!role) {
+        throw new NotFoundException(
+          `El rol con ID ${dto.roleId} no existe o no está activo`,
+        );
+      }
+    }
+
+    try {
+      await this.userRepository.save({
+        id,
+        ...dto,
+        ...(dto.roleId && { role: { id: dto.roleId } }),
+      });
+
+      return this.findOne(id);
+    } catch (error) {
+      throw new InternalServerErrorException('Error al actualizar el usuario');
+    }
   }
 }
