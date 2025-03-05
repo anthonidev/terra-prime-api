@@ -4,6 +4,7 @@ import { AuthModule } from './auth/auth.module';
 import { envs } from './config/envs';
 import { UsersModule } from './user/user.module';
 import { SeedModule } from './seed/seed.module';
+import { ProjectModule } from './project/project.module';
 import * as crypto from 'crypto';
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import * as crypto from 'crypto';
     AuthModule,
     UsersModule,
     SeedModule,
+    ProjectModule,
   ],
 })
 export class AppModule {}

@@ -23,7 +23,7 @@ export class AuthService {
     private jwtService: JwtService,
     @InjectRepository(View)
     private viewRepository: Repository<View>,
-  ) {}
+  ) { }
 
   private cleanView(view: View): CleanView {
     const {

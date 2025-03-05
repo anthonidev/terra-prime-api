@@ -28,7 +28,7 @@ export class UsersService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Role)
     private readonly roleRepository: Repository<Role>,
-  ) {}
+  ) { }
 
   private async findOneOrFail(
     criteria: FindOptionsWhere<User>,
@@ -36,7 +36,21 @@ export class UsersService {
   ): Promise<User> {
     const user = await this.userRepository.findOne({
       where: criteria,
-      relations,
+      //add passwrod a la lista de campos a excluir
+      select: [
+        'id',
+        'email',
+        'firstName',
+        'lastName',
+        'document',
+        'photo',
+        'isActive',
+        'createdAt',
+        'updatedAt',
+        'password',
+      ],
+      relations
+
     });
 
     if (!user) {
@@ -158,6 +172,7 @@ export class UsersService {
           'user.firstName',
           'user.lastName',
           'user.document',
+          'user.password',
           'user.photo',
           'user.isActive',
           'user.createdAt',
