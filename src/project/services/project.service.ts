@@ -1,11 +1,31 @@
-import { Injectable, Logger, ConflictException, InternalServerErrorException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
-import { ProjectExcelDto, LotExcelDto } from '../dto/bulk-project-upload.dto';
-import { Project } from '../entities/project.entity';
-import { Stage } from '../entities/stage.entity';
+import { DataSource, Repository } from 'typeorm';
+import {
+  LotExcelDto,
+  LotStatus,
+  ProjectExcelDto,
+} from '../dto/bulk-project-upload.dto';
+import {
+  BlockDetailDto,
+  ProjectDetailDto,
+  StageDetailDto,
+} from '../dto/project-detail.dto';
+import {
+  ProjectListItemDto,
+  ProjectListResponseDto,
+} from '../dto/project-list.dto';
+import { UpdateProjectDto } from '../dto/update-project.dto';
 import { Block } from '../entities/block.entity';
 import { Lot } from '../entities/lot.entity';
+import { Project } from '../entities/project.entity';
+import { Stage } from '../entities/stage.entity';
 
 @Injectable()
 export class ProjectService {
@@ -14,35 +34,25 @@ export class ProjectService {
   constructor(
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
-    @InjectRepository(Stage)
-    private readonly stageRepository: Repository<Stage>,
-    @InjectRepository(Block)
-    private readonly blockRepository: Repository<Block>,
-    @InjectRepository(Lot)
-    private readonly lotRepository: Repository<Lot>,
     private readonly dataSource: DataSource,
-  ) { }
+  ) {}
 
-  /**
-   * Crea un proyecto junto con todas sus etapas, manzanas y lotes en una transacción
-   */
   async createBulkProject(projectData: ProjectExcelDto): Promise<Project> {
-    // Verificar si ya existe un proyecto con ese nombre
     const existingProject = await this.projectRepository.findOne({
       where: { name: projectData.name },
     });
 
     if (existingProject) {
-      throw new ConflictException(`Ya existe un proyecto con el nombre ${projectData.name}`);
+      throw new ConflictException(
+        `Ya existe un proyecto con el nombre ${projectData.name}`,
+      );
     }
 
-    // Crear un queryRunner para gestionar la transacción
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      // Crear el proyecto
       const project = queryRunner.manager.create(Project, {
         name: projectData.name,
         currency: projectData.currency,
@@ -51,10 +61,10 @@ export class ProjectService {
 
       await queryRunner.manager.save(project);
 
-      // Organizar los lotes por etapa y manzana
-      const lotesByStageAndBlock = this.groupLotsByStageAndBlock(projectData.lots);
+      const lotesByStageAndBlock = this.groupLotsByStageAndBlock(
+        projectData.lots,
+      );
 
-      // Crear etapas, manzanas y lotes
       for (const stageName in lotesByStageAndBlock) {
         const stage = queryRunner.manager.create(Stage, {
           name: stageName,
@@ -73,7 +83,6 @@ export class ProjectService {
 
           await queryRunner.manager.save(block);
 
-          // Crear lotes para esta manzana
           for (const lotData of lotesByStageAndBlock[stageName][blockName]) {
             const lot = queryRunner.manager.create(Lot, {
               name: lotData.lot.toString(),
@@ -89,15 +98,15 @@ export class ProjectService {
         }
       }
 
-      // Confirmar la transacción
       await queryRunner.commitTransaction();
 
-      // Retornar el proyecto creado con todas sus relaciones
       return this.findProjectByName(projectData.name);
     } catch (error) {
-      // Revertir cambios en caso de error
       await queryRunner.rollbackTransaction();
-      this.logger.error(`Error al crear proyecto: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error al crear proyecto: ${error.message}`,
+        error.stack,
+      );
 
       if (error instanceof ConflictException) {
         throw error;
@@ -105,19 +114,16 @@ export class ProjectService {
 
       throw new InternalServerErrorException('Error al crear el proyecto');
     } finally {
-      // Liberar el queryRunner
       await queryRunner.release();
     }
   }
 
-  /**
-   * Agrupa los lotes por etapa y manzana para facilitar la creación
-   */
-  private groupLotsByStageAndBlock(lots: LotExcelDto[]): { [stage: string]: { [block: string]: LotExcelDto[] } } {
+  private groupLotsByStageAndBlock(lots: LotExcelDto[]): {
+    [stage: string]: { [block: string]: LotExcelDto[] };
+  } {
     const result: { [stage: string]: { [block: string]: LotExcelDto[] } } = {};
 
     for (const lot of lots) {
-      // Inicializar objetos si no existen
       if (!result[lot.stage]) {
         result[lot.stage] = {};
       }
@@ -126,20 +132,180 @@ export class ProjectService {
         result[lot.stage][lot.block] = [];
       }
 
-      // Añadir lote a su grupo
       result[lot.stage][lot.block].push(lot);
     }
 
     return result;
   }
 
-  /**
-   * Busca un proyecto por nombre con todas sus relaciones
-   */
   async findProjectByName(name: string): Promise<Project> {
     return this.projectRepository.findOne({
       where: { name },
       relations: ['stages', 'stages.blocks', 'stages.blocks.lots'],
     });
+  }
+
+  async findAll(): Promise<ProjectListResponseDto> {
+    try {
+      const projects = await this.projectRepository.find({
+        relations: ['stages', 'stages.blocks', 'stages.blocks.lots'],
+        order: {
+          updatedAt: 'DESC',
+        },
+      });
+
+      const projectDtos: ProjectListItemDto[] = projects.map((project) => {
+        let blockCount = 0;
+        let lotCount = 0;
+        let activeLotCount = 0;
+
+        project.stages.forEach((stage) => {
+          blockCount += stage.blocks.length;
+
+          stage.blocks.forEach((block) => {
+            lotCount += block.lots.length;
+
+            activeLotCount += block.lots.filter(
+              (lot) => lot.status === LotStatus.ACTIVE,
+            ).length;
+          });
+        });
+
+        return {
+          id: project.id,
+          name: project.name,
+          currency: project.currency,
+          isActive: project.isActive,
+          logo: project.logo,
+          stageCount: project.stages.length,
+          blockCount,
+          lotCount,
+          activeLotCount,
+          createdAt: project.createdAt,
+          updatedAt: project.updatedAt,
+        };
+      });
+
+      return {
+        projects: projectDtos,
+        total: projectDtos.length,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error al obtener proyectos: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException('Error al obtener los proyectos');
+    }
+  }
+
+  async findOne(id: string): Promise<ProjectDetailDto> {
+    try {
+      const project = await this.projectRepository.findOne({
+        where: { id },
+        relations: ['stages', 'stages.blocks', 'stages.blocks.lots'],
+      });
+
+      if (!project) {
+        throw new NotFoundException(`Proyecto con ID ${id} no encontrado`);
+      }
+
+      const stages: StageDetailDto[] = project.stages.map((stage) => {
+        const blocks: BlockDetailDto[] = stage.blocks.map((block) => {
+          return {
+            id: block.id,
+            name: block.name,
+            isActive: block.isActive,
+            lotCount: block.lots.length,
+            activeLots: block.lots.filter((lot) => lot.status === 'Activo')
+              .length,
+            reservedLots: block.lots.filter((lot) => lot.status === 'Separado')
+              .length,
+            soldLots: block.lots.filter((lot) => lot.status === 'Vendido')
+              .length,
+            inactiveLots: block.lots.filter((lot) => lot.status === 'Inactivo')
+              .length,
+          };
+        });
+
+        return {
+          id: stage.id,
+          name: stage.name,
+          isActive: stage.isActive,
+          blocks,
+        };
+      });
+
+      const projectDetail: ProjectDetailDto = {
+        id: project.id,
+        name: project.name,
+        currency: project.currency,
+        isActive: project.isActive,
+        logo: project.logo,
+        logoPublicId: project.logoPublicId,
+        stages,
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt,
+      };
+
+      return projectDetail;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      this.logger.error(
+        `Error al obtener proyecto ${id}: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException('Error al obtener el proyecto');
+    }
+  }
+
+  async updateProject(
+    id: string,
+    updateProjectDto: UpdateProjectDto,
+  ): Promise<ProjectDetailDto> {
+    try {
+      const project = await this.projectRepository.findOne({
+        where: { id },
+        relations: ['stages', 'stages.blocks', 'stages.blocks.lots'],
+      });
+
+      if (!project) {
+        throw new NotFoundException(`Proyecto con ID ${id} no encontrado`);
+      }
+
+      if (updateProjectDto.name && updateProjectDto.name !== project.name) {
+        const existingProject = await this.projectRepository.findOne({
+          where: { name: updateProjectDto.name },
+        });
+
+        if (existingProject) {
+          throw new ConflictException(
+            `Ya existe un proyecto con el nombre ${updateProjectDto.name}`,
+          );
+        }
+      }
+
+      Object.assign(project, updateProjectDto);
+
+      await this.projectRepository.save(project);
+
+      return this.findOne(id);
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ConflictException
+      ) {
+        throw error;
+      }
+
+      this.logger.error(
+        `Error al actualizar proyecto ${id}: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException('Error al actualizar el proyecto');
+    }
   }
 }

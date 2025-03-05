@@ -28,7 +28,7 @@ export class UsersService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Role)
     private readonly roleRepository: Repository<Role>,
-  ) { }
+  ) {}
 
   private async findOneOrFail(
     criteria: FindOptionsWhere<User>,
@@ -49,8 +49,7 @@ export class UsersService {
         'updatedAt',
         'password',
       ],
-      relations
-
+      relations,
     });
 
     if (!user) {

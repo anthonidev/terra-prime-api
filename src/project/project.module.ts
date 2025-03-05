@@ -1,21 +1,38 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ExcelService } from './services/excel.service';
-import { ProjectService } from './services/project.service';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
-import { ProjectController } from './project.controller';
-import { Project } from './entities/project.entity';
-import { Stage } from './entities/stage.entity';
+import { BlockController } from './controllers/block.controller';
+import { LotController } from './controllers/lot.controller';
+import { ProjectController } from './controllers/project.controller';
+import { StageController } from './controllers/stage.controller';
 import { Block } from './entities/block.entity';
 import { Lot } from './entities/lot.entity';
+import { Project } from './entities/project.entity';
+import { Stage } from './entities/stage.entity';
+import { BlockService } from './services/block.service';
+import { ExcelService } from './services/excel.service';
+import { LotService } from './services/lot.service';
+import { ProjectService } from './services/project.service';
+import { StageService } from './services/stage.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, Stage, Block, Lot]),
     CloudinaryModule,
   ],
-  controllers: [ProjectController],
-  providers: [ExcelService, ProjectService],
+  controllers: [
+    ProjectController,
+    StageController,
+    BlockController,
+    LotController,
+  ],
+  providers: [
+    ExcelService,
+    ProjectService,
+    BlockService,
+    LotService,
+    StageService,
+  ],
   exports: [TypeOrmModule, ProjectService],
 })
-export class ProjectModule { }
+export class ProjectModule {}
