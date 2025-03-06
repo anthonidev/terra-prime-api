@@ -78,11 +78,11 @@ export class LotService {
       }
 
       if (search) {
-        queryBuilder.andWhere('lot.name ILIKE :search', {
-          search: `%${search}%`,
-        });
+        queryBuilder.andWhere(
+          '(lot.name ILIKE :search OR block.name ILIKE :search OR stage.name ILIKE :search)',
+          { search: `%${search}%` },
+        );
       }
-
       queryBuilder
         .orderBy('lot.name', order)
         .skip((page - 1) * limit)

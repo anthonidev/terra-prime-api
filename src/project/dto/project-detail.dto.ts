@@ -7,6 +7,7 @@ export interface BlockDetailDto {
   reservedLots: number;
   soldLots: number;
   inactiveLots: number;
+  stageId: string;
 }
 
 export interface StageDetailDto {

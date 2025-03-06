@@ -21,6 +21,7 @@ export class UpdateProjectDto {
 
   @IsOptional()
   @IsBoolean()
+  @Transform(({ value }) => value === 'true')
   isActive?: boolean;
 
   @IsOptional()

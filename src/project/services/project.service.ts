@@ -217,6 +217,7 @@ export class ProjectService {
             name: block.name,
             isActive: block.isActive,
             lotCount: block.lots.length,
+            stageId: stage.id,
             activeLots: block.lots.filter((lot) => lot.status === 'Activo')
               .length,
             reservedLots: block.lots.filter((lot) => lot.status === 'Separado')
