@@ -1,26 +1,33 @@
 # Etapa base
 FROM node:20-slim AS base
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+
+# Instalar pnpm directamente en lugar de usar corepack
+RUN npm install -g pnpm
+
 WORKDIR /app
+
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 # Etapa de construcción
 FROM base AS builder
 WORKDIR /app
-# RUN --mount=type=cache,id=pnpm,target=/pnpm/store
 COPY . .
 RUN pnpm build
 
 # Etapa de producción
 FROM node:20-slim AS runner
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable  # Asegúrate de habilitar corepack en la etapa runner
+
+# Instalar pnpm directamente en lugar de usar corepack
+RUN npm install -g pnpm
+
 WORKDIR /usr/src/app
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --prod --frozen-lockfile
 COPY --from=builder /app/dist ./dist
+
+# Configurar puerto para Railway (opcional pero recomendado)
+ENV PORT=3000
+EXPOSE 3000
+
 CMD [ "node", "dist/main" ]
