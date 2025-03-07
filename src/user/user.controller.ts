@@ -45,9 +45,7 @@ export class UsersController {
     return this.usersService.update(id, updateUserDto);
   }
 
-  //roles
-  @Get('roles')
-  @Roles('SYS')
+  @Get('roles') @Roles('SYS')
   allRoles() {
     return this.usersService.allRoles();
   }
