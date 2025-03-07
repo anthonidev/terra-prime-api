@@ -2,7 +2,7 @@ export const rolData = [
   {
     name: 'Sistema',
     code: 'SYS',
-    views: ['PROFILE', 'G_PROJECT', 'PROJECT', 'LOTE', 'LEAD', 'USER'],
+    views: ['PROFILE', 'G_PROJECT', 'PROJECT', 'NEW_PROJECT', 'LEAD', 'USER'],
   },
   {
     name: 'Recepción',
@@ -12,12 +12,12 @@ export const rolData = [
   {
     name: 'Gerente de ventas',
     code: 'GVE',
-    views: ['PROFILE', 'G_PROJECT', 'PROJECT', 'LOTE'],
+    views: ['PROFILE', 'G_PROJECT', 'PROJECT'],
   },
   {
     name: 'Ventas',
     code: 'VEN',
-    views: ['PROFILE', 'G_PROJECT', 'PROJECT', 'LOTE'],
+    views: ['PROFILE', 'G_PROJECT', 'PROJECT'],
   },
   {
     name: 'Supervisor de Cobranza',
@@ -70,11 +70,11 @@ export const vistaData = [
         parent: 'G_PROJECT',
       },
       {
-        name: 'Lotes',
-        url: '/lotes',
+        name: 'Nuevo Proyecto',
+        url: '/proyectos/nuevo',
         order: 2,
         icon: 'lote',
-        code: 'LOTE',
+        code: 'NEW_PROJECT',
         children: null,
         parent: 'G_PROJECT',
       },
