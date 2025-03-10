@@ -1,13 +1,1 @@
-import { Module } from '@nestjs/common';
-import { DashboardService } from './dashboard.service';
-import { DashboardController } from './dashboard.controller';
-import { UsersModule } from 'src/user/user.module';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { ProjectModule } from 'src/project/project.module';
-
-@Module({
-  controllers: [DashboardController],
-  providers: [DashboardService],
-  imports: [UsersModule,TypeOrmModule,ProjectModule],
-})
-export class DashboardModule {}
+import { Module } from '@nestjs/common';import { DashboardService } from './dashboard.service';import { DashboardController } from './dashboard.controller';import { UsersModule } from 'src/user/user.module';import { TypeOrmModule } from '@nestjs/typeorm';import { ProjectModule } from 'src/project/project.module';@Module({  controllers: [DashboardController],  providers: [DashboardService],  imports: [UsersModule,TypeOrmModule,ProjectModule],})export class DashboardModule {}

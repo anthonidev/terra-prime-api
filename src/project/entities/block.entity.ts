@@ -1,71 +1,1 @@
-import {
-  BeforeInsert,
-  BeforeUpdate,
-  Column,
-  CreateDateColumn,
-  Entity,
-  ManyToOne,
-  OneToMany,
-  PrimaryGeneratedColumn,
-  Unique,
-  UpdateDateColumn,
-} from 'typeorm';
-import {
-  IsBoolean,
-  IsNotEmpty,
-  MaxLength,
-  MinLength,
-  Matches,
-} from 'class-validator';
-import { Transform } from 'class-transformer';
-import { Stage } from './stage.entity';
-import { Lot } from './lot.entity';
-
-@Entity('blocks')
-@Unique(['name', 'stage']) // El nombre debe ser único dentro de la etapa
-export class Block {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
-
-  @Column()
-  @IsNotEmpty({ message: 'El nombre de la manzana es requerido' })
-  @MinLength(1, { message: 'El nombre debe tener al menos 1 caracter' })
-  @MaxLength(50, { message: 'El nombre no puede tener más de 50 caracteres' })
-  @Matches(/^[a-zA-ZÀ-ÿ0-9\s\-_.]+$/, {
-    message: 'El nombre solo debe contener letras, números, espacios y guiones',
-  })
-  @Transform(({ value }) => value?.trim())
-  name: string;
-
-  @Column('bool', {
-    default: true,
-  })
-  @IsBoolean()
-  isActive: boolean;
-
-  @ManyToOne(() => Stage, (stage) => stage.blocks, {
-    nullable: false,
-    onDelete: 'CASCADE',
-  })
-  stage: Stage;
-
-  @OneToMany(() => Lot, (lot) => lot.block, {
-    cascade: true,
-    eager: true,
-  })
-  lots: Lot[];
-
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
-
-  @BeforeInsert()
-  @BeforeUpdate()
-  trimName() {
-    if (this.name) {
-      this.name = this.name.trim();
-    }
-  }
-}
+import {  BeforeInsert,  BeforeUpdate,  Column,  CreateDateColumn,  Entity,  ManyToOne,  OneToMany,  PrimaryGeneratedColumn,  Unique,  UpdateDateColumn,} from 'typeorm';import {  IsBoolean,  IsNotEmpty,  MaxLength,  MinLength,  Matches,} from 'class-validator';import { Transform } from 'class-transformer';import { Stage } from './stage.entity';import { Lot } from './lot.entity';@Entity('blocks')@Unique(['name', 'stage']) export class Block {  @PrimaryGeneratedColumn('uuid')  id: string;  @Column()  @IsNotEmpty({ message: 'El nombre de la manzana es requerido' })  @MinLength(1, { message: 'El nombre debe tener al menos 1 caracter' })  @MaxLength(50, { message: 'El nombre no puede tener más de 50 caracteres' })  @Matches(/^[a-zA-ZÀ-ÿ0-9\s\-_.]+$/, {    message: 'El nombre solo debe contener letras, números, espacios y guiones',  })  @Transform(({ value }) => value?.trim())  name: string;  @Column('bool', {    default: true,  })  @IsBoolean()  isActive: boolean;  @ManyToOne(() => Stage, (stage) => stage.blocks, {    nullable: false,    onDelete: 'CASCADE',  })  stage: Stage;  @OneToMany(() => Lot, (lot) => lot.block, {    cascade: true,    eager: true,  })  lots: Lot[];  @CreateDateColumn()  createdAt: Date;  @UpdateDateColumn()  updatedAt: Date;  @BeforeInsert()  @BeforeUpdate()  trimName() {    if (this.name) {      this.name = this.name.trim();    }  }}

@@ -1,73 +1,1 @@
-import {
-  IsBoolean,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  IsUUID,
-  MaxLength,
-  MinLength,
-  Matches,
-} from 'class-validator';
-import { Transform } from 'class-transformer';
-
-/**
- * DTO para crear una manzana
- */
-export class CreateBlockDto {
-  @IsNotEmpty({ message: 'El nombre de la manzana es requerido' })
-  @IsString({ message: 'El nombre debe ser texto' })
-  @MinLength(1, { message: 'El nombre debe tener al menos 1 caracter' })
-  @MaxLength(50, { message: 'El nombre no puede tener más de 50 caracteres' })
-  @Matches(/^[a-zA-ZÀ-ÿ0-9\s\-_.]+$/, {
-    message: 'El nombre solo debe contener letras, números, espacios y guiones',
-  })
-  @Transform(({ value }) => value?.trim())
-  name: string;
-
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean = true;
-
-  @IsNotEmpty({ message: 'El ID de la etapa es requerido' })
-  @IsUUID('all', { message: 'El ID de la etapa debe ser un UUID válido' })
-  stageId: string;
-}
-
-/**
- * DTO para actualizar una manzana
- */
-export class UpdateBlockDto {
-  @IsOptional()
-  @IsString({ message: 'El nombre debe ser texto' })
-  @MinLength(1, { message: 'El nombre debe tener al menos 1 caracter' })
-  @MaxLength(50, { message: 'El nombre no puede tener más de 50 caracteres' })
-  @Matches(/^[a-zA-ZÀ-ÿ0-9\s\-_.]+$/, {
-    message: 'El nombre solo debe contener letras, números, espacios y guiones',
-  })
-  @Transform(({ value }) => value?.trim())
-  name?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
-}
-
-/**
- * DTO para la respuesta de una manzana
- */
-export interface BlockResponseDto {
-  id: string;
-  name: string;
-  isActive: boolean;
-  stageId: string;
-  stageName: string;
-  projectId: string;
-  projectName: string;
-  lotCount: number;
-  activeLots: number;
-  reservedLots: number;
-  soldLots: number;
-  inactiveLots: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
+import {  IsBoolean,  IsNotEmpty,  IsOptional,  IsString,  IsUUID,  MaxLength,  MinLength,  Matches,} from 'class-validator';import { Transform } from 'class-transformer';export class CreateBlockDto {  @IsNotEmpty({ message: 'El nombre de la manzana es requerido' })  @IsString({ message: 'El nombre debe ser texto' })  @MinLength(1, { message: 'El nombre debe tener al menos 1 caracter' })  @MaxLength(50, { message: 'El nombre no puede tener más de 50 caracteres' })  @Matches(/^[a-zA-ZÀ-ÿ0-9\s\-_.]+$/, {    message: 'El nombre solo debe contener letras, números, espacios y guiones',  })  @Transform(({ value }) => value?.trim())  name: string;  @IsOptional()  @IsBoolean()  isActive?: boolean = true;  @IsNotEmpty({ message: 'El ID de la etapa es requerido' })  @IsUUID('all', { message: 'El ID de la etapa debe ser un UUID válido' })  stageId: string;}export class UpdateBlockDto {  @IsOptional()  @IsString({ message: 'El nombre debe ser texto' })  @MinLength(1, { message: 'El nombre debe tener al menos 1 caracter' })  @MaxLength(50, { message: 'El nombre no puede tener más de 50 caracteres' })  @Matches(/^[a-zA-ZÀ-ÿ0-9\s\-_.]+$/, {    message: 'El nombre solo debe contener letras, números, espacios y guiones',  })  @Transform(({ value }) => value?.trim())  name?: string;  @IsOptional()  @IsBoolean()  isActive?: boolean;}export interface BlockResponseDto {  id: string;  name: string;  isActive: boolean;  stageId: string;  stageName: string;  projectId: string;  projectName: string;  lotCount: number;  activeLots: number;  reservedLots: number;  soldLots: number;  inactiveLots: number;  createdAt: Date;  updatedAt: Date;}

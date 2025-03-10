@@ -1,1 +1,1 @@
-export class Dashboard {}
+export class Dashboard {}

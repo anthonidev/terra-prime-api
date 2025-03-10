@@ -7,11 +7,11 @@ export const rolData = [
   {
     name: 'Recepción',
     code: 'REC',
-    views: ['PROFILE', 'LEAD'],
+    views: ['PROFILE', 'LEAD', 'LEAD_SOURCE'],
   },
   {
-    name: 'Gerente de ventas',
-    code: 'GVE',
+    name: 'Jefe de ventas',
+    code: 'JVE',
     views: ['PROFILE', 'G_PROJECT', 'PROJECT'],
   },
   {
@@ -30,8 +30,8 @@ export const rolData = [
     views: ['PROFILE'],
   },
   {
-    name: 'Finanzas',
-    code: 'FIN',
+    name: 'Facturación',
+    code: 'FAC',
     views: ['PROFILE'],
   },
   {
@@ -40,7 +40,6 @@ export const rolData = [
     views: ['PROFILE'],
   },
 ];
-
 export const vistaData = [
   {
     name: 'Perfil',
@@ -51,52 +50,78 @@ export const vistaData = [
     children: null,
     parent: null,
   },
-
+  {
+    name: 'Usuarios',
+    url: '/usuarios',
+    order: 2,
+    icon: 'user',
+    parent: null,
+    children: null,
+    code: 'USER',
+  },
   {
     name: 'Gestión de Proyectos',
     url: null,
-    order: 2,
+    order: 3,
     icon: 'g-project',
     code: 'G_PROJECT',
     parent: null,
     children: [
       {
-        name: 'Proyectos',
-        url: '/proyectos',
-        order: 1,
-        icon: 'project',
-        code: 'PROJECT',
-        children: null,
-        parent: 'G_PROJECT',
-      },
-      {
         name: 'Nuevo Proyecto',
         url: '/proyectos/nuevo',
-        order: 2,
+        order: 1,
         icon: 'lote',
         code: 'NEW_PROJECT',
         children: null,
         parent: 'G_PROJECT',
       },
+      {
+        name: 'Proyectos',
+        url: '/proyectos',
+        order: 2,
+        icon: 'project',
+        code: 'PROJECT',
+        children: null,
+        parent: 'G_PROJECT',
+      },
     ],
   },
-
   {
-    name: 'Leads',
-    url: '/',
-    order: 3,
-    icon: 'lead',
-    children: null,
+    name: 'Gestión de Leads',
+    url: null,
+    order: 4,
+    icon: 'g-lead',
+    code: 'G_LEAD',
     parent: null,
-    code: 'LEAD',
-  },
-  {
-    name: 'Usuarios',
-    url: '/usuarios',
-    order: 3,
-    icon: 'user',
-    parent: null,
-    children: null,
-    code: 'USER',
+    children: [
+      {
+        name: 'Fuentes de Leads',
+        url: '/fuentes',
+        order: 1,
+        icon: 'lead-source',
+        code: 'LEAD_SOURCE',
+        children: null,
+        parent: 'LEAD',
+      },
+      {
+        name: 'Nuevo Lead',
+        url: '/leads/nuevo',
+        order: 2,
+        icon: 'new-lead',
+        code: 'NEW_LEAD',
+        children: null,
+        parent: 'LEAD',
+      },
+      {
+        name: 'Leads',
+        url: '/leads',
+        order: 3,
+        icon: 'leads',
+        code: 'LEADS',
+        children: null,
+        parent: 'LEAD',
+      },
+    ],
   },
 ];

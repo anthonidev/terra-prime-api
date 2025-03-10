@@ -1,0 +1,1 @@
+import { IsOptional, IsBoolean, IsString } from 'class-validator';import { Transform } from 'class-transformer';import { PaginationDto } from '../../common/dto/paginationDto';export class FindLinersDto extends PaginationDto {  @IsOptional()  @IsString()  search?: string;  @IsOptional()  @Transform(({ value }) => value === 'true')  @IsBoolean()  isActive?: boolean;}
