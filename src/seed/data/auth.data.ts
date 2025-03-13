@@ -7,7 +7,7 @@ export const rolData = [
   {
     name: 'Recepción',
     code: 'REC',
-    views: ['PROFILE', 'LEAD', 'LEAD_SOURCE'],
+    views: ['PROFILE', 'G_LEAD', 'LEAD_SOURCE', 'NEW_LEAD', 'LEADS'],
   },
   {
     name: 'Jefe de ventas',
@@ -102,7 +102,7 @@ export const vistaData = [
         icon: 'lead-source',
         code: 'LEAD_SOURCE',
         children: null,
-        parent: 'LEAD',
+        parent: 'G_LEAD',
       },
       {
         name: 'Nuevo Lead',
@@ -111,7 +111,7 @@ export const vistaData = [
         icon: 'new-lead',
         code: 'NEW_LEAD',
         children: null,
-        parent: 'LEAD',
+        parent: 'G_LEAD',
       },
       {
         name: 'Leads',
@@ -120,7 +120,16 @@ export const vistaData = [
         icon: 'leads',
         code: 'LEADS',
         children: null,
-        parent: 'LEAD',
+        parent: 'G_LEAD',
+      },
+      {
+        name: 'Linner',
+        url: '/linner',
+        order: 4,
+        icon: 'linner',
+        code: 'LINNER',
+        children: null,
+        parent: 'G_LEAD',
       },
     ],
   },

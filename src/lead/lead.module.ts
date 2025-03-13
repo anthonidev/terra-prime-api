@@ -13,6 +13,8 @@ import { LeadService } from './services/lead.service';
 import { LinerService } from './services/liner.service';
 import { UbigeoService } from './services/ubigeo.service';
 import { LeadVisit } from './entities/lead-visit.entity';
+import { BulkLeadController } from './controllers/bulk-lead.controller';
+import { BulkLeadService } from './services/bulk-lead.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Lead, Liner, Ubigeo, LeadSource, LeadVisit]),
@@ -22,13 +24,21 @@ import { LeadVisit } from './entities/lead-visit.entity';
     LinerController,
     UbigeoController,
     LeadSourceController,
+    BulkLeadController,
   ],
-  providers: [LeadService, LinerService, UbigeoService, LeadSourceService],
+  providers: [
+    LeadService,
+    LinerService,
+    UbigeoService,
+    LeadSourceService,
+    BulkLeadService,
+  ],
   exports: [
     LeadService,
     LinerService,
     UbigeoService,
     LeadSourceService,
+    BulkLeadService,
     TypeOrmModule,
   ],
 })
