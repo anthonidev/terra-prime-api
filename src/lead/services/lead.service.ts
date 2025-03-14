@@ -49,27 +49,36 @@ export class LeadService {
   async createOrUpdateLead(
     createUpdateDto: CreateUpdateLeadDto,
   ): Promise<Lead> {
-    const { document, documentType } = createUpdateDto;
+    const { document, documentType, isNewLead, sourceId } = createUpdateDto;
     let lead = await this.leadRepository.findOne({
       where: { document, documentType },
     });
+
+    if (isNewLead) {
+      if (lead) {
+        throw new ConflictException(
+          `El lead con documento ${documentType} ${document} ya existe`,
+        );
+      }
+    }
+
     if (lead && lead.isInOffice) {
       throw new ConflictException(
         `El lead con documento ${documentType} ${document} ya se encuentra en la oficina`,
       );
     }
+
     if (lead) {
       const { firstName, lastName, document, documentType, ...updateFields } =
         createUpdateDto;
       const updateData: Partial<Lead> = { ...updateFields, isInOffice: true };
       if (updateFields.sourceId) {
         const source = await this.leadSourceRepository.findOne({
-          where: { id: Number(updateFields.sourceId) },
+          where: { id: sourceId },
         });
         if (source) {
           updateData.source = source;
         }
-        delete updateData.source;
       }
       if (updateFields.ubigeoId) {
         const ubigeo = await this.ubigeoRepository.findOne({
@@ -78,7 +87,6 @@ export class LeadService {
         if (ubigeo) {
           updateData.ubigeo = ubigeo;
         }
-        delete updateData.ubigeo;
       }
       await this.leadRepository.update(lead.id, updateData);
       lead = await this.leadRepository.findOne({
@@ -92,12 +100,11 @@ export class LeadService {
       });
       if (createUpdateDto.sourceId) {
         const source = await this.leadSourceRepository.findOne({
-          where: { id: Number(createUpdateDto.sourceId) },
+          where: { id: sourceId },
         });
         if (source) {
           newLead.source = source;
         }
-        delete newLead.source;
       }
       if (createUpdateDto.ubigeoId) {
         const ubigeo = await this.ubigeoRepository.findOne({
@@ -106,7 +113,6 @@ export class LeadService {
         if (ubigeo) {
           newLead.ubigeo = ubigeo;
         }
-        delete newLead.ubigeo;
       }
       lead = await this.leadRepository.save(newLead);
     }
@@ -176,5 +182,37 @@ export class LeadService {
       throw new NotFoundException(`Lead con ID ${id} no encontrado`);
     }
     return lead;
+  }
+
+  async registerDeparture(id: string): Promise<Lead> {
+    const lead = await this.leadRepository.findOne({
+      where: { id },
+      relations: ['visits'],
+      order: {
+        visits: {
+          createdAt: 'DESC',
+        },
+      },
+    });
+    if (!lead) {
+      throw new NotFoundException(`Lead con ID ${id} no encontrado`);
+    }
+    if (!lead.isInOffice) {
+      throw new ConflictException(
+        'El lead ya se encuentra fuera de la oficina',
+      );
+    }
+    const lastVisit = lead.visits[0];
+    if (!lastVisit.departureTime) {
+      lastVisit.departureTime = new Date();
+      await this.leadVisitRepository.save(lastVisit);
+    }
+    // cambiar isInOffice a false al lead
+    await this.leadRepository.update(lead.id, { isInOffice: false });
+
+    return this.leadRepository.findOne({
+      where: { id },
+      relations: ['source', 'ubigeo', 'visits'],
+    });
   }
 }

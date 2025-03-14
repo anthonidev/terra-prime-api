@@ -207,84 +207,120 @@ export class SeedService {
   async seedUbigeo() {
     this.logger.log('Iniciando seed de ubigeo...');
     try {
-      this.logger.log('Iniciando seed departamentos...');
+      // PASO 1: Insertar todos los departamentos y esperar a que terminen
+      this.logger.log('Iniciando inserción de departamentos...');
       const departamentos = departamentosData;
-      departamentos.forEach(async (departamento) => {
-        const existingDepartamento = await this.ubigeoRepository.findOne({
-          where: { code: departamento.id },
-        });
-        if (existingDepartamento) {
-          this.logger.debug(
-            `Departamento existente encontrado: ${departamento.id}`,
+
+      // Utilizamos Promise.all para esperar que todos los departamentos se inserten
+      await Promise.all(
+        departamentos.map(async (departamento) => {
+          const existingDepartamento = await this.ubigeoRepository.findOne({
+            where: { code: departamento.id },
+          });
+
+          if (existingDepartamento) {
+            this.logger.debug(
+              `Departamento existente encontrado: ${departamento.id}`,
+            );
+            return;
+          }
+
+          const newDepartamento = this.ubigeoRepository.create({
+            name: departamento.name,
+            code: departamento.id,
+            parentId: null,
+          });
+
+          await this.ubigeoRepository.save(newDepartamento);
+          this.logger.log(
+            `Departamento creado exitosamente: ${departamento.id}`,
           );
-          return;
-        }
-        const newDepartamento = this.ubigeoRepository.create({
-          name: departamento.name,
-          code: departamento.id,
-          parentId: null,
-        });
-        await this.ubigeoRepository.save(newDepartamento);
-        this.logger.log(`Departamento creado exitosamente: ${departamento.id}`);
-      });
-      this.logger.log('Seed de departamentos completado');
-      this.logger.log('Iniciando seed provincias ...');
+        }),
+      );
+      this.logger.log('Todos los departamentos han sido procesados.');
+
+      // PASO 2: Insertar todas las provincias y esperar a que terminen
+      this.logger.log('Iniciando inserción de provincias...');
       const provincias = provinciasData;
-      provincias.forEach(async (provincia) => {
-        const existingProvincia = await this.ubigeoRepository.findOne({
-          where: { code: provincia.id },
-        });
-        if (existingProvincia) {
-          this.logger.debug(`Provincia existente encontrada: ${provincia.id}`);
-          return;
-        }
-        const departamento = await this.ubigeoRepository.findOne({
-          where: { code: provincia.department_id },
-        });
-        if (!departamento) {
-          this.logger.error(
-            `Departamento no encontrado para provincia ${provincia.id}`,
-          );
-          return;
-        }
-        const newProvincia = this.ubigeoRepository.create({
-          name: provincia.name,
-          code: provincia.id,
-          parentId: departamento.id,
-        });
-        await this.ubigeoRepository.save(newProvincia);
-        this.logger.log(`Provincia creada exitosamente: ${provincia.id}`);
-      });
-      this.logger.log('Seed de provincias completado');
+
+      // Utilizamos Promise.all para esperar que todas las provincias se inserten
+      await Promise.all(
+        provincias.map(async (provincia) => {
+          const existingProvincia = await this.ubigeoRepository.findOne({
+            where: { code: provincia.id },
+          });
+
+          if (existingProvincia) {
+            this.logger.debug(
+              `Provincia existente encontrada: ${provincia.id}`,
+            );
+            return;
+          }
+
+          const departamento = await this.ubigeoRepository.findOne({
+            where: { code: provincia.department_id },
+          });
+
+          if (!departamento) {
+            this.logger.error(
+              `Departamento no encontrado para provincia ${provincia.id}`,
+            );
+            return;
+          }
+
+          const newProvincia = this.ubigeoRepository.create({
+            name: provincia.name,
+            code: provincia.id,
+            parentId: departamento.id,
+          });
+
+          await this.ubigeoRepository.save(newProvincia);
+          this.logger.log(`Provincia creada exitosamente: ${provincia.id}`);
+        }),
+      );
+      this.logger.log('Todas las provincias han sido procesadas.');
+
+      // PASO 3: Insertar todos los distritos después de que departamentos y provincias estén listos
+      this.logger.log('Iniciando inserción de distritos...');
       const distritos = distritosData;
-      this.logger.log('Iniciando seed de distritos...');
-      distritos.forEach(async (distrito) => {
-        const existingDistrito = await this.ubigeoRepository.findOne({
-          where: { code: distrito.id },
-        });
-        if (existingDistrito) {
-          this.logger.debug(`Distrito existente encontrado: ${distrito.id}`);
-          return;
-        }
-        const provincia = await this.ubigeoRepository.findOne({
-          where: { code: distrito.province_id },
-        });
-        if (!provincia) {
-          this.logger.error(
-            `Provincia no encontrada para distrito ${distrito.id}`,
-          );
-          return;
-        }
-        const newDistrito = this.ubigeoRepository.create({
-          name: distrito.name,
-          code: distrito.id,
-          parentId: provincia.id,
-        });
-        await this.ubigeoRepository.save(newDistrito);
-        this.logger.log(`Distrito creado exitosamente: ${distrito.id}`);
-      });
-      this.logger.log('Seed de distritos completado');
-      this.logger.log('Seed de ubigeo completado exitosamente');
+
+      // Utilizamos Promise.all para esperar que todos los distritos se inserten
+      await Promise.all(
+        distritos.map(async (distrito) => {
+          const existingDistrito = await this.ubigeoRepository.findOne({
+            where: { code: distrito.id },
+          });
+
+          if (existingDistrito) {
+            this.logger.debug(`Distrito existente encontrado: ${distrito.id}`);
+            return;
+          }
+
+          // Ahora usamos province_id para obtener la provincia correcta
+          const provincia = await this.ubigeoRepository.findOne({
+            where: { code: distrito.province_id },
+          });
+
+          if (!provincia) {
+            this.logger.error(
+              `Provincia no encontrada para distrito ${distrito.id}`,
+            );
+            return;
+          }
+
+          const newDistrito = this.ubigeoRepository.create({
+            name: distrito.name,
+            code: distrito.id,
+            parentId: provincia.id,
+          });
+
+          await this.ubigeoRepository.save(newDistrito);
+          this.logger.log(`Distrito creado exitosamente: ${distrito.id}`);
+        }),
+      );
+      this.logger.log('Todos los distritos han sido procesados.');
+
+      this.logger.log('Seed de ubigeo completado exitosamente.');
     } catch (error) {
       this.logger.error(`Error en seedUbigeo: ${error.message}`);
       throw error;

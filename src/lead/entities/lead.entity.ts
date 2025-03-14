@@ -59,7 +59,7 @@ export class Lead {
   @IsEmail({}, { message: 'El email debe tener un formato válido' })
   @Transform(({ value }) => value?.toLowerCase().trim())
   email: string;
-  @Column()
+  @Column({ unique: true })
   @IsNotEmpty({ message: 'El documento es requerido' })
   @IsString()
   @MaxLength(20, {
@@ -74,8 +74,8 @@ export class Lead {
   @IsEnum(DocumentType, { message: 'El tipo de documento debe ser DNI o CE' })
   @IsNotEmpty({ message: 'El tipo de documento es requerido' })
   documentType: DocumentType;
-  @Column()
-  @IsNotEmpty({ message: 'El teléfono es requerido' })
+  @Column({ nullable: true })
+  @IsOptional()
   @IsString()
   phone: string;
   @Column({ nullable: true })

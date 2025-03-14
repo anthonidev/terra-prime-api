@@ -97,7 +97,7 @@ export const vistaData = [
     children: [
       {
         name: 'Fuentes de Leads',
-        url: '/fuentes',
+        url: '/leads/fuentes',
         order: 1,
         icon: 'lead-source',
         code: 'LEAD_SOURCE',
@@ -124,7 +124,7 @@ export const vistaData = [
       },
       {
         name: 'Linner',
-        url: '/linner',
+        url: '/leads/linner',
         order: 4,
         icon: 'linner',
         code: 'LINNER',
