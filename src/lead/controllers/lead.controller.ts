@@ -6,6 +6,7 @@ import {
   HttpException,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -96,6 +97,42 @@ export class LeadController {
       );
     }
   }
+
+  @Patch('update/:id')
+  @Roles('SYS', 'REC')
+  async updateLead(
+    @Param('id') id: string,
+    @Body() updateDto: CreateUpdateLeadDto,
+  ) {
+    try {
+      const lead = await this.leadService.updateLead(id, updateDto);
+      return {
+        success: true,
+        message: 'Se ha actualizado el lead',
+        data: lead,
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      if (error instanceof ConflictException) {
+        return {
+          success: false,
+          message: error.message,
+          data: null,
+        };
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Error al actualizar el lead',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
   @Get()
   @Roles('SYS', 'REC', 'VEN', 'GVE')
   async findAll(@Query() filters: FindLeadsDto) {

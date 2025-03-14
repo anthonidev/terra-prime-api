@@ -124,9 +124,9 @@ export const vistaData = [
       },
       {
         name: 'Linner',
-        url: '/leads/linner',
+        url: '/leads/liner',
         order: 4,
-        icon: 'linner',
+        icon: 'liner',
         code: 'LINNER',
         children: null,
         parent: 'G_LEAD',

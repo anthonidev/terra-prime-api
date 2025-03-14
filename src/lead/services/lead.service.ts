@@ -126,6 +126,40 @@ export class LeadService {
       relations: ['source', 'ubigeo', 'visits'],
     });
   }
+
+  async updateLead(id: string, updateDto: CreateUpdateLeadDto): Promise<Lead> {
+    const lead = await this.leadRepository.findOne({
+      where: { id },
+      relations: ['source', 'ubigeo'],
+    });
+    if (!lead) {
+      throw new NotFoundException(`Lead con ID ${id} no encontrado`);
+    }
+    const { sourceId, ubigeoId, ...updateFields } = updateDto;
+    const updateData: Partial<Lead> = { ...updateFields };
+    if (updateDto.sourceId) {
+      const source = await this.leadSourceRepository.findOne({
+        where: { id: sourceId },
+      });
+      if (source) {
+        updateData.source = source;
+      }
+    }
+    if (updateDto.ubigeoId) {
+      const ubigeo = await this.ubigeoRepository.findOne({
+        where: { id: ubigeoId },
+      });
+      if (ubigeo) {
+        updateData.ubigeo = ubigeo;
+      }
+    }
+    await this.leadRepository.update(lead.id, updateData);
+    return this.leadRepository.findOne({
+      where: { id },
+      relations: ['source', 'ubigeo', 'visits', 'visits.liner'],
+    });
+  }
+
   async findAll(filters: FindLeadsDto): Promise<PaginatedResult<Lead>> {
     const {
       page = 1,
