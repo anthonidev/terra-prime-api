@@ -1,0 +1,7 @@
+export enum StatusSale {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  FINANCED = 'FINANCED',
+  REJECTED = 'REJECTED',
+  CANCELLED = 'CANCELLED',
+}
