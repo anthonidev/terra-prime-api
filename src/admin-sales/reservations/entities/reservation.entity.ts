@@ -1,8 +1,9 @@
 import { Client } from "src/admin-sales/clients/entities/client.entity";
 import { Timestamped } from "src/common/entities/timestamped.entity";
 import { Lot } from "src/project/entities/lot.entity";
-import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, ManyToOne, OneToOne, PrimaryGeneratedColumn } from "typeorm";
 import { StatusReservation } from "../enums/status-reservation.enum";
+import { Sale } from "src/admin-sales/sales/entities/sale.entity";
 
 @Entity()
 export class Reservation extends Timestamped {
@@ -14,6 +15,9 @@ export class Reservation extends Timestamped {
 
   @ManyToOne(() => Lot, (lot) => lot.reservations)
   lot: Lot;
+
+  @OneToOne(() => Sale, (sale) => sale.reservation)
+  sale: Sale;
 
   @Column({
     type: 'decimal',

@@ -2,7 +2,7 @@ import { Reservation } from "src/admin-sales/reservations/entities/reservation.e
 import { Sale } from "src/admin-sales/sales/entities/sale.entity";
 import { Timestamped } from "src/common/entities/timestamped.entity";
 import { Lead } from "src/lead/entities/lead.entity";
-import { Column, Entity, JoinColumn, OneToMany, OneToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Entity, JoinColumn, OneToMany, OneToOne, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity('clients')
 export class Client extends Timestamped {
@@ -19,4 +19,6 @@ export class Client extends Timestamped {
   @OneToMany(() => Reservation, (reservation) => reservation.client)
   reservations: Reservation[];
 
+  // TODO: Agregar campos
+  
 }
