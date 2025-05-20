@@ -2,11 +2,13 @@ import { Client } from "src/admin-sales/clients/entities/client.entity";
 import { SalesType } from "src/admin-sales/sales-type/entities/sales-type.entity";
 import { Timestamped } from "src/common/entities/timestamped.entity";
 import { User } from "src/user/entities/user.entity";
-import { Column, Entity, JoinColumn, ManyToOne, OneToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn } from "typeorm";
 import { StatusSale } from "../enums/status-sale.enum";
 import { Financing } from "src/admin-sales/financing/entities/financing.entity";
 import { Lot } from "src/project/entities/lot.entity";
 import { Reservation } from "src/admin-sales/reservations/entities/reservation.entity";
+import { LateTee } from "src/admin-sales/late-fee/entities/lafe-tee.entity";
+import { UrbanDevelopment } from "src/admin-sales/urban-development/entities/urban-development.entity";
 
 @Entity('sales')
 export class Sale extends Timestamped {
@@ -18,6 +20,10 @@ export class Sale extends Timestamped {
 
   @ManyToOne(() => SalesType, (type) => type.sales)
   type: SalesType;
+
+  @OneToOne(() => Financing, (financing) => financing.type)
+  @JoinColumn({ name: 'financing_id' })
+  financing: Financing;
 
   @ManyToOne(() => Lot, (lot) => lot.sales)
   lot: Lot;
@@ -38,14 +44,19 @@ export class Sale extends Timestamped {
     precision: 10,
     scale: 2,
   })
-  initialAmount: number;
+  totalAmount: number;
 
   @Column({
-    type: 'numeric',
-    precision: 10,
-    scale: 2,
+    type: 'timestamp',
+    nullable: false,
   })
-  totalAmount: number;
+  contractDate: Date;
+  
+  @Column({
+    type: 'timestamp',
+    nullable: false,
+  })
+  saleDate: Date;
 
   @Column({
     type: 'enum',
@@ -54,6 +65,9 @@ export class Sale extends Timestamped {
   })
   status: StatusSale;
 
-  @OneToOne(() => Financing, (financing) => financing.type)
-  financing: Financing;
+  @OneToMany(() => LateTee, (lateFeeTee) => lateFeeTee.sale)
+  lateFeeTee: LateTee[];
+
+  @OneToMany(() => UrbanDevelopment, (urbanDevelopment) => urbanDevelopment.sale)
+  urbanDevelopment: UrbanDevelopment[];
 }

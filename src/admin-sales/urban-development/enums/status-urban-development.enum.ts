@@ -1,4 +1,4 @@
-export enum StatusSale {
+export enum StatusUrbanDevelopment {
   PENDING = 'PENDING',
   APPROVED = 'APPROVED',
   IN_PAYMENT_PROCESS = 'IN_PAYMENT_PROCESS',
