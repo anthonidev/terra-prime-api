@@ -25,6 +25,7 @@ import {
 import { Exclude, Transform } from 'class-transformer';
 import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
 import { Reservation } from 'src/admin-sales/reservations/entities/reservation.entity';
+import { Lead } from 'src/lead/entities/lead.entity';
 @Entity()
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -132,4 +133,7 @@ export class User {
 
   @OneToMany(() => Reservation, (reservation) => reservation.vendor)
   reservations: User[];
+
+  @OneToMany(() => Lead, (lead) => lead.vendor)
+  leads: Lead[];
 }

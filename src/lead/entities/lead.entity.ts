@@ -27,6 +27,7 @@ import { LeadSource } from './lead-source.entity';
 import { LeadVisit } from './lead-visit.entity';
 import { Ubigeo } from './ubigeo.entity';
 import { Client } from 'src/admin-sales/clients/entities/client.entity';
+import { User } from 'src/user/entities/user.entity';
 export enum DocumentType {
   DNI = 'DNI',
   CE = 'CE',
@@ -102,6 +103,9 @@ export class Lead {
   visits: LeadVisit[];
   @OneToOne(() => Client, (client) => client.lead)
   client: Client;
+  @ManyToOne(() => User, (user) => user.leads)
+  @JoinColumn({ name: 'vendor_id' })
+  vendor: User;
   @Column({ default: true })
   isActive: boolean;
   @CreateDateColumn()

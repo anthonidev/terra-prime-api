@@ -1,9 +1,14 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
-import { UpdateSaleDto } from './dto/update-sale.dto';
+import { FindAllLeadsByDayDto } from './dto/find-all-leads-by-day.dto';
+import { AssignLeadsToVendorDto } from './dto/assign-leads-to-vendor.dto';
+import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorators/roles.decorator';
 
 @Controller('sales')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
@@ -12,23 +17,31 @@ export class SalesController {
     return this.salesService.create(createSaleDto);
   }
 
-  @Get()
-  findAll() {
-    return this.salesService.findAll();
+  @Get('leads-day')
+  @Roles('JVE')
+  findAllLeadsByDay(
+    @Query() findAllLeadsByDayDto: FindAllLeadsByDayDto,
+  ) {
+    return this.salesService.findAllLeadsByDay(findAllLeadsByDayDto);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.salesService.findOne(+id);
+  @Post('assign-leads-to-vendor')
+  @Roles('JVE')
+  assignLeadsToVendor(
+    @Body() assignLeadsToVendorDto: AssignLeadsToVendorDto,
+  ) {
+    return this.salesService.assignLeadsToVendor(assignLeadsToVendorDto);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateSaleDto: UpdateSaleDto) {
-    return this.salesService.update(+id, updateSaleDto);
+  @Get('vendors-actives')
+  @Roles('JVE')
+  findAllVendors() {
+    return this.salesService.findAllVendors();
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.salesService.remove(+id);
+  @Get('projects-actives')
+  @Roles('JVE')
+  findAllActiveProjects() {
+    return this.salesService.findAllActiveProjects();
   }
 }

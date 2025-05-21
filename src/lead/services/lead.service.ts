@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Between, Raw, Repository } from 'typeorm';
 import { Lead } from '../entities/lead.entity';
 import { Ubigeo } from '../entities/ubigeo.entity';
 import { LeadSource } from '../entities/lead-source.entity';
@@ -16,6 +16,7 @@ import {
   PaginatedResult,
   PaginationHelper,
 } from 'src/common/helpers/pagination.helper';
+import { UsersService } from 'src/user/user.service';
 @Injectable()
 export class LeadService {
   constructor(
@@ -27,6 +28,7 @@ export class LeadService {
     private readonly leadSourceRepository: Repository<LeadSource>,
     @InjectRepository(LeadVisit)
     private readonly leadVisitRepository: Repository<LeadVisit>,
+    private readonly userService: UsersService,
   ) {}
   async findByDocument(
     findDto: FindLeadByDocumentDto,
@@ -248,5 +250,46 @@ export class LeadService {
       where: { id },
       relations: ['source', 'ubigeo', 'visits'],
     });
+  }
+
+  // internal helpers methods
+  async findAllByDay(day: Date): Promise<Lead[]> {
+    const dateOnly = day.toISOString().split('T')[0]; // '2025-05-21'
+
+    const leads = await this.leadRepository.find({
+      where: {
+        createdAt: Raw((alias) => `DATE(${alias}) = :date`, { date: dateOnly }),
+        isActive: true,
+      },
+      relations: ['source', 'ubigeo', 'vendor'],
+    });
+
+    return leads;
+  }
+
+  // asignar leads a un vendedor:
+  async assignLeadsToVendor(
+    leadsId: string[],
+    vendorId: string
+  ): Promise<Lead[]> {
+    const vendor = await this.userService.findOneVendor(vendorId);
+    const leads = await Promise.all(
+      leadsId.map((id) => this.findOneById(id))
+    );
+    const updatedLeads = leads.map((lead) => {
+      lead.vendor = vendor;
+      return lead;
+    });
+    return await this.leadRepository.save(updatedLeads);
+  }
+
+  private async findOneById(id: string): Promise<Lead> {
+    const lead = await this.leadRepository.findOne({
+      where: { id },
+      relations: ['source', 'ubigeo', 'vendor']
+    });
+    if (!lead)
+      throw new NotFoundException(`Lead con ID ${id} no encontrado`);
+    return lead;
   }
 }

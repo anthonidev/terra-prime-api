@@ -4,6 +4,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
   Logger,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
@@ -208,6 +209,37 @@ export class UsersService {
         error instanceof ConflictException
         ? error
         : new InternalServerErrorException('Error al actualizar el usuario');
+    }
+  }
+
+  async findOneVendor(id: string): Promise<User> {
+    try {
+      const user = await this.userRepository.findOne({
+        where: { id  },
+        relations: ['role']
+      });
+      if (!user)
+        throw new NotFoundException(`El usuario con ID ${id} no existe`);
+      if(user.role.code !== 'VEN')
+        throw new ForbiddenException(`El usuario asignado con ID ${id} no es un vendedor`);
+      return user;
+    } catch (error) { 
+      this.logger.error(`Error fetching user ${id}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async findAllVendors(): Promise<User[]> {
+    try {
+      const users = await this.userRepository.find({
+        where: { 
+          isActive: true,
+          role: { code: 'VEN' } },
+      });
+      return users;
+    } catch (error) {
+      this.logger.error(`Error fetching vendors: ${error.message}`);
+      throw new InternalServerErrorException('Error al obtener los vendedores');
     }
   }
 }
