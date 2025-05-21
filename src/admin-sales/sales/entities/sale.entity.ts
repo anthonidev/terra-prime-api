@@ -1,5 +1,4 @@
 import { Client } from "src/admin-sales/clients/entities/client.entity";
-import { SalesType } from "src/admin-sales/sales-type/entities/sales-type.entity";
 import { Timestamped } from "src/common/entities/timestamped.entity";
 import { User } from "src/user/entities/user.entity";
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn } from "typeorm";
@@ -9,6 +8,7 @@ import { Lot } from "src/project/entities/lot.entity";
 import { Reservation } from "src/admin-sales/reservations/entities/reservation.entity";
 import { LateTee } from "src/admin-sales/late-fee/entities/lafe-tee.entity";
 import { UrbanDevelopment } from "src/admin-sales/urban-development/entities/urban-development.entity";
+import { SaleType } from "../enums/sale-type.enum";
 
 @Entity('sales')
 export class Sale extends Timestamped {
@@ -18,10 +18,14 @@ export class Sale extends Timestamped {
   @ManyToOne(() => Client, (client) => client.sales)
   client: Client;
 
-  @ManyToOne(() => SalesType, (type) => type.sales)
-  type: SalesType;
+  @Column({
+    type: 'enum',
+    enum: SaleType,
+    nullable: false,
+  })
+  type: SaleType;
 
-  @OneToOne(() => Financing, (financing) => financing.type)
+  @OneToOne(() => Financing, (financing) => financing.sale)
   @JoinColumn({ name: 'financing_id' })
   financing: Financing;
 

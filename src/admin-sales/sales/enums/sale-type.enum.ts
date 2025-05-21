@@ -1,0 +1,4 @@
+export enum SaleType {
+  DIRECT_PAYMENT = 'DIRECT_PAYMENT',
+  FINANCED = 'FINANCED',
+}
