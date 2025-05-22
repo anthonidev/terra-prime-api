@@ -34,7 +34,7 @@ export class ProjectService {
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
   async createBulkProject(projectData: ProjectExcelDto): Promise<Project> {
     const existingProject = await this.projectRepository.findOne({
       where: { name: projectData.name },
@@ -208,7 +208,7 @@ export class ProjectService {
         currency: project.currency,
         isActive: project.isActive,
         logo: project.logo,
-        logoPublicId: project.logoPublicId,
+        logoKey: project.logoKey,
         stages,
         createdAt: project.createdAt,
         updatedAt: project.updatedAt,

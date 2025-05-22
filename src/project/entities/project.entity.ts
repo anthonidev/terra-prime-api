@@ -72,7 +72,7 @@ export class Project {
     default: null,
   })
   @IsOptional()
-  logoPublicId: string | null;
+  logoKey: string | null;
   @OneToMany(() => Stage, (stage) => stage.project, {
     cascade: true,
     eager: true,
