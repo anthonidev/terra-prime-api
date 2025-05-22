@@ -35,13 +35,13 @@ export class AwsS3Service {
             const fileName = `${uuidv4()}.${fileExtension}`;
             const key = `${folder}/${fileName}`;
 
-            // Configurar el comando de subida
+            // Configurar el comando de subida (SIN ACL)
             const uploadCommand = new PutObjectCommand({
                 Bucket: this.bucketName,
                 Key: key,
                 Body: file.buffer,
                 ContentType: file.mimetype,
-                ACL: 'public-read', // Hacer el archivo público
+                // Removido: ACL: 'public-read', - Esta línea causa el error
                 Metadata: {
                     originalName: file.originalname,
                     uploadedAt: new Date().toISOString(),
