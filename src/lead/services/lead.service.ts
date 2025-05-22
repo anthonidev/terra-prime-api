@@ -254,11 +254,10 @@ export class LeadService {
 
   // internal helpers methods
   async findAllByDay(day: Date): Promise<Lead[]> {
-    const dateOnly = day.toISOString().split('T')[0]; // '2025-05-21'
 
     const leads = await this.leadRepository.find({
       where: {
-        createdAt: Raw((alias) => `DATE(${alias}) = :date`, { date: dateOnly }),
+        isInOffice:true,
         isActive: true,
       },
       relations: ['source', 'ubigeo', 'vendor'],

@@ -27,7 +27,7 @@ export class PaymentDetails {
     length: 200,
     nullable: true
   })
-  cloudinaryPublicId?: string;
+  urlKey?: string;
 
   @Column({
     type: 'decimal',

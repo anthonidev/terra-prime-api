@@ -8,7 +8,7 @@ export const formatAllActiveProjects =
     name: project.name,
     currency: project.currency,
     logo: project.logo,
-    logoPublicId: project.logoPublicId,
+    logoPublicId: project.logoKey,
     projectCode: project.projectCode,
     createdAt: project.createdAt,
   };

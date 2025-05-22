@@ -10,7 +10,6 @@ import { PaginationHelper } from 'src/common/helpers/pagination.helper';
 import { Paginated } from 'src/common/interfaces/paginated.interface';
 import { LeadsByDayResponse } from './interfaces/leads-by-day-response.interface';
 import { AssignLeadsToVendorDto } from './dto/assign-leads-to-vendor.dto';
-import { User } from 'src/user/entities/user.entity';
 import { UsersService } from 'src/user/user.service';
 import { AllVendorsActivesResponse } from './interfaces/all-vendors-actives-response.interface';
 import { formatFindAllVendors } from './helpers/format-find-all-vendors.helper';
