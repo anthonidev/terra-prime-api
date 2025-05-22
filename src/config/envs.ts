@@ -9,10 +9,12 @@ interface Envvars {
   DB_PASSWORD: string;
   JWT_SECRET: string;
   JWT_REFRESH_SECRET: string;
-  PORT: number;
-  CLOUDINARY_CLOUD_NAME: string;
-  CLOUDINARY_API_KEY: string;
-  CLOUDINARY_API_SECRET: string;
+  PORT: number
+
+  AWS_REGION: string;
+  AWS_ACCESS_KEY_ID: string;
+  AWS_SECRET_ACCESS_KEY: string;
+  AWS_S3_BUCKET_NAME: string;
 
   AWS_SES_SMTP_USERNAME: string;
   AWS_SES_SMTP_PASSWORD: string;
@@ -30,9 +32,11 @@ const envVarsSchema = joi
     DB_PASSWORD: joi.string().required(),
     JWT_SECRET: joi.string().required(),
     JWT_REFRESH_SECRET: joi.string().required(),
-    CLOUDINARY_CLOUD_NAME: joi.string().required(),
-    CLOUDINARY_API_KEY: joi.string().required(),
-    CLOUDINARY_API_SECRET: joi.string().required(),
+
+    AWS_REGION: joi.string().required(),
+    AWS_ACCESS_KEY_ID: joi.string().required(),
+    AWS_SECRET_ACCESS_KEY: joi.string().required(),
+    AWS_S3_BUCKET_NAME: joi.string().required(),
 
     AWS_SES_SMTP_USERNAME: joi.string().required(),
     AWS_SES_SMTP_PASSWORD: joi.string().required(),
@@ -58,9 +62,11 @@ export const envs = {
   port: envVars.PORT,
   jwtSecret: envVars.JWT_SECRET,
   jwtRefreshSecret: envVars.JWT_REFRESH_SECRET,
-  cloudinaryCloudName: envVars.CLOUDINARY_CLOUD_NAME,
-  cloudinaryApiKey: envVars.CLOUDINARY_API_KEY,
-  cloudinaryApiSecret: envVars.CLOUDINARY_API_SECRET,
+
+  awsRegion: envVars.AWS_REGION,
+  awsAccessKeyId: envVars.AWS_ACCESS_KEY_ID,
+  awsSecretAccessKey: envVars.AWS_SECRET_ACCESS_KEY,
+  awsS3BucketName: envVars.AWS_S3_BUCKET_NAME,
 
   awsSesSmtpUsername: envVars.AWS_SES_SMTP_USERNAME,
   awsSesSmtpPassword: envVars.AWS_SES_SMTP_PASSWORD,

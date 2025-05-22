@@ -15,7 +15,6 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
-import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import {
   CreateBulkProjectDto,
   ValidateExcelResponseDto,
@@ -25,6 +24,7 @@ import { UpdateProjectDto } from '../dto/update-project.dto';
 import { ExcelService } from '../services/excel.service';
 import { LotService } from '../services/lot.service';
 import { ProjectService } from '../services/project.service';
+import { AwsS3Service } from 'src/files/aws-s3.service';
 @Controller('projects')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ProjectController {
@@ -32,8 +32,8 @@ export class ProjectController {
     private readonly excelService: ExcelService,
     private readonly projectService: ProjectService,
     private readonly lotService: LotService,
-    private readonly cloudinaryService: CloudinaryService,
-  ) {}
+    private readonly awsS3Service: AwsS3Service,
+  ) { }
   @Post('validate-excel')
   @Roles('SYS', 'GVE')
   @UseInterceptors(FileInterceptor('file'))
@@ -113,14 +113,19 @@ export class ProjectController {
     if (logoFile) {
       try {
         const currentProject = await this.projectService.findOne(id);
-        const cloudinaryResponse = await this.cloudinaryService.uploadImage(
+
+        // Subir nueva imagen a S3
+        const s3Response = await this.awsS3Service.uploadImage(
           logoFile,
           'projects-logos',
         );
-        updateProjectDto.logo = cloudinaryResponse.url;
-        updateProjectDto.logoPublicId = cloudinaryResponse.publicId;
-        if (currentProject.logoPublicId) {
-          await this.cloudinaryService.deleteImage(currentProject.logoPublicId);
+
+        updateProjectDto.logo = s3Response.url;
+        updateProjectDto.logoKey = s3Response.key;
+
+        // Eliminar imagen anterior de S3 si existe
+        if (currentProject.logoKey) {
+          await this.awsS3Service.deleteFile(currentProject.logoKey);
         }
       } catch (error) {
         throw new InternalServerErrorException(
