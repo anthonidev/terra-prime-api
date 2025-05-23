@@ -43,13 +43,13 @@ export class SalesController {
   }
 
   @Get('projects-actives')
-  @Roles('JVE')
+  @Roles('JVE', 'VEN')
   findAllActiveProjects() {
     return this.salesService.findAllActiveProjects();
   }
 
   @Get('stages/:projectId')
-  @Roles('JVE')
+  @Roles('JVE', 'VEN')
   async findAllStagesByProjectId(
     @Param('projectId', ParseUUIDPipe) projectId: string,
   ) {
@@ -57,7 +57,7 @@ export class SalesController {
   }
 
   @Get('blocks/:stageId')
-  @Roles('JVE')
+  @Roles('JVE', 'VEN')
   async findAllBlocksByStageId(
     @Param('stageId', ParseUUIDPipe) stageId: string,
   ) {
@@ -65,7 +65,7 @@ export class SalesController {
   }
 
   @Get('lots/:blockId')
-  @Roles('JVE')
+  @Roles('JVE', 'VEN')
   async findAllLotsByBlockId(
     @Param('blockId', ParseUUIDPipe) blockId: string,
     @Query() findAllLotsDto: FindAllLotsDto,
