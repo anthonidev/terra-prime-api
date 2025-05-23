@@ -37,6 +37,7 @@ export class SalesService {
     private readonly blockService: BlockService,
     private readonly lotService: LotService,
   ) {}
+  // TODO: Implementar la API de ventas
   create(createSaleDto: CreateSaleDto) {
     return 'This action adds a new sale';
   }
@@ -90,20 +91,10 @@ export class SalesService {
   async findAllLotsByBlockId(
     blockId: string,
     findAllLotsDto: FindAllLotsDto,
-  ): Promise<Paginated<LotResponse>> {
-    const {
-      status,
-      page = 1,
-      limit = 10,
-      order = 'DESC',
-    } = findAllLotsDto;
-    const paginationDto = { page, limit, order };
+  ): Promise<LotResponse[]> {
+    const { status } = findAllLotsDto;
     const lots = await this.lotService.findAllByBlockId(blockId, status);
-    return PaginationHelper.createPaginatedResponse(
-      lots.map(formatLotResponse),
-      lots.length,
-      paginationDto,
-    );
+    return lots.map(formatLotResponse);
   }
 
   async findAllLeadsByUser(
