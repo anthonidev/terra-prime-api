@@ -105,4 +105,15 @@ export class SalesService {
       paginationDto,
     );
   }
+
+  async findAllLeadsByUser(
+    userId: string,
+  ): Promise<LeadsByDayResponse[]> {
+    const leads = await this.leadService.findAllByUser(userId);
+    const leadsFormatted = leads.map(formatFindAllLedsByDayResponse);
+    return leadsFormatted.map( lead => {
+      const { vendor, ...rest } = lead;
+      return rest;
+    });
+  }
 }

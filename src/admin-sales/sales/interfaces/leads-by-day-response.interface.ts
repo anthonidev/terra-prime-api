@@ -18,7 +18,7 @@ export interface LeadsByDayResponse {
     code: string;
     parentId: number;
   } | null;
-  vendor: {
+  vendor?: {
     id: string;
     firstName: string;
     lastName: string;

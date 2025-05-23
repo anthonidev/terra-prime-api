@@ -266,6 +266,21 @@ export class LeadService {
     return leads;
   }
 
+  async findAllByUser(userId: string): Promise<Lead[]> {
+
+    const user = await this.userService.findOne(userId);
+    const leads = await this.leadRepository.find({
+      where: {
+        isInOffice:true,
+        isActive: true,
+        vendor: user,
+      },
+      relations: ['source', 'ubigeo', 'vendor'],
+    });
+
+    return leads;
+  }
+
   // asignar leads a un vendedor:
   async assignLeadsToVendor(
     leadsId: string[],

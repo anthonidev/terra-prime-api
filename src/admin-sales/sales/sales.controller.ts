@@ -7,6 +7,8 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { FindAllLotsDto } from './dto/find-all-lots.dto';
+import { GetUser } from 'src/auth/decorators/get-user.decorator';
+import { User } from 'src/user/entities/user.entity';
 
 @Controller('sales')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -69,5 +71,13 @@ export class SalesController {
     @Query() findAllLotsDto: FindAllLotsDto,
   ) {
     return this.salesService.findAllLotsByBlockId(blockId, findAllLotsDto);
+  }
+
+  @Get('leads-vendor')
+  @Roles('VEN')
+  async findAllLeadsByUser(
+    @GetUser() user: User,
+  ) {
+    return this.salesService.findAllLeadsByUser(user.id);
   }
 }
