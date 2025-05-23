@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, ParseUUIDPipe } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { FindAllLeadsByDayDto } from './dto/find-all-leads-by-day.dto';
@@ -6,6 +6,7 @@ import { AssignLeadsToVendorDto } from './dto/assign-leads-to-vendor.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
+import { FindAllLotsDto } from './dto/find-all-lots.dto';
 
 @Controller('sales')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -43,5 +44,30 @@ export class SalesController {
   @Roles('JVE')
   findAllActiveProjects() {
     return this.salesService.findAllActiveProjects();
+  }
+
+  @Get('stages/:projectId')
+  @Roles('JVE')
+  async findAllStagesByProjectId(
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+  ) {
+    return this.salesService.findAllStagesByProjectId(projectId);
+  }
+
+  @Get('blocks/:stageId')
+  @Roles('JVE')
+  async findAllBlocksByStageId(
+    @Param('stageId', ParseUUIDPipe) stageId: string,
+  ) {
+    return this.salesService.findAllBlocksByStageId(stageId);
+  }
+
+  @Get('lots/:blockId')
+  @Roles('JVE')
+  async findAllLotsByBlockId(
+    @Param('blockId', ParseUUIDPipe) blockId: string,
+    @Query() findAllLotsDto: FindAllLotsDto,
+  ) {
+    return this.salesService.findAllLotsByBlockId(blockId, findAllLotsDto);
   }
 }

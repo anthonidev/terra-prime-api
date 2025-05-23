@@ -16,6 +16,14 @@ import { formatFindAllVendors } from './helpers/format-find-all-vendors.helper';
 import { ProjectService } from 'src/project/services/project.service';
 import { FindAllActiveProjectsResponse } from 'src/project/interfaces/find-all-active-projects-response.interface';
 import { formatAllActiveProjects } from './helpers/format-all-active-projects.helper.';
+import { StageResponse } from 'src/project/interfaces/stage-response.interface';
+import { StageService } from 'src/project/services/stage.service';
+import { BlockService } from 'src/project/services/block.service';
+import { BlockResponse } from 'src/project/interfaces/block-response.interface';
+import { LotResponse } from 'src/project/interfaces/lot-response.interface';
+import { LotService } from 'src/project/services/lot.service';
+import { FindAllLotsDto } from './dto/find-all-lots.dto';
+import { formatLotResponse } from 'src/project/helpers/format-lot-response.helper';
 
 @Injectable()
 export class SalesService {
@@ -25,6 +33,9 @@ export class SalesService {
     private readonly leadService: LeadService,
     private readonly userService: UsersService,
     private readonly projectService: ProjectService,
+    private readonly stageService: StageService,
+    private readonly blockService: BlockService,
+    private readonly lotService: LotService,
   ) {}
   create(createSaleDto: CreateSaleDto) {
     return 'This action adds a new sale';
@@ -64,5 +75,34 @@ export class SalesService {
   async findAllActiveProjects(): Promise<FindAllActiveProjectsResponse[]> {
     const projects = await this.projectService.findAllActiveProjects();
     return projects.map(formatAllActiveProjects);
+  }
+
+  async findAllStagesByProjectId(
+    projectId: string,
+  ): Promise<StageResponse[]> {
+    return await this.stageService.findAllByProjectId(projectId);
+  }
+
+  async findAllBlocksByStageId(stageId: string): Promise<BlockResponse[]> {
+    return await this.blockService.findAllByStageId(stageId);
+  }
+
+  async findAllLotsByBlockId(
+    blockId: string,
+    findAllLotsDto: FindAllLotsDto,
+  ): Promise<Paginated<LotResponse>> {
+    const {
+      status,
+      page = 1,
+      limit = 10,
+      order = 'DESC',
+    } = findAllLotsDto;
+    const paginationDto = { page, limit, order };
+    const lots = await this.lotService.findAllByBlockId(blockId, status);
+    return PaginationHelper.createPaginatedResponse(
+      lots.map(formatLotResponse),
+      lots.length,
+      paginationDto,
+    );
   }
 }

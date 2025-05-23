@@ -23,7 +23,7 @@ import { Transform } from 'class-transformer';
 import { Block } from './block.entity';
 import { Reservation } from 'src/admin-sales/reservations/entities/reservation.entity';
 import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
-enum LotStatus {
+export enum LotStatus {
   ACTIVE = 'Activo',
   INACTIVE = 'Inactivo',
   SOLD = 'Vendido',

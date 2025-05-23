@@ -14,6 +14,7 @@ import { ExcelService } from './services/excel.service';
 import { LotService } from './services/lot.service';
 import { ProjectService } from './services/project.service';
 import { StageService } from './services/stage.service';
+import { SalesService } from 'src/admin-sales/sales/sales.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, Stage, Block, Lot]),
@@ -32,6 +33,6 @@ import { StageService } from './services/stage.service';
     LotService,
     StageService,
   ],
-  exports: [TypeOrmModule, ProjectService],
+  exports: [TypeOrmModule, ProjectService, StageService, BlockService, LotService],
 })
 export class ProjectModule { }
