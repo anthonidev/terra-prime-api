@@ -65,7 +65,6 @@ export class LeadController {
   @Roles('SYS', 'REC')
   async createOrUpdateLead(@Body() createUpdateDto: CreateUpdateLeadDto) {
     try {
-      console.log(createUpdateDto);
       const lead = await this.leadService.createOrUpdateLead(createUpdateDto);
       const isNewLead = lead.visits.length === 1;
       return {
@@ -76,7 +75,6 @@ export class LeadController {
         data: lead,
       };
     } catch (error) {
-      console.log(error);
       if (error instanceof HttpException) {
         throw error;
       }

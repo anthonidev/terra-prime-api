@@ -10,7 +10,7 @@ import {
   PaginatedResult,
   PaginationHelper,
 } from 'src/common/helpers/pagination.helper';
-import { Repository } from 'typeorm';
+import { QueryRunner, Repository } from 'typeorm';
 import { LotStatus } from '../dto/bulk-project-upload.dto';
 import {
   CreateLotDto,
@@ -289,5 +289,16 @@ export class LotService {
     if (!lot)
       throw new NotFoundException(`El lote con ID ${lotId} no se encuentra registrado`);
     return lot;
+  }
+
+  async updateStatus(
+    id: string,
+    status: LotStatus,
+    queryRunner?: QueryRunner,
+  ) {
+    const repository = queryRunner
+      ? queryRunner.manager.getRepository(Lot)
+      : this.lotRepository;
+    await repository.update({ id }, { status });
   }
 }

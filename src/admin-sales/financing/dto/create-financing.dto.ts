@@ -24,7 +24,7 @@ export class CreateFinancingDto {
 
   @IsNotEmpty({ message: 'La cantidad de cuotas de financiación es requerida' })
   @IsNumber({}, { message: 'La cantidad de cuotas de financiación debe ser un número' })
-  quantitySaleCoutes: number;
+  quantityCoutes: number;
 
   financingInstallments: CreateFinancingInstallmentsDto[];
 

@@ -269,7 +269,6 @@ export class LeadService {
   async findAllByUser(userId: string): Promise<Lead[]> {
 
     const user = await this.userService.findOne(userId);
-    console.log(user);
     const leads = await this.leadRepository.find({
       where: {
         isInOffice:true,

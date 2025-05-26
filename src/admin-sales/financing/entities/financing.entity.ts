@@ -8,7 +8,7 @@ import { FinancingType } from "../enums/financing-type.enum";
 @Entity('financing')
 export class Financing extends Timestamped {
   @PrimaryGeneratedColumn('uuid')
-  id: number;
+  id: string;
 
   @Column({
     type: 'enum',
@@ -23,7 +23,11 @@ export class Financing extends Timestamped {
   @OneToOne(() => UrbanDevelopment, (urbanDevelopment) => urbanDevelopment.financing)
   urbanDevelopment: UrbanDevelopment;
 
-  @OneToMany(() => FinancingInstallments, (installments) => installments.financing)
+  @OneToMany(
+    () => FinancingInstallments,
+    (installments) => installments.financing,
+    {cascade: true}
+  )
   financingInstallments: FinancingInstallments[];
 
   @Column({
@@ -45,11 +49,11 @@ export class Financing extends Timestamped {
     scale: 2,
     nullable: false,
   })
-  interest: number;
+  interestRate: number;
 
   @Column({
     type: 'numeric',
     nullable: false,
   })
-  cuoteQuantity: number;
+  quantityCoutes: number;
 }

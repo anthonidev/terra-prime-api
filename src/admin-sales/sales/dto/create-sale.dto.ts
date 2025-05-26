@@ -1,4 +1,4 @@
-import { IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, ValidateNested } from "class-validator";
+import { IsArray, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested } from "class-validator";
 import { SaleType } from "../enums/sale-type.enum";
 import { plainToInstance, Transform, Type } from "class-transformer";
 import { MethodPayment } from "src/admin-payments/payments/enums/method-payment.enum";
@@ -7,7 +7,7 @@ import { CreateFinancingInstallmentsDto } from "src/admin-sales/financing/dto/cr
 
 export class CreateSaleDto {
 	@IsUUID('4', { message: 'El identificador del lote tiene que ser un UUID válido' })
-	@IsNotEmpty({ message: 'El identificador de venta es requerido' })
+	@IsNotEmpty({ message: 'El identificador del lote es requerido' })
   lotId: string;
 
 	@IsEnum(SaleType, {
@@ -17,12 +17,12 @@ export class CreateSaleDto {
   saleType: SaleType;
 
 	@IsNumber({}, { message: 'El identificador del cliente debe ser un número válido' })
-	@IsNotEmpty({ message: 'El identificador del lead es requerido' })
+	@IsNotEmpty({ message: 'El identificador del cliente es requerido' })
   clientId: number;
 	
 	@IsNotEmpty({ message: 'El npumero de cuotas de la habilitación urbana es requerida' })
 	@IsInt({ message: 'El número de cuotas de la habilitación urbana debe ser un número entero' })
-  qantityHuCuotes: number;
+  quantityHuCuotes: number;
 
 	@IsDateString({}, { message: 'La fecha de pago debe ser válida' })
 	@IsNotEmpty({ message: 'La fecha de pago es requerida' })
@@ -38,7 +38,22 @@ export class CreateSaleDto {
 
 	@IsNumber({}, { message: 'El monto total debe ser un número válido' })
 	@IsNotEmpty({ message: 'El monto total es requerido' })
+	@Min(1, { message: 'El monto total no puede ser negativo o cero' })
 	totalAmount: number;
+
+	@IsNumber({}, { message: 'El monto inicial de la habilitación urbana debe ser un número válido' })
+	@IsNotEmpty({ message: 'El monto inicial de la habilitación urbana es requerida' })
+	@Min(0, { message: 'El monto inicial de la habilitación urbana no puede ser negativo' })
+	initialAmountUrbanDevelopment: number;
+
+	@IsNumber({}, { message: 'El monto total de la habilitación urbana debe ser un número válido' })
+	@IsNotEmpty({ message: 'El monto total de la habilitación urbana es requerida' })
+	@Min(1, { message: 'El monto total de la habilitación urbana no puede ser negativo o cero' })
+	totalAmountUrbanDevelopment: number;
+
+	@IsDateString({}, { message: 'La fecha de pago inicial de la habilitación urbana debe ser válida' })
+	@IsNotEmpty({ message: 'La fecha de pago inicial de la habilitación urbana es requerida' })
+	firstPaymentDateHu: string;
 
   // Financiado
 	@IsOptional()
@@ -85,5 +100,9 @@ export class CreateSaleDto {
 	@Type(() => CreateDetailPaymentDto)
 	payments?: CreateDetailPaymentDto[];
 
+	@IsOptional()
+	@IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateFinancingInstallmentsDto)
 	financingInstallments?: CreateFinancingInstallmentsDto[];
 }

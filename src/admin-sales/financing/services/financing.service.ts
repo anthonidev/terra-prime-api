@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateFinancingDto } from '../dto/create-financing.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Financing } from '../entities/financing.entity';
@@ -43,11 +43,6 @@ export class FinancingService {
   ): CreateFinancingInstallmentsDto[] {
 
     const installments: CreateFinancingInstallmentsDto[] = [];
-
-    if (numberOfPayments <= 0) {
-      console.log('Número de pagos <= 0. Retornando array vacío.');
-      return [];
-    }
 
     const ratePerPeriod = interestRate / 100;
 
@@ -126,5 +121,16 @@ export class FinancingService {
         }
     }
     return installments;
+  }
+
+  // Internal helpers methods
+  async findOneById(id: string): Promise<Financing> {
+    const financing = await this.financingRepository.findOne({
+      where: { id },
+      relations: ['sale', 'urbanDevelopment'],
+    });
+    if (!financing)
+      throw new NotFoundException(`El financiamiento con ID ${id} no se encuentra registrado`);
+    return financing;
   }
 }
