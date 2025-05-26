@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, ParseUUIDPipe, ParseIntPipe } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { FindAllLeadsByDayDto } from './dto/find-all-leads-by-day.dto';
@@ -9,6 +9,9 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { FindAllLotsDto } from './dto/find-all-lots.dto';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/user/entities/user.entity';
+import { CalculateAmortizationDto } from '../financing/dto/calculate-amortizacion-dto';
+import { CreateGuarantorDto } from '../guarantors/dto/create-guarantor.dto';
+import { CreateClientDto } from '../clients/dto/create-client.dto';
 
 @Controller('sales')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -16,8 +19,11 @@ export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
   @Post()
-  create(@Body() createSaleDto: CreateSaleDto) {
-    return this.salesService.create(createSaleDto);
+  create(
+    @Body() createSaleDto: CreateSaleDto,
+    @GetUser() user: User,
+  ) {
+    return this.salesService.create(createSaleDto, user.id);
   }
 
   @Get('leads-day')
@@ -79,5 +85,46 @@ export class SalesController {
     @GetUser() user: User,
   ) {
     return this.salesService.findAllLeadsByUser(user.id);
+  }
+
+  @Post('calculate-amortization')
+  @Roles('JVE', 'VEN')
+  async calculateAmortization(
+    @Body() calculateAmortizationDto: CalculateAmortizationDto,
+  ) {
+    return this.salesService.calculateAmortization(calculateAmortizationDto);
+  }
+
+  @Get('guarantors/:id')
+  @Roles('JVE', 'VEN')
+  async findOneGuarantorById(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.salesService.findOneGuarantorById(id);
+  }
+
+  @Post('guarantor-create')
+  @Roles('JVE', 'VEN')
+  async createGuarantor(
+    @Body() createGuarantorDto: CreateGuarantorDto,
+  ) {
+    return this.salesService.createGuarantor(createGuarantorDto);
+  } 
+
+  @Get('clients/:id')
+  @Roles('JVE', 'VEN')
+  async findOneClientById(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.salesService.findOneClientById(id);
+  }
+
+  @Post('client-create')
+  @Roles('JVE', 'VEN')
+  async createClient(
+    @Body() createClientDto: CreateClientDto,
+    @GetUser() user: User,
+  ) {
+    return this.salesService.createClient(createClientDto, user.id);
   }
 }

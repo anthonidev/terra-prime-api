@@ -7,10 +7,10 @@ import { Column, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGene
 
 @Entity('clients')
 export class Client extends Timestamped {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn()
   id: number;
 
-  @OneToOne(() => Lead, (lead) => lead.client)
+  @OneToOne(() => Lead, (lead) => lead.client,{eager: true})
   @JoinColumn({ name: 'lead_id' })
   lead: Lead;
 
@@ -29,5 +29,11 @@ export class Client extends Timestamped {
     nullable: false
   })
   address: string;
+
+  @Column({
+    type: 'boolean',
+    default: true,
+  })
+  isActive: boolean;
 
 }

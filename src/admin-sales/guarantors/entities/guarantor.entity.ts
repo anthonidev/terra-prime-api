@@ -1,9 +1,10 @@
 import { Client } from "src/admin-sales/clients/entities/client.entity";
+import { Timestamped } from "src/common/entities/timestamped.entity";
 import { DocumentType } from "src/lead/entities/lead.entity";
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity('guarantors')
-export class Guarantor {
+export class Guarantor extends Timestamped {
   @PrimaryGeneratedColumn()
   id: number;
 

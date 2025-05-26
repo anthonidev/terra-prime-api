@@ -269,11 +269,12 @@ export class LeadService {
   async findAllByUser(userId: string): Promise<Lead[]> {
 
     const user = await this.userService.findOne(userId);
+    console.log(user);
     const leads = await this.leadRepository.find({
       where: {
         isInOffice:true,
         isActive: true,
-        vendor: user,
+        vendor: { id: user.id },
       },
       relations: ['source', 'ubigeo', 'vendor'],
     });
@@ -297,7 +298,20 @@ export class LeadService {
     return await this.leadRepository.save(updatedLeads);
   }
 
-  private async findOneById(id: string): Promise<Lead> {
+  async isValidLeadToVendor(leadId: string, vendorId: string): Promise<Lead> {
+    const lead = await this.findOneById(leadId);
+    if (lead.vendor.id !== vendorId)
+      throw new NotFoundException(
+        `El vendedor con ID ${vendorId} no se encuentra asignado en el lead`
+      );
+    if (!lead.isInOffice)
+      throw new ConflictException(
+        `El lead con ID ${leadId} no se encuentra en la oficina`
+      );
+    return lead;
+  }
+
+  async findOneById(id: string): Promise<Lead> {
     const lead = await this.leadRepository.findOne({
       where: { id },
       relations: ['source', 'ubigeo', 'vendor']

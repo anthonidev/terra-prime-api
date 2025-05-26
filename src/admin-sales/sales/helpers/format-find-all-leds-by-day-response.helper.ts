@@ -11,16 +11,16 @@ export const formatFindAllLedsByDayResponse = (lead: Lead) => {
     phone2: lead.phone2,
     age: lead.age,
     createdAt: lead.createdAt,
-    source: {
+    source: lead.source ? {
       id: lead.source.id,
       name: lead.source.name,
-    },
-    ubigeo: {
+    } : null,
+    ubigeo: lead.ubigeo ? {
       id: lead.ubigeo.id,
       name: lead.ubigeo.name,
       code: lead.ubigeo.code,
       parentId: lead.ubigeo.parentId,
-    },
+    } : null,
     vendor: lead.vendor ? {
       id: lead.vendor.id,
       firstName: lead.vendor.firstName,

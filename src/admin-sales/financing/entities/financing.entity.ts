@@ -51,17 +51,5 @@ export class Financing extends Timestamped {
     type: 'numeric',
     nullable: false,
   })
-  cuoteQuantityLot: number;
-
-  @Column({
-    type: 'numeric',
-    nullable: false,
-  })
-  cuoteQuantityHU: number;
-
-  @Column({
-    type: 'numeric',
-    nullable: false,
-  })
-  cuoteQuantityTotal: number;
+  cuoteQuantity: number;
 }

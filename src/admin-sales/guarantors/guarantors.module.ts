@@ -8,5 +8,6 @@ import { Guarantor } from './entities/guarantor.entity';
   imports: [TypeOrmModule.forFeature([Guarantor])],
   controllers: [GuarantorsController],
   providers: [GuarantorsService],
+  exports: [GuarantorsService],
 })
 export class GuarantorsModule {}

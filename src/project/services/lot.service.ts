@@ -244,6 +244,7 @@ export class LotService {
       throw new InternalServerErrorException('Error al obtener el lote');
     }
   }
+
   private transformLotToDetailDto(lot: Lot): LotDetailResponseDto {
     return {
       id: lot.id,
@@ -279,5 +280,14 @@ export class LotService {
     if (!lots)
       throw new NotFoundException(`No se encontraron lotes para esta manzana`);
     return lots.map(formatLotResponse);
+  }
+
+  async isLotValidForSale(lotId: string): Promise<Lot> {
+    const lot = await this.lotRepository.findOne({
+      where: { id: lotId, status: LotStatus.ACTIVE },
+    });
+    if (!lot)
+      throw new NotFoundException(`El lote con ID ${lotId} no se encuentra registrado`);
+    return lot;
   }
 }
