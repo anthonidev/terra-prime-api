@@ -35,12 +35,16 @@ export class FinancingService {
   }
 
   generateAmortizationTable(
-    principal: number,
+    totalAmount: number,
+    initialAmount: number,
+    reservationAmount: number,
     interestRate: number,
     numberOfPayments: number,
     firstPaymentDate: string | Date,
     includeDecimals: boolean = true,
   ): CreateFinancingInstallmentsDto[] {
+
+    const principal = totalAmount - initialAmount - reservationAmount;
 
     const installments: CreateFinancingInstallmentsDto[] = [];
 
@@ -113,11 +117,9 @@ export class FinancingService {
         let adjustmentNeeded = totalExpectedPaymentWithFullDecimals - sumOfCalculatedInstallments;
 
         if (Math.abs(adjustmentNeeded) > 0.005) {
-            let lastCouteAmount = installments[numberOfPayments - 1].couteAmount;
-            lastCouteAmount += adjustmentNeeded;
-            installments[numberOfPayments - 1].couteAmount = Math.round(lastCouteAmount);
-        } else {
-            installments[numberOfPayments - 1].couteAmount = Math.round(installments[numberOfPayments - 1].couteAmount);
+          let lastCouteAmount = installments[numberOfPayments - 1].couteAmount;
+          // ✅ Añadir el ajuste y dejarlo con decimales
+          installments[numberOfPayments - 1].couteAmount = parseFloat((lastCouteAmount + adjustmentNeeded).toFixed(2));
         }
     }
     return installments;

@@ -9,6 +9,7 @@ import { Reservation } from "src/admin-sales/reservations/entities/reservation.e
 import { LateTee } from "src/admin-sales/late-fee/entities/lafe-tee.entity";
 import { UrbanDevelopment } from "src/admin-sales/urban-development/entities/urban-development.entity";
 import { SaleType } from "../enums/sale-type.enum";
+import { Guarantor } from "src/admin-sales/guarantors/entities/guarantor.entity";
 
 @Entity('sales')
 export class Sale extends Timestamped {
@@ -17,6 +18,9 @@ export class Sale extends Timestamped {
 
   @ManyToOne(() => Client, (client) => client.sales)
   client: Client;
+
+  @ManyToOne(() => Guarantor, (guarantor) => guarantor.sales)
+  guarantor: Guarantor;
 
   @Column({
     type: 'enum',

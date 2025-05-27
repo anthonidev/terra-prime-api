@@ -12,6 +12,7 @@ import { User } from 'src/user/entities/user.entity';
 import { CalculateAmortizationDto } from '../financing/dto/calculate-amortizacion-dto';
 import { CreateGuarantorDto } from '../guarantors/dto/create-guarantor.dto';
 import { CreateClientDto } from '../clients/dto/create-client.dto';
+import { CreateClientAndGuarantorDto } from './dto/create-client-and-guarantor.dto';
 
 @Controller('sales')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -111,20 +112,31 @@ export class SalesController {
     return this.salesService.createGuarantor(createGuarantorDto);
   } 
 
-  @Get('clients/:id')
+  // @Get('clients/:id')
+  // @Roles('JVE', 'VEN')
+  // async findOneClientById(
+  //   @Param('id', ParseIntPipe) id: number,
+  // ) {
+  //   return this.salesService.findOneClientById(id);
+  // }
+
+  @Get('clients/document/:document')
   @Roles('JVE', 'VEN')
-  async findOneClientById(
-    @Param('id', ParseIntPipe) id: number,
-  ) {
-    return this.salesService.findOneClientById(id);
+  async findOneClientByDocument(
+    @Param('document') document: string,
+  ) { 
+    return this.salesService.findOneClientByDocument(document); 
   }
 
-  @Post('client-create')
+  @Post('client-and-guarantor-create')
   @Roles('JVE', 'VEN')
-  async createClient(
-    @Body() createClientDto: CreateClientDto,
+  async createClientAndGuarantor(
+    @Body() createClientAndGuarantorDto: CreateClientAndGuarantorDto,
     @GetUser() user: User,
-  ) {
-    return this.salesService.createClient(createClientDto, user.id);
+  ) {   
+    return this.salesService.createClientAndGuarantor({
+      ...createClientAndGuarantorDto,
+      userId: user.id,
+    });
   }
 }

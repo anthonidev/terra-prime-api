@@ -19,10 +19,10 @@ export class CreateSaleDto {
 	@IsNumber({}, { message: 'El identificador del cliente debe ser un número válido' })
 	@IsNotEmpty({ message: 'El identificador del cliente es requerido' })
   clientId: number;
-	
-	@IsNotEmpty({ message: 'El npumero de cuotas de la habilitación urbana es requerida' })
-	@IsInt({ message: 'El número de cuotas de la habilitación urbana debe ser un número entero' })
-  quantityHuCuotes: number;
+
+	@IsNumber({}, { message: 'El identificador del garante debe ser un número válido' })
+	@IsNotEmpty({ message: 'El identificador del garante es requerido' })
+	guarantorId: number;
 
 	@IsDateString({}, { message: 'La fecha de pago debe ser válida' })
 	@IsNotEmpty({ message: 'La fecha de pago es requerida' })
@@ -41,19 +41,24 @@ export class CreateSaleDto {
 	@Min(1, { message: 'El monto total no puede ser negativo o cero' })
 	totalAmount: number;
 
-	@IsNumber({}, { message: 'El monto inicial de la habilitación urbana debe ser un número válido' })
-	@IsNotEmpty({ message: 'El monto inicial de la habilitación urbana es requerida' })
-	@Min(0, { message: 'El monto inicial de la habilitación urbana no puede ser negativo' })
-	initialAmountUrbanDevelopment: number;
-
+	// HU
 	@IsNumber({}, { message: 'El monto total de la habilitación urbana debe ser un número válido' })
 	@IsNotEmpty({ message: 'El monto total de la habilitación urbana es requerida' })
-	@Min(1, { message: 'El monto total de la habilitación urbana no puede ser negativo o cero' })
+	@Min(0, { message: 'El monto total de la habilitación urbana no puede ser negativo' })
 	totalAmountUrbanDevelopment: number;
 
 	@IsDateString({}, { message: 'La fecha de pago inicial de la habilitación urbana debe ser válida' })
-	@IsNotEmpty({ message: 'La fecha de pago inicial de la habilitación urbana es requerida' })
-	firstPaymentDateHu: string;
+	@IsOptional()
+	firstPaymentDateHu?: string;
+
+	@IsOptional()
+	@IsNumber({}, { message: 'El monto inicial de la habilitación urbana debe ser un número válido' })
+	@Min(0, { message: 'El monto inicial de la habilitación urbana no puede ser negativo' })
+	initialAmountUrbanDevelopment?: number = 0;
+	
+	@IsOptional()
+	@IsInt({ message: 'El número de cuotas de la habilitación urbana debe ser un número entero' })
+  quantityHuCuotes?: number;
 
   // Financiado
 	@IsOptional()

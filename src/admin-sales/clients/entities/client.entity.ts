@@ -1,9 +1,8 @@
-import { Guarantor } from "src/admin-sales/guarantors/entities/guarantor.entity";
 import { Reservation } from "src/admin-sales/reservations/entities/reservation.entity";
 import { Sale } from "src/admin-sales/sales/entities/sale.entity";
 import { Timestamped } from "src/common/entities/timestamped.entity";
 import { Lead } from "src/lead/entities/lead.entity";
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, JoinColumn, OneToMany, OneToOne, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity('clients')
 export class Client extends Timestamped {
@@ -19,9 +18,6 @@ export class Client extends Timestamped {
 
   @OneToMany(() => Reservation, (reservation) => reservation.client)
   reservations: Reservation[];
-
-  @ManyToOne(() => Guarantor, (guarantor) => guarantor.clients)
-  guarantor: Guarantor;
 
   @Column({
     type: 'varchar',

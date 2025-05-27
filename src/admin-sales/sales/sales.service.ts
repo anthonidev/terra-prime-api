@@ -40,10 +40,15 @@ import { GuarantorResponse } from '../guarantors/interfaces/guarantor-response.i
 import { ClientResponse } from '../clients/interfaces/client-response.interface';
 import { UrbanDevelopmentService } from '../urban-development/urban-development.service';
 import { CalculateAmortizationResponse } from './interfaces/calculate-amortization-response.interface';
-import { calculateNextMonthDate } from './helpers/calculate-next-month-date.helper';
 import { ReservationsService } from '../reservations/reservations.service';
 import { validateSaleDates } from './helpers/validate-sale-dates.helper';
 import { LotStatus } from 'src/project/entities/lot.entity';
+import { ClientSaleResponse } from '../clients/interfaces/client-sale-response.interface';
+import { formatClientAndGuarantorResponse } from './helpers/format-client-and-guarantor-response.helper';
+import { ClientAndGuarantorResponse } from './interfaces/client-and-guarantor-response.interface';
+import { StatusReservation } from '../reservations/enums/status-reservation.enum';
+import { formatSaleResponse } from './helpers/format-sale-response.helper';
+import { SaleResponse } from './interfaces/sale-response.interface';
 
 @Injectable()
 export class SalesService {
@@ -68,45 +73,52 @@ export class SalesService {
   async create(
     createSaleDto: CreateSaleDto,
     userId: string,
-  ) {
-    const { clientId, lotId, saleDate, paymentDate, firstPaymentDateHu } = createSaleDto;
-    validateSaleDates({ saleDate, paymentDate, firstPaymentDateHu });
-    await Promise.all([
-      this.clientService.isValidClient(clientId),
-      this.lotService.isLotValidForSale(lotId),
-    ]);
-    // Crear venta
-    let savedSale;
-    const { saleType } = createSaleDto;
-    if (saleType === SaleType.DIRECT_PAYMENT)
-      savedSale = await this.handleSaleCreation(createSaleDto, userId, async (queryRunner, data) => {
-        const savedSale = await this.createSale(data, userId, null, queryRunner);
-        return savedSale;
-      });
-    if (saleType === SaleType.FINANCED)
-      savedSale = this.handleSaleCreation(createSaleDto, userId, async (queryRunner, data) => {
-        const { initialAmount, interestRate, quantitySaleCoutes, paymentDate, totalAmount, financingInstallments, reservationId } = data;
-        const reservationAmount = reservationId ? await this.reservationService.getAmountReservation(reservationId) : 0;
-        this.isValidFinancingDataSaLe(
+  ): Promise<SaleResponse> {
+    try {
+      const { clientId, lotId, guarantorId, saleDate, paymentDate, firstPaymentDateHu, reservationId } = createSaleDto;
+      validateSaleDates({ saleDate, paymentDate, firstPaymentDateHu });
+      await Promise.all([
+        this.clientService.isValidClient(clientId),
+        this.lotService.isLotValidForSale(lotId),
+        this.guarantorService.isValidGuarantor(guarantorId),
+        (reservationId) ? this.reservationService.isValidReservation(reservationId): null,
+      ]);
+
+      let sale;
+      if (createSaleDto.saleType === SaleType.DIRECT_PAYMENT) {
+        sale = await this.handleSaleCreation(createSaleDto, userId, async (queryRunner, data) => {
+          return this.createSale(data, userId, null, queryRunner);
+        });
+      } else if (createSaleDto.saleType === SaleType.FINANCED) {
+        sale = await this.handleSaleCreation(createSaleDto, userId, async (queryRunner, data) => {
+          const { initialAmount, interestRate, quantitySaleCoutes, paymentDate, totalAmount, financingInstallments, reservationId } = data;
+          const reservationAmount = reservationId ? await this.reservationService.getAmountReservation(reservationId) : 0;
+          this.isValidFinancingDataSaLe(
             totalAmount,
             reservationAmount,
             initialAmount,
             interestRate,
             quantitySaleCoutes,
             financingInstallments
-        );
-        const financingData = {
+          );
+          const financingData = {
             financingType: FinancingType.CREDITO,
             initialAmount,
             interestRate,
             quantityCoutes: quantitySaleCoutes,
             initialPaymentDate: paymentDate,
             financingInstallments: financingInstallments
-        };
-        const financingSale = await this.financingService.create(financingData, queryRunner);
-        return await this.createSale(data, userId, financingSale.id, queryRunner);
-      });
-    return await this.findOneById(savedSale.id);
+          };
+          const financingSale = await this.financingService.create(financingData, queryRunner);
+          return this.createSale(data, userId, financingSale.id, queryRunner);
+        });
+      }
+      const savedSale = await this.findOneById(sale.id);
+      return formatSaleResponse(savedSale);
+      // return savedSale;
+    } catch (error) {
+      throw error;
+    }
   }
 
   async findAllLeadsByDay(
@@ -187,15 +199,36 @@ export class SalesService {
     return await this.clientService.findOneById(id);
   }
 
-  async createClient(createClientDto: CreateClientDto, userId: string): Promise<ClientResponse> {
-    return await this.clientService.create(createClientDto, userId);
+  async findOneClientByDocument(document: string): Promise<ClientSaleResponse> {
+    return await this.clientService.findOneByDocument(document);
+  }
+
+  async createClientAndGuarantor(data: {
+    createClient: CreateClientDto,
+    createGuarantor: CreateGuarantorDto,
+    document: string,
+    userId: string
+  }): Promise<ClientAndGuarantorResponse> {
+    return await this.transactionService.runInTransaction(async (queryRunner) => {
+      const { createClient, createGuarantor, userId, document} = data;
+      const existingClient = await this.clientService.findOneByDocument(document);
+      let client: ClientResponse;
+      if (existingClient)
+        client = await this.clientService.findOneById(existingClient.id);
+      if(!existingClient)
+        client = await this.clientService.create(createClient, userId, queryRunner);
+      const guarantor = await this.guarantorService.create(createGuarantor, queryRunner);
+      return formatClientAndGuarantorResponse(client, guarantor);
+    });
   }
 
   calculateAmortization(
     calculateAmortizationDto: CalculateAmortizationDto,
   ): CalculateAmortizationResponse {
     const installments = this.financingService.generateAmortizationTable(
-      calculateAmortizationDto.principalAmount,
+      calculateAmortizationDto.totalAmount,
+      calculateAmortizationDto.initialAmount,
+      calculateAmortizationDto.reservationAmount,
       calculateAmortizationDto.interestRate,
       calculateAmortizationDto.numberOfPayments,
       calculateAmortizationDto.firstPaymentDate,
@@ -217,15 +250,24 @@ export class SalesService {
     createSaleDto: CreateSaleDto,
     userId: string,
     saleSpecificLogic: (queryRunner: QueryRunner, createSaleDto: CreateSaleDto) => Promise<Sale>,
-) {
+  ) {
     return await this.transactionService.runInTransaction(async (queryRunner) => {
-        const savedSale = await saleSpecificLogic(queryRunner, createSaleDto);
-        const financingDataHu = this.calculateAndCreateFinancingHu(createSaleDto);
-        const financingHu = await this.financingService.create(financingDataHu, queryRunner);
-        await this.createUrbanDevelopment(savedSale.id, financingHu.id, createSaleDto, queryRunner);
-        await this.lotService.updateStatus(savedSale.lot.id, LotStatus.SOLD, queryRunner);
+      const savedSale = await saleSpecificLogic(queryRunner, createSaleDto);
+      await this.lotService.updateStatus(savedSale.lot.id, LotStatus.SOLD, queryRunner);
+      if (createSaleDto.totalAmountUrbanDevelopment === 0) return savedSale;
+      this.isValidUrbanDevelopmentDataSaLe(
+        createSaleDto.firstPaymentDateHu,
+        createSaleDto.initialAmountUrbanDevelopment,
+        createSaleDto.quantityHuCuotes,
+      );
+      if (createSaleDto.reservationId)
+        await this.reservationService.updateStatusReservation(createSaleDto.reservationId, StatusReservation.SOLD);
+      const financingDataHu = this.calculateAndCreateFinancingHu(createSaleDto);
+      const financingHu = await this.financingService.create(financingDataHu, queryRunner);
+      await this.createUrbanDevelopment(savedSale.id, financingHu.id, createSaleDto, queryRunner);
+      return savedSale;
     });
-}
+  }
 
   async createSale(
     createSaleDto: CreateSaleDto,
@@ -239,6 +281,7 @@ export class SalesService {
     const sale = repository.create({
       lot: { id: createSaleDto.lotId },
       client: { id: createSaleDto.clientId },
+      guarantor: { id: createSaleDto.guarantorId },
       type: createSaleDto.saleType,
       reservation: createSaleDto.reservationId 
       ? { id: createSaleDto.reservationId } 
@@ -257,14 +300,27 @@ export class SalesService {
     financingHuId: string,
     createSaleDto: CreateSaleDto,
     queryRunner: QueryRunner,
-) {
-    await this.urbanDevelopmentService.create({
-        saleId: savedSaleId,
-        financingId: financingHuId,
-        amount: createSaleDto.totalAmountUrbanDevelopment,
-        initialAmount: createSaleDto.initialAmountUrbanDevelopment,
-    }, queryRunner);
-}
+  ) {
+      await this.urbanDevelopmentService.create({
+          saleId: savedSaleId,
+          financingId: financingHuId,
+          amount: createSaleDto.totalAmountUrbanDevelopment,
+          initialAmount: createSaleDto.initialAmountUrbanDevelopment,
+      }, queryRunner);
+  }
+
+  private isValidUrbanDevelopmentDataSaLe(
+    datePayment: string,
+    initialAmount: number,
+    quantityHuCuotes: number,
+  ): void {
+    if (!datePayment)
+      throw new BadRequestException('La fecha de pago inicial de la habilitación urbana es requerida');
+    if (!initialAmount)
+      throw new BadRequestException('El monto inicial de la habilitación urbana es requerido');
+    if (!quantityHuCuotes)
+      throw new BadRequestException('El número de cuotas de la habilitación urbana es requerida');
+  }
 
   private isValidFinancingDataSaLe(
     totalAmount: number,
@@ -287,9 +343,11 @@ export class SalesService {
         `El número de cuotas enviadas (${financingInstallments.length}) no coincide con la cantidad de cuotas esperada (${quantitySaleCoutes}).`
       );
     const sumOfInstallmentAmounts = financingInstallments.reduce((sum, installment) => sum + installment.couteAmount, 0);
-    const amount = totalAmount - initialAmount - reservationAmount;
+    // const amount = totalAmount - initialAmount - reservationAmount;
     const calculatedAmortization = this.financingService.generateAmortizationTable(
-      amount,
+      totalAmount,
+      initialAmount,
+      reservationAmount,
       interestRate,
       quantitySaleCoutes,
       financingInstallments[0]?.expectedPaymentDate.toString(),
@@ -302,14 +360,21 @@ export class SalesService {
       throw new BadRequestException(
         `La suma de los montos de las cuotas enviadas (${sumOfInstallmentAmounts.toFixed(2)}) no coincide con el monto total esperado según la amortización (${expectedTotalAmortizedAmount.toFixed(2)}).`
       );
-
   }
 
 
   async findOneById(id: string): Promise<Sale> {
     const sale = await this.saleRepository.findOne({
       where: { id },
-      relations: ['client', 'lot', 'financing'],
+      relations: [
+        'client',
+        'lot',
+        'financing',
+        'guarantor',
+        'reservation',
+        'vendor',
+        'financing.financingInstallments'
+      ],
     });
     if (!sale)
       throw new NotFoundException(`La venta con ID ${id} no se encuentra registrado`);
@@ -318,7 +383,9 @@ export class SalesService {
 
   private calculateAndCreateFinancingHu(createSaleDto: CreateSaleDto) {
     const financingInstallmentsHu = this.calculateAmortization({
-      principalAmount: createSaleDto.totalAmountUrbanDevelopment - createSaleDto.initialAmountUrbanDevelopment,
+      totalAmount: createSaleDto.totalAmountUrbanDevelopment,
+      initialAmount: createSaleDto.initialAmountUrbanDevelopment,
+      reservationAmount: 0,
       interestRate: 0,
       numberOfPayments:createSaleDto.quantityHuCuotes,
       firstPaymentDate: createSaleDto.firstPaymentDateHu,

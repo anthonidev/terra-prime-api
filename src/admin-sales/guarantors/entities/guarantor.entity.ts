@@ -1,4 +1,5 @@
 import { Client } from "src/admin-sales/clients/entities/client.entity";
+import { Sale } from "src/admin-sales/sales/entities/sale.entity";
 import { Timestamped } from "src/common/entities/timestamped.entity";
 import { DocumentType } from "src/lead/entities/lead.entity";
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
@@ -58,6 +59,6 @@ export class Guarantor extends Timestamped {
   })
   address: string;
 
-  @OneToMany(() => Client, (client) => client.guarantor)
-  clients: Client[];
+  @OneToMany(() => Sale, (sale) => sale.guarantor)
+  sales: Sale[];
 }

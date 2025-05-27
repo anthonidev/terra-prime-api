@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { Reservation } from './entities/reservation.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { StatusReservation } from './enums/status-reservation.enum';
 
 @Injectable()
 export class ReservationsService {
@@ -18,6 +19,26 @@ export class ReservationsService {
       select: ['amount'],
     });
     return reservation.amount;
+  }
+
+  async isValidReservation(reservationId: string): Promise<Reservation> {
+    const reservation = await this.reservationRepository.findOne({
+      where: { id: reservationId, status: StatusReservation.PENDING },
+    });
+    if (!reservation)
+      throw new NotFoundException(`La reserva con ID ${reservationId} no se encuentra disponible`);
+    return reservation;
+  }
+
+  async updateStatusReservation(reservationId: string, status: StatusReservation): Promise<Reservation> {
+    const reservation = await this.reservationRepository.findOne({
+      where: { id: reservationId },
+    });
+    if (!reservation)
+      throw new NotFoundException(`La reserva con ID ${reservationId} no se encuentra registrada`);
+    reservation.status = status;
+    await this.reservationRepository.save(reservation);
+    return reservation;
   }
 
   create(createReservationDto: CreateReservationDto) {

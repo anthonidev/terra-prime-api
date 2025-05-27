@@ -6,7 +6,17 @@ export class CalculateAmortizationDto {
   @IsNotEmpty({ message: 'El monto total de financiación es requerido' })
   @IsNumber({}, { message: 'El monto total de financiación debe ser un número' })
   @Type(() => Number)
-  principalAmount: number;
+  totalAmount: number;
+
+  @IsNotEmpty({ message: 'El monto inicial de financiación es requerido' })
+  @IsNumber({}, { message: 'El monto inicial de financiación debe ser un número' })
+  @Type(() => Number)
+  initialAmount: number;
+
+  @IsOptional()
+  @IsNumber({}, { message: 'El monto de reserva debe ser un número' })
+  @Type(() => Number)
+  reservationAmount?: number = 0;
 
   @IsNotEmpty({ message: 'El porcentaje de interés es requerido' })
   @IsNumber({}, { message: 'El porcentaje de interés debe ser un número' })

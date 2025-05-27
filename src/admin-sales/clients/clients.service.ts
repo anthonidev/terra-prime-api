@@ -2,11 +2,13 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { CreateClientDto } from './dto/create-client.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Client } from './entities/client.entity';
-import { Repository } from 'typeorm';
+import { QueryRunner, Repository } from 'typeorm';
 import { LeadService } from 'src/lead/services/lead.service';
 import { GuarantorsService } from '../guarantors/guarantors.service';
 import { ClientResponse } from './interfaces/client-response.interface';
 import { formatClientResponse } from './helpers/format-client-response.helper';
+import { formatClientResponseSale } from './helpers/format-client-response-sale.helper';
+import { ClientSaleResponse } from './interfaces/client-sale-response.interface';
 
 @Injectable()
 export class ClientsService {
@@ -20,23 +22,25 @@ export class ClientsService {
   async create(
     createClientDto: CreateClientDto,
     userId: string,
+    queryRunner?: QueryRunner,
   ): Promise<ClientResponse> {
     try {
-      const { leadId, guarantorId, address } = createClientDto;
+      const { leadId, address } = createClientDto;
+      const repository = queryRunner
+        ? queryRunner.manager.getRepository(Client)
+        : this.clientRepository;
       const lead = await this.leadService.findOneById(leadId);
-      const guarantor = guarantorId ? await this.guarantorService.findOneById(guarantorId) : undefined;
       if (lead.vendor.id !== userId)
         throw new NotFoundException(
           `El cliente con ID ${leadId} no se encuentra asignado al vendedor activo`,
         );
-      const client = this.clientRepository.create({
+      const client = repository.create({
         lead: { id: leadId },
         address,
-        guarantor: guarantor ? { id: guarantor.id } : undefined,
       });
-      const savedClient = await this.clientRepository.save(client);
-      const responseClient = await this.findOneById(savedClient.id);
-      return formatClientResponse(responseClient);
+      const savedClient = await repository.save(client);
+      // const responseClient = await this.findOneById(savedClient.id);
+      return formatClientResponse(savedClient);
     } catch (error) {
       throw new ConflictException(error.message);
     }
@@ -45,11 +49,20 @@ export class ClientsService {
   async findOneById(id: number): Promise<Client> {
     const client = await this.clientRepository.findOne({
       where: { id },
-      relations: ['lead', 'lead.ubigeo', 'lead.source', 'guarantor'],
+      relations: ['lead'],
     });
     if (!client)
       throw new NotFoundException(`El cliente con ID ${id} no se encuentra registrado`);
     return client;
+  }
+
+  async findOneByDocument(document: string): Promise<ClientSaleResponse> {
+    const client = await this.clientRepository.findOne({
+      where: { lead: { document } },
+      relations: ['lead'],
+    });
+    if (!client) return null;
+    return formatClientResponseSale(client);
   }
 
   // Internal helpers methods

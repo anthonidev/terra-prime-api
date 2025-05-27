@@ -5,6 +5,5 @@ export interface ClientResponse {
   id: number;
   address: string;
   lead: LeadsByDayResponse;
-  guarantor: GuarantorResponse;
   createdAt: Date;
 }
