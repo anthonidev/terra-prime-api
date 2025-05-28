@@ -66,7 +66,7 @@ export class SalesController {
     return this.salesService.findAllVendors();
   }
 
-  @Get('projects-actives')
+  @Get('projects/actives')
   @Roles('JVE', 'VEN')
   findAllActiveProjects() {
     return this.salesService.findAllActiveProjects();
