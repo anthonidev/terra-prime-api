@@ -2,4 +2,7 @@ import { CreateFinancingInstallmentsDto } from "src/admin-sales/financing/dto/cr
 
 export interface CalculateAmortizationResponse {
   installments: CreateFinancingInstallmentsDto[];
+  meta: {
+    totalCouteAmountSum: number;
+  }
 }

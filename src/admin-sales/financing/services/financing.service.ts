@@ -122,6 +122,7 @@ export class FinancingService {
           installments[numberOfPayments - 1].couteAmount = parseFloat((lastCouteAmount + adjustmentNeeded).toFixed(2));
         }
     }
+    
     return installments;
   }
 

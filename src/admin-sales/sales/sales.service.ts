@@ -224,9 +224,9 @@ export class SalesService {
     return await this.guarantorService.findOneById(id);
   }
 
-  async createGuarantor(createGuarantorDto: CreateGuarantorDto): Promise<GuarantorResponse> {
-    return await this.guarantorService.create(createGuarantorDto);
-  }
+  // async createGuarantor(createGuarantorDto: CreateGuarantorDto): Promise<GuarantorResponse> {
+  //   return await this.guarantorService.create(createGuarantorDto);
+  // }
 
   async findOneClientById(id: number): Promise<Client> {
     return await this.clientService.findOneById(id);
@@ -243,14 +243,9 @@ export class SalesService {
     userId: string
   }): Promise<ClientAndGuarantorResponse> {
     return await this.transactionService.runInTransaction(async (queryRunner) => {
-      const { createClient, createGuarantor, userId, document} = data;
-      const existingClient = await this.clientService.findOneByDocument(document);
-      let client: ClientResponse;
-      if (existingClient)
-        client = await this.clientService.findOneById(existingClient.id);
-      if(!existingClient)
-        client = await this.clientService.create(createClient, userId, queryRunner);
-      const guarantor = await this.guarantorService.create(createGuarantor, queryRunner);
+      const { createClient, createGuarantor, userId } = data;
+      const  client = await this.clientService.createOrUpdate(createClient, userId, queryRunner);
+      const guarantor = await this.guarantorService.createOrUpdate(createGuarantor, queryRunner);
       return formatClientAndGuarantorResponse(client, guarantor);
     });
   }
@@ -267,6 +262,7 @@ export class SalesService {
       calculateAmortizationDto.firstPaymentDate,
       calculateAmortizationDto.includeDecimals,
     );
+    const totalCouteAmountSum = installments.reduce((sum, installment) => sum + installment.couteAmount, 0);
     return {
       installments: installments.map((installment) => {
         const { couteAmount, expectedPaymentDate } = installment;
@@ -275,6 +271,9 @@ export class SalesService {
           expectedPaymentDate: expectedPaymentDate,
         };
       }),
+      meta: {
+        totalCouteAmountSum
+      }
     };
   }
 

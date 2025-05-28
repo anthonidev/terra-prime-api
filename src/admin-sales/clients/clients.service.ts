@@ -46,6 +46,41 @@ export class ClientsService {
     }
   }
 
+  async createOrUpdate(
+    createClientDto: CreateClientDto,
+    userId: string,
+    queryRunner?: QueryRunner,
+  ): Promise<ClientResponse> {
+    try {
+      const { leadId, address } = createClientDto;
+      const repository = queryRunner
+        ? queryRunner.manager.getRepository(Client)
+        : this.clientRepository;
+      const lead = await this.leadService.findOneById(leadId);
+      if (lead.vendor.id !== userId)
+        throw new NotFoundException(
+          `El cliente con ID ${leadId} no se encuentra asignado al vendedor activo`,
+        );
+      const client = await this.clientRepository.findOne({
+        where: { lead: { id: leadId } },
+        relations: ['lead'],
+      });
+      if (!client) {
+        const client = repository.create({
+          lead: { id: leadId },
+          address,
+        });
+        const savedClient = await repository.save(client);
+        return formatClientResponse(savedClient);
+      }
+      client.address = address;
+      await repository.save(client);
+      return formatClientResponse(client);
+    } catch (error) {
+      throw new ConflictException(error.message);
+    }
+  }
+
   async findOneById(id: number): Promise<Client> {
     const client = await this.clientRepository.findOne({
       where: { id },

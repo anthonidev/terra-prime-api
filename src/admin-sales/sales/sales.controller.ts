@@ -121,13 +121,13 @@ export class SalesController {
     return this.salesService.findOneGuarantorById(id);
   }
 
-  @Post('guarantors/create')
-  @Roles('JVE', 'VEN')
-  async createGuarantor(
-    @Body() createGuarantorDto: CreateGuarantorDto,
-  ) {
-    return this.salesService.createGuarantor(createGuarantorDto);
-  }
+  // @Post('guarantors/create')
+  // @Roles('JVE', 'VEN')
+  // async createGuarantor(
+  //   @Body() createGuarantorDto: CreateGuarantorDto,
+  // ) {
+  //   return this.salesService.createGuarantor(createGuarantorDto);
+  // }
 
   @Get('clients/document/:document')
   @Roles('JVE', 'VEN')

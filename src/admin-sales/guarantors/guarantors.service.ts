@@ -13,7 +13,7 @@ export class GuarantorsService {
     private readonly guarantorRepository: Repository<Guarantor>,
   ) {}
   // Methods for endpoints
-  async create(
+  async createOrUpdate(
     createGuarantorDto: CreateGuarantorDto,
     queryRunner?: QueryRunner,
   ): Promise<GuarantorResponse> {
