@@ -60,7 +60,7 @@ export class SalesController {
     return this.salesService.assignLeadsToVendor(assignLeadsToVendorDto);
   }
 
-  @Get('vendors-actives')
+  @Get('vendors/actives')
   @Roles('JVE')
   findAllVendors() {
     return this.salesService.findAllVendors();
@@ -97,7 +97,7 @@ export class SalesController {
     return this.salesService.findAllLotsByBlockId(blockId, findAllLotsDto);
   }
 
-  @Get('leads-vendor')
+  @Get('leads/vendor')
   @Roles('VEN')
   async findAllLeadsByUser(
     @GetUser() user: User,
