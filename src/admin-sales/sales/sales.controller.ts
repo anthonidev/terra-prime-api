@@ -52,7 +52,7 @@ export class SalesController {
     return this.salesService.findAllLeadsByDay(findAllLeadsByDayDto);
   }
 
-  @Post('assign-leads-to-vendor')
+  @Post('leads/assign/vendor')
   @Roles('JVE')
   assignLeadsToVendor(
     @Body() assignLeadsToVendorDto: AssignLeadsToVendorDto,
@@ -105,7 +105,7 @@ export class SalesController {
     return this.salesService.findAllLeadsByUser(user.id);
   }
 
-  @Post('calculate-amortization')
+  @Post('financing/calculate-amortization')
   @Roles('JVE', 'VEN')
   async calculateAmortization(
     @Body() calculateAmortizationDto: CalculateAmortizationDto,
@@ -121,7 +121,7 @@ export class SalesController {
     return this.salesService.findOneGuarantorById(id);
   }
 
-  @Post('guarantor-create')
+  @Post('guarantors/create')
   @Roles('JVE', 'VEN')
   async createGuarantor(
     @Body() createGuarantorDto: CreateGuarantorDto,
@@ -137,7 +137,7 @@ export class SalesController {
     return this.salesService.findOneClientByDocument(document); 
   }
 
-  @Post('client-and-guarantor-create')
+  @Post('clients/guarantors/create')
   @Roles('JVE', 'VEN')
   async createClientAndGuarantor(
     @Body() createClientAndGuarantorDto: CreateClientAndGuarantorDto,
