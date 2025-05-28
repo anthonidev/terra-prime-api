@@ -44,7 +44,7 @@ export class SalesController {
     return this.salesService.findOneById(id);
   }
 
-  @Get('leads-day')
+  @Get('leads/day')
   @Roles('JVE')
   findAllLeadsByDay(
     @Query() findAllLeadsByDayDto: FindAllLeadsByDayDto,
