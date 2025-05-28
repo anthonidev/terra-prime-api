@@ -38,10 +38,9 @@ export class GuarantorsService {
   async findOneById(id: number): Promise<Guarantor> {
     const guarantor = await this.guarantorRepository.findOne({
       where: { id },
-      relations: ['clients'],
     });
     if (!guarantor)
-      throw new NotFoundException(`El aval con ID ${id} no se encuentra registrado`);
+      throw new NotFoundException(`El garante con ID ${id} no se encuentra registrado`);
     return guarantor;
   }
 

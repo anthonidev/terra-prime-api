@@ -20,11 +20,28 @@ export class SalesController {
   constructor(private readonly salesService: SalesService) {}
 
   @Post()
+  @Roles('JVE', 'VEN')
   create(
     @Body() createSaleDto: CreateSaleDto,
     @GetUser() user: User,
   ) {
     return this.salesService.create(createSaleDto, user.id);
+  }
+
+  @Get()
+  @Roles('JVE', 'VEN')
+  findAll(
+    @GetUser() user: User,
+  ) {
+    return this.salesService.findAll(user.id);
+  }
+
+  @Get(':id')
+  @Roles('JVE', 'VEN')
+  async findOneById(
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.salesService.findOneById(id);
   }
 
   @Get('leads-day')
@@ -110,15 +127,7 @@ export class SalesController {
     @Body() createGuarantorDto: CreateGuarantorDto,
   ) {
     return this.salesService.createGuarantor(createGuarantorDto);
-  } 
-
-  // @Get('clients/:id')
-  // @Roles('JVE', 'VEN')
-  // async findOneClientById(
-  //   @Param('id', ParseIntPipe) id: number,
-  // ) {
-  //   return this.salesService.findOneClientById(id);
-  // }
+  }
 
   @Get('clients/document/:document')
   @Roles('JVE', 'VEN')

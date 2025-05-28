@@ -19,11 +19,13 @@ export function formatSaleResponse(sale: Sale) {
       lotPrice: sale.lot?.lotPrice,
     },
     financing: sale.financing ? {
+      id: sale.financing.id,
       initialAmount: sale.financing.initialAmount,
       interestRate: sale.financing.interestRate,
       quantityCoutes: sale.financing.quantityCoutes,
       financingInstallments: sale.financing.financingInstallments.map((installment) => {
         return {
+          id: installment.id,
           couteAmount: installment.couteAmount,
           expectedPaymentDate: installment.expectedPaymentDate.toISOString(),
         };
