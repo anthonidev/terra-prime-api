@@ -113,12 +113,45 @@ export class SalesService {
           return this.createSale(data, userId, financingSale.id, queryRunner);
         });
       }
-      const savedSale = await this.findOneById(sale.id);
-      return formatSaleResponse(savedSale);
+      return await this.findOneById(sale.id);
       // return savedSale;
     } catch (error) {
       throw error;
     }
+  }
+
+  async findAll(userId: string): Promise<SaleResponse[]> {
+    const sales = await this.saleRepository.find({
+      relations: [
+        'client', 
+        'lot', 
+        'financing', 
+        'guarantor', 
+        'reservation', 
+        'vendor', 
+        'financing.financingInstallments'
+      ],
+      where: { vendor: { id: userId } },
+    });
+    return sales.map(formatSaleResponse);
+  }
+
+  async findOneById(id: string): Promise<SaleResponse> {
+    const sale = await this.saleRepository.findOne({
+      where: { id },
+      relations: [
+        'client',
+        'lot',
+        'financing',
+        'guarantor',
+        'reservation',
+        'vendor',
+        'financing.financingInstallments'
+      ],
+    });
+    if (!sale)
+      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrado`);
+    return formatSaleResponse(sale);
   }
 
   async findAllLeadsByDay(
@@ -281,8 +314,10 @@ export class SalesService {
     const sale = repository.create({
       lot: { id: createSaleDto.lotId },
       client: { id: createSaleDto.clientId },
-      guarantor: { id: createSaleDto.guarantorId },
-      type: createSaleDto.saleType,
+      guarantor: createSaleDto.guarantorId 
+      ? { id: createSaleDto.guarantorId } 
+      : null,
+      type: createSaleDto.saleType, 
       reservation: createSaleDto.reservationId 
       ? { id: createSaleDto.reservationId } 
       : null,
@@ -360,25 +395,6 @@ export class SalesService {
       throw new BadRequestException(
         `La suma de los montos de las cuotas enviadas (${sumOfInstallmentAmounts.toFixed(2)}) no coincide con el monto total esperado según la amortización (${expectedTotalAmortizedAmount.toFixed(2)}).`
       );
-  }
-
-
-  async findOneById(id: string): Promise<Sale> {
-    const sale = await this.saleRepository.findOne({
-      where: { id },
-      relations: [
-        'client',
-        'lot',
-        'financing',
-        'guarantor',
-        'reservation',
-        'vendor',
-        'financing.financingInstallments'
-      ],
-    });
-    if (!sale)
-      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrado`);
-    return sale;
   }
 
   private calculateAndCreateFinancingHu(createSaleDto: CreateSaleDto) {

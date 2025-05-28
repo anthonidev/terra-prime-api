@@ -1,5 +1,3 @@
-import { DocumentType } from "src/seed/data/config.data";
-
 export interface SaleResponse {
   id: string;
   type: string;
@@ -18,6 +16,7 @@ export interface SaleResponse {
     lotPrice: number;
   };
   financing: {
+    id: string;
     initialAmount: number;
     interestRate: number;
     quantityCoutes: number;
