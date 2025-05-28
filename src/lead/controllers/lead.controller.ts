@@ -21,7 +21,7 @@ import { FindLeadsDto } from '../dto/find-leads.dto';
 @Controller('leads')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class LeadController {
-  constructor(private readonly leadService: LeadService) {}
+  constructor(private readonly leadService: LeadService) { }
   @Post('find-by-document')
   @Roles('SYS', 'REC', 'VEN')
   async findByDocument(@Body() findDto: FindLeadByDocumentDto) {
@@ -51,6 +51,7 @@ export class LeadController {
           data: null,
         };
       }
+      console.error('Error al buscar el lead por documento:', error);
       throw new HttpException(
         {
           success: false,
@@ -85,6 +86,7 @@ export class LeadController {
           data: null,
         };
       }
+      console.error('Error al registrar o actualizar el lead:', error);
       throw new HttpException(
         {
           success: false,
@@ -202,4 +204,5 @@ export class LeadController {
       );
     }
   }
+
 }
