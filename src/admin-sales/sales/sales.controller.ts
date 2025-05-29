@@ -13,6 +13,7 @@ import { CalculateAmortizationDto } from '../financing/dto/calculate-amortizacio
 import { CreateGuarantorDto } from '../guarantors/dto/create-guarantor.dto';
 import { CreateClientDto } from '../clients/dto/create-client.dto';
 import { CreateClientAndGuarantorDto } from './dto/create-client-and-guarantor.dto';
+import { PaginationDto } from 'src/common/dto/paginationDto';
 
 @Controller('sales')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -28,12 +29,22 @@ export class SalesController {
     return this.salesService.create(createSaleDto, user.id);
   }
 
-  @Get()
+  @Get('all/list')
+  @Roles('JVE')
+  findAllActives(
+    @GetUser() user: User,
+    @Query() paginationDto: PaginationDto,
+  ) {
+    return this.salesService.findAll(paginationDto);
+  }
+
+  @Get('all/list/vendor')
   @Roles('JVE', 'VEN')
   findAll(
     @GetUser() user: User,
+    @Query() paginationDto: PaginationDto,
   ) {
-    return this.salesService.findAll(user.id);
+    return this.salesService.findAll(paginationDto, user.id);
   }
 
   @Get(':id')

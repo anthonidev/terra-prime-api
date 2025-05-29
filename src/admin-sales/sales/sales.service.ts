@@ -49,6 +49,7 @@ import { ClientAndGuarantorResponse } from './interfaces/client-and-guarantor-re
 import { StatusReservation } from '../reservations/enums/status-reservation.enum';
 import { formatSaleResponse } from './helpers/format-sale-response.helper';
 import { SaleResponse } from './interfaces/sale-response.interface';
+import { PaginationDto } from 'src/common/dto/paginationDto';
 
 @Injectable()
 export class SalesService {
@@ -120,7 +121,8 @@ export class SalesService {
     }
   }
 
-  async findAll(userId: string): Promise<SaleResponse[]> {
+  async findAll(paginationDto: PaginationDto, userId?: string): Promise<Paginated<SaleResponse>> {
+    const whereCondition = userId ? { vendor: { id: userId } } : {};
     const sales = await this.saleRepository.find({
       relations: [
         'client', 
@@ -131,9 +133,9 @@ export class SalesService {
         'vendor', 
         'financing.financingInstallments'
       ],
-      where: { vendor: { id: userId } },
+      where: whereCondition,
     });
-    return sales.map(formatSaleResponse);
+    return PaginationHelper.createPaginatedResponse(sales.map(formatSaleResponse), sales.length, paginationDto);
   }
 
   async findOneById(id: string): Promise<SaleResponse> {
