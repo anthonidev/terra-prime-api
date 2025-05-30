@@ -133,4 +133,13 @@ export const vistaData = [
       },
     ],
   },
+  {
+    name: 'Bienvenidos',
+    url: '/ventas/bienvenidos',
+    order: 5,
+    icon: 'welcome',
+    code: 'WELCOME',
+    parent: null,
+    children: null,
+  }
 ];
