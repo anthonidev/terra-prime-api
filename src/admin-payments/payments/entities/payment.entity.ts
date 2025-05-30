@@ -101,8 +101,8 @@ export class Payment extends Timestamped {
   @Column({ nullable: true })
   relatedEntityType: string;
 
-  @Column({ nullable: true, type: 'int' })
-  relatedEntityId: number;
+  @Column({ nullable: true, type: 'varchar', length: 100 })
+  relatedEntityId: string;
 
   @Column({ type: 'json', nullable: true })
   metadata: Record<string, any>;

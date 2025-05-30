@@ -50,6 +50,14 @@ import { StatusReservation } from '../reservations/enums/status-reservation.enum
 import { formatSaleResponse } from './helpers/format-sale-response.helper';
 import { SaleResponse } from './interfaces/sale-response.interface';
 import { PaginationDto } from 'src/common/dto/paginationDto';
+import { PaymentsService } from 'src/admin-payments/payments/services/payments.service';
+import { CreatePaymentDto } from 'src/admin-payments/payments/dto/create-payment.dto';
+import { PaymentResponse } from 'src/admin-payments/payments/interfaces/payment-response.interface';
+import { CreateDetailPaymentDto } from 'src/admin-payments/payments/dto/create-detail-payment.dto';
+import { MethodPayment } from 'src/admin-payments/payments/enums/method-payment.enum';
+import { query } from 'express';
+import { StatusSale } from './enums/status-sale.enum';
+import { CreatePaymentSaleDto } from './dto/create-payment-sale.dto';
 
 @Injectable()
 export class SalesService {
@@ -69,6 +77,7 @@ export class SalesService {
     @Inject(forwardRef(() => UrbanDevelopmentService))
     private readonly urbanDevelopmentService: UrbanDevelopmentService,
     private readonly reservationService: ReservationsService,
+    private readonly paymentsService: PaymentsService,
   ) {}
 
   async create(
@@ -118,6 +127,30 @@ export class SalesService {
       // return savedSale;
     } catch (error) {
       throw error;
+    }
+  }
+
+  async createPaymentSale(
+    saleId: string,
+    createPaymentSaleDto: CreatePaymentSaleDto,
+    files: Express.Multer.File[],
+    userId: string,
+  ): Promise<PaymentResponse> {
+    const { payments } = createPaymentSaleDto;
+    try {
+      const sale = await this.findOneById(saleId);
+      if (!sale)
+        throw new NotFoundException(`Venta con ID ${saleId} no encontrada`);
+      const paymentDto = await this.isValidDataPaymentSale(sale, payments);
+      return await this.transactionService.runInTransaction(async (queryRunner) => {
+        const paymentResult = await this.paymentsService.create(paymentDto, files, userId, queryRunner);
+        return paymentResult;
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+          throw error;
+      }
+      throw new BadRequestException(`Error al crear pago para venta: ${error.message}`);
     }
   }
 
@@ -226,10 +259,6 @@ export class SalesService {
     return await this.guarantorService.findOneById(id);
   }
 
-  // async createGuarantor(createGuarantorDto: CreateGuarantorDto): Promise<GuarantorResponse> {
-  //   return await this.guarantorService.create(createGuarantorDto);
-  // }
-
   async findOneClientById(id: number): Promise<Client> {
     return await this.clientService.findOneById(id);
   }
@@ -279,7 +308,58 @@ export class SalesService {
     };
   }
 
+  async updateStatusSale(
+    id: string,
+    status: StatusSale,
+    queryRunner: QueryRunner,
+  ): Promise<void> {
+    const repository = queryRunner 
+      ? queryRunner.manager.getRepository(Sale) 
+      : this.saleRepository;
+    const sale = await repository.update({ id: id }, { status: status });
+    if (sale.affected === 0)
+      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrada`);
+  }
+
   // Internal helpers methods
+
+  private async isValidDataPaymentSale(
+    sale: SaleResponse,
+    paymentDetails: CreateDetailPaymentDto[]
+  ): Promise<CreatePaymentDto> {
+    const reservationAmount = sale.reservation ? await this.reservationService.getAmountReservation(sale.reservation.id) : 0;
+    let paymentDto: CreatePaymentDto;
+    if (sale.type === SaleType.DIRECT_PAYMENT) {
+      paymentDto = {
+        methodPayment: MethodPayment.VOUCHER,
+        amount: sale.totalAmount - reservationAmount,
+        relatedEntityType: 'sale', 
+        relatedEntityId: sale.id,
+        metadata: {
+          'Concepto de pago': 'Monto total de la venta de lote',
+          'Fecha de pago': new Date().toISOString(),
+          'Monto de pago': sale.totalAmount - reservationAmount,
+        },
+        paymentDetails
+      };
+    }
+    if (sale.type === SaleType.FINANCED) {
+      paymentDto = {
+        methodPayment: MethodPayment.VOUCHER,
+        amount: sale.financing.initialAmount - reservationAmount,
+        relatedEntityType: 'financing', 
+        relatedEntityId: sale.financing.id,
+        metadata: {
+          'Concepto de pago': 'Monto inicial de la venta de lote',
+          'Fecha de pago': new Date().toISOString(),
+          'Monto de pago': sale.financing.initialAmount - reservationAmount,
+        },
+        paymentDetails
+      };
+    }
+    return paymentDto;
+  }
+
   private async handleSaleCreation(
     createSaleDto: CreateSaleDto,
     userId: string,

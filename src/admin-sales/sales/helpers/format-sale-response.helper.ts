@@ -36,6 +36,7 @@ export function formatSaleResponse(sale: Sale) {
       lastName: sale.guarantor.lastName,
     } : null,
     reservation: sale.reservation ? {
+      id: sale.reservation.id,
       amount: sale.reservation.amount,
     } : null,
     vendor: sale.vendor ? {

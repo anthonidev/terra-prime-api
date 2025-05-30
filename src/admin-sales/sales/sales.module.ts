@@ -12,6 +12,7 @@ import { CommonModule } from 'src/common/common.module';
 import { GuarantorsModule } from '../guarantors/guarantors.module';
 import { UrbanDevelopmentModule } from '../urban-development/urban-development.module';
 import { ReservationsModule } from '../reservations/reservations.module';
+import { PaymentsModule } from 'src/admin-payments/payments/payments.module';
 
 @Module({
   imports: [
@@ -23,7 +24,8 @@ import { ReservationsModule } from '../reservations/reservations.module';
     CommonModule,
     GuarantorsModule,
     ReservationsModule,
-    forwardRef(() => UrbanDevelopmentModule)
+    forwardRef(() => UrbanDevelopmentModule),
+    PaymentsModule
   ],
   controllers: [SalesController],
   providers: [SalesService],

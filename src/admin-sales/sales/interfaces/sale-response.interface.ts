@@ -26,6 +26,7 @@ export interface SaleResponse {
     lastName: string;
   };
   reservation: {
+    id: string;
     amount: number;
   };
   vendor: {

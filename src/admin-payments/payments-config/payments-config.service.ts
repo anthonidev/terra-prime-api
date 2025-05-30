@@ -1,26 +1,22 @@
-import { Injectable } from '@nestjs/common';
-import { CreatePaymentsConfigDto } from './dto/create-payments-config.dto';
-import { UpdatePaymentsConfigDto } from './dto/update-payments-config.dto';
+import { BadRequestException, Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { PaymentConfig } from "src/admin-payments/payments-config/entities/payments-config.entity";
+import { Repository } from "typeorm";
 
 @Injectable()
 export class PaymentsConfigService {
-  create(createPaymentsConfigDto: CreatePaymentsConfigDto) {
-    return 'This action adds a new paymentsConfig';
-  }
-
-  findAll() {
-    return `This action returns all paymentsConfig`;
-  }
-
-  findOne(id: number) {
-    return `This action returns a #${id} paymentsConfig`;
-  }
-
-  update(id: number, updatePaymentsConfigDto: UpdatePaymentsConfigDto) {
-    return `This action updates a #${id} paymentsConfig`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} paymentsConfig`;
+  constructor(
+    @InjectRepository(PaymentConfig)
+    private readonly paymentConfigRepository: Repository<PaymentConfig>,
+  ) {}
+  async findOneByCode(code: string): Promise<PaymentConfig> {
+    const paymentConfig = await this.paymentConfigRepository.findOne({
+      where: { code },
+    });
+    if (!paymentConfig || !paymentConfig.isActive)
+      throw new BadRequestException(
+          'La opción de pago para órdenes no está disponible',
+      );
+    return paymentConfig;
   }
 }

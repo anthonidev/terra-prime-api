@@ -5,8 +5,8 @@ import { Timestamped } from "src/common/entities/timestamped.entity";
 
 @Entity('financing_installments')
 export class FinancingInstallments extends Timestamped {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
   @Column({
     type: 'numeric',

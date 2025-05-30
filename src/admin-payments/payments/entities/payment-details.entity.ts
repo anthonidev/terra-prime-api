@@ -10,7 +10,7 @@ export class PaymentDetails {
   @ManyToOne(
     () => Payment,
     (payment) => payment.details,
-    { nullable: false }
+    { nullable: false, onDelete: 'CASCADE' }
   )
   @JoinColumn({ name: 'payment_id' })
   payment: Payment;

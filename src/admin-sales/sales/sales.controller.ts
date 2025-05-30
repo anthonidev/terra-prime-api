@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, ParseUUIDPipe, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, ParseUUIDPipe, ParseIntPipe, UploadedFiles, ParseFilePipeBuilder, HttpStatus, ValidationPipe, UseInterceptors, UsePipes } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { FindAllLeadsByDayDto } from './dto/find-all-leads-by-day.dto';
@@ -14,6 +14,9 @@ import { CreateGuarantorDto } from '../guarantors/dto/create-guarantor.dto';
 import { CreateClientDto } from '../clients/dto/create-client.dto';
 import { CreateClientAndGuarantorDto } from './dto/create-client-and-guarantor.dto';
 import { PaginationDto } from 'src/common/dto/paginationDto';
+import { CreateDetailPaymentDto } from 'src/admin-payments/payments/dto/create-detail-payment.dto';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { CreatePaymentSaleDto } from './dto/create-payment-sale.dto';
 
 @Controller('sales')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -132,14 +135,6 @@ export class SalesController {
     return this.salesService.findOneGuarantorById(id);
   }
 
-  // @Post('guarantors/create')
-  // @Roles('JVE', 'VEN')
-  // async createGuarantor(
-  //   @Body() createGuarantorDto: CreateGuarantorDto,
-  // ) {
-  //   return this.salesService.createGuarantor(createGuarantorDto);
-  // }
-
   @Get('clients/document/:document')
   @Roles('JVE', 'VEN')
   async findOneClientByDocument(
@@ -158,5 +153,31 @@ export class SalesController {
       ...createClientAndGuarantorDto,
       userId: user.id,
     });
+  }
+
+  @Post('payments/sale/:id')
+  @Roles('JVE', 'VEN')
+  @UseInterceptors(FilesInterceptor('files'))
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async createPaymentSale(
+    @Body() createPaymentSaleDto: CreatePaymentSaleDto,
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user: User,
+    @UploadedFiles(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({
+          fileType: /(jpg|jpeg|png|webp)$/,
+        })
+        .addMaxSizeValidator({
+          maxSize: 1024 * 1024 * 2,
+        })
+        .build({
+          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+          fileIsRequired: false,
+        }),
+    )
+    files: Array<Express.Multer.File>,
+  ) {   
+    return this.salesService.createPaymentSale(id, createPaymentSaleDto, files, user.id);
   }
 }
