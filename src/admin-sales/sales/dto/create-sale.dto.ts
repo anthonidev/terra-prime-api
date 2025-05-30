@@ -78,12 +78,6 @@ export class CreateSaleDto {
   @Transform(({ value }) => value?.trim())
   paymentReference?: string;
 
-  @IsEnum(MethodPayment, {
-      message: 'El método de pago debe ser un valor válido',
-  })
-  @IsNotEmpty({ message: 'El método de pago es requerido' })
-  methodPayment: MethodPayment;
-
 	@Transform(({ value }) => {
 		if (typeof value === 'string') {
 				try {
