@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
 import { UpdatePaymentDto } from './dto/update-payment.dto';
 import { PaymentsService } from './services/payments.service';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -8,6 +8,7 @@ import { RejectionDto } from './dto/rejection.dto';
 import { ApprovePaymentDto } from './dto/approve-payment.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { FindPaymentsDto } from './dto/find-payments.dto';
 
 @Controller('payments')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -32,5 +33,13 @@ export class PaymentsController {
     @GetUser() user: User,
   ) {
     return this.paymentsService.rejectPayment(id, rejectionDto.rejectionReason, user.id);
+  }
+
+  @Get('list')
+  @Roles('JVE')
+  async findAllPayments(
+    @Query() filters: FindPaymentsDto,
+  ) {
+    return this.paymentsService.findAllPayments(filters);
   }
 }

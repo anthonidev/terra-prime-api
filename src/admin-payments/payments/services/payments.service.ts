@@ -18,6 +18,8 @@ import { ApprovePaymentDto } from '../dto/approve-payment.dto';
 import { SaleType } from 'src/admin-sales/sales/enums/sale-type.enum';
 import { LotService } from 'src/project/services/lot.service';
 import { LotStatus } from 'src/project/entities/lot.entity';
+import { FindPaymentsDto } from '../dto/find-payments.dto';
+import { PaginationHelper } from 'src/common/helpers/pagination.helper';
 
 @Injectable()
 export class PaymentsService {
@@ -215,6 +217,96 @@ export class PaymentsService {
         })),
       };
     });
+  }
+
+  async findAllPayments(filters: FindPaymentsDto) {
+    try {
+      const {
+        page = 1,
+        limit = 10,
+        startDate,
+        endDate,
+        paymentConfigId,
+        status,
+        order = 'DESC',
+        search,
+      } = filters;
+
+      const queryBuilder = this.paymentRepository
+        .createQueryBuilder('payment')
+        .leftJoinAndSelect('payment.paymentConfig', 'paymentConfig')
+        .leftJoinAndSelect('payment.reviewedBy', 'reviewer')
+        .leftJoinAndSelect('payment.user', 'user');
+
+      if (paymentConfigId)
+        queryBuilder.andWhere('payment.paymentConfig.id = :paymentConfigId', {
+          paymentConfigId,
+        });
+
+      if (status)
+        queryBuilder.andWhere('payment.status = :status', { status });
+
+      if (startDate)
+        queryBuilder.andWhere('payment.createdAt >= :startDate', {
+          startDate: new Date(startDate),
+        });
+
+      if (search) {
+        queryBuilder.andWhere(
+          '(user.email ILIKE :search)',
+          { search: `%${search}%` },
+        );
+      }
+
+      if (endDate) {
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        queryBuilder.andWhere('payment.createdAt <= :endDate', {
+          endDate: endOfDay,
+        });
+      }
+
+      queryBuilder
+        .orderBy('payment.createdAt', order)
+        .skip((page - 1) * limit)
+        .take(limit);
+
+      queryBuilder.select([
+        'payment.id',
+        'payment.amount',
+        'payment.status',
+        'payment.createdAt',
+        'payment.reviewedAt',
+        'payment.codeOperation',
+        'payment.banckName',
+        'payment.dateOperation',
+        'payment.numberTicket',
+        'paymentConfig.name',
+        'reviewer.id',
+        'reviewer.email',
+        'user.id',
+        'user.photo',
+        'user.email',
+      ]);
+
+      const [items, totalItems] = await queryBuilder.getManyAndCount();
+
+      const paginationResponse = PaginationHelper.createPaginatedResponse(
+        items,
+        totalItems,
+        filters,
+      );
+
+      return {
+        ...paginationResponse,
+        meta: {
+          ...paginationResponse.meta,
+        },
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   // Internal helpers methods
