@@ -10,6 +10,8 @@ import { LateTee } from "src/admin-sales/late-fee/entities/lafe-tee.entity";
 import { UrbanDevelopment } from "src/admin-sales/urban-development/entities/urban-development.entity";
 import { SaleType } from "../enums/sale-type.enum";
 import { Guarantor } from "src/admin-sales/guarantors/entities/guarantor.entity";
+import { SecondaryClient } from "src/admin-sales/secondary-client/entities/secondary-client.entity";
+import { SecondaryClientSale } from "src/admin-sales/secondary-client/entities/secondary-client-sale.entity";
 
 @Entity('sales')
 export class Sale extends Timestamped {
@@ -78,4 +80,7 @@ export class Sale extends Timestamped {
 
   @OneToMany(() => UrbanDevelopment, (urbanDevelopment) => urbanDevelopment.sale)
   urbanDevelopment: UrbanDevelopment[];
+
+  @OneToMany(() => SecondaryClientSale, (secondaryClient) => secondaryClient.sale)
+  secondaryClientSales: SecondaryClientSale[];
 }

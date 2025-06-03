@@ -6,8 +6,9 @@ import { ReservationsModule } from './reservations/reservations.module';
 import { GuarantorsModule } from './guarantors/guarantors.module';
 import { LateFeeModule } from './late-fee/late-fee.module';
 import { UrbanDevelopmentModule } from './urban-development/urban-development.module';
+import { SecondaryClientModule } from './secondary-client/secondary-client.module';
 
 @Module({
-  imports: [SalesModule, ClientsModule, FinancingModule, ReservationsModule, GuarantorsModule, LateFeeModule, UrbanDevelopmentModule]
+  imports: [SalesModule, ClientsModule, FinancingModule, ReservationsModule, GuarantorsModule, LateFeeModule, UrbanDevelopmentModule, SecondaryClientModule]
 })
 export class AdminSalesModule {}

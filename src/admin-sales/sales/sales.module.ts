@@ -13,6 +13,7 @@ import { GuarantorsModule } from '../guarantors/guarantors.module';
 import { UrbanDevelopmentModule } from '../urban-development/urban-development.module';
 import { ReservationsModule } from '../reservations/reservations.module';
 import { PaymentsModule } from 'src/admin-payments/payments/payments.module';
+import { SecondaryClientModule } from '../secondary-client/secondary-client.module';
 
 @Module({
   imports: [
@@ -25,7 +26,8 @@ import { PaymentsModule } from 'src/admin-payments/payments/payments.module';
     GuarantorsModule,
     ReservationsModule,
     forwardRef(() => UrbanDevelopmentModule),
-    PaymentsModule
+    PaymentsModule,
+    SecondaryClientModule
   ],
   controllers: [SalesController],
   providers: [SalesService],

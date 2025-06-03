@@ -21,8 +21,13 @@ export class CreateSaleDto {
   clientId: number;
 
 	@IsNumber({}, { message: 'El identificador del garante debe ser un número válido' })
-	@IsNotEmpty({ message: 'El identificador del garante es requerido' })
-	guarantorId: number;
+	@IsOptional()
+	guarantorId?: number;
+
+	@IsArray()
+	@IsOptional()
+	@Type(() => Number) 
+	secondaryClientsIds?: number[];
 
 	@IsDateString({}, { message: 'La fecha de pago debe ser válida' })
 	@IsNotEmpty({ message: 'La fecha de pago es requerida' })

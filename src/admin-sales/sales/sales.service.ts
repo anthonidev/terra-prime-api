@@ -59,6 +59,8 @@ import { query } from 'express';
 import { StatusSale } from './enums/status-sale.enum';
 import { CreatePaymentSaleDto } from './dto/create-payment-sale.dto';
 import { Financing } from '../financing/entities/financing.entity';
+import { CreateSecondaryClientDto } from '../secondary-client/dto/create-secondary-client.dto';
+import { SecondaryClientService } from '../secondary-client/secondary-client.service';
 
 @Injectable()
 export class SalesService {
@@ -79,6 +81,7 @@ export class SalesService {
     private readonly urbanDevelopmentService: UrbanDevelopmentService,
     private readonly reservationService: ReservationsService,
     private readonly paymentsService: PaymentsService,
+    private readonly secondaryClientService: SecondaryClientService,
   ) {}
 
   async create(
@@ -86,13 +89,14 @@ export class SalesService {
     userId: string,
   ): Promise<SaleResponse> {
     try {
-      const { clientId, lotId, guarantorId, saleDate, paymentDate, firstPaymentDateHu, reservationId } = createSaleDto;
+      const { clientId, lotId, guarantorId, saleDate, paymentDate, firstPaymentDateHu, reservationId, secondaryClientsIds = [] } = createSaleDto;
       validateSaleDates({ saleDate, paymentDate, firstPaymentDateHu });
       await Promise.all([
         this.clientService.isValidClient(clientId),
         this.lotService.isLotValidForSale(lotId),
-        this.guarantorService.isValidGuarantor(guarantorId),
+        (guarantorId) ? this.guarantorService.isValidGuarantor(guarantorId): null,
         (reservationId) ? this.reservationService.isValidReservation(reservationId): null,
+        ...secondaryClientsIds.map(id => this.secondaryClientService.isValidSecondaryClient(id)),
       ]);
 
       let sale;
@@ -280,15 +284,27 @@ export class SalesService {
 
   async createClientAndGuarantor(data: {
     createClient: CreateClientDto,
-    createGuarantor: CreateGuarantorDto,
+    createGuarantor?: CreateGuarantorDto,
+    createSecondaryClient?: CreateSecondaryClientDto[],
     document: string,
     userId: string
   }): Promise<ClientAndGuarantorResponse> {
     return await this.transactionService.runInTransaction(async (queryRunner) => {
-      const { createClient, createGuarantor, userId } = data;
+      const { createClient, createGuarantor, createSecondaryClient, userId } = data;
       const  client = await this.clientService.createOrUpdate(createClient, userId, queryRunner);
-      const guarantor = await this.guarantorService.createOrUpdate(createGuarantor, queryRunner);
-      return formatClientAndGuarantorResponse(client, guarantor);
+      const guarantor = createGuarantor ? await this.guarantorService.createOrUpdate(createGuarantor, queryRunner) : null;
+      let secondaryClientIds: number[] = [];
+
+      if (createSecondaryClient && createSecondaryClient.length > 0) {
+        const createdSecondaryClients = await Promise.all(
+          createSecondaryClient.map(async (dto) => {
+            const secondaryClient = await this.secondaryClientService.createOrUpdate(dto, userId, queryRunner);
+            return secondaryClient.id; // Asegúrate de que esto devuelva un objeto con `id`
+          }),
+        );
+        secondaryClientIds = createdSecondaryClients;
+      }
+      return formatClientAndGuarantorResponse(client, guarantor, secondaryClientIds);
     });
   }
 
@@ -378,6 +394,13 @@ export class SalesService {
   ) {
     return await this.transactionService.runInTransaction(async (queryRunner) => {
       const savedSale = await saleSpecificLogic(queryRunner, createSaleDto);
+      if (createSaleDto.secondaryClientsIds.length > 0)
+        await Promise.all(
+          createSaleDto.secondaryClientsIds.map(async (id) => {
+            const secondaryClientSale = await this.secondaryClientService.createSecondaryClientSale(savedSale.id, id, queryRunner);
+            return secondaryClientSale;
+          }),
+        );
       await this.lotService.updateStatus(savedSale.lot.id, LotStatus.SOLD, queryRunner);
       if (createSaleDto.totalAmountUrbanDevelopment === 0) return savedSale;
       this.isValidUrbanDevelopmentDataSaLe(
