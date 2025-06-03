@@ -15,6 +15,7 @@ export function formatSaleResponse(sale: Sale) {
       phone: sale.client?.lead?.phone,
     },
     lot: {
+      id: sale.lot?.id,
       name: sale.lot?.name,
       lotPrice: sale.lot?.lotPrice,
     },

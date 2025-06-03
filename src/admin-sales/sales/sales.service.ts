@@ -58,6 +58,7 @@ import { MethodPayment } from 'src/admin-payments/payments/enums/method-payment.
 import { query } from 'express';
 import { StatusSale } from './enums/status-sale.enum';
 import { CreatePaymentSaleDto } from './dto/create-payment-sale.dto';
+import { Financing } from '../financing/entities/financing.entity';
 
 @Injectable()
 export class SalesService {
@@ -187,6 +188,16 @@ export class SalesService {
     if (!sale)
       throw new NotFoundException(`La venta con ID ${id} no se encuentra registrado`);
     return formatSaleResponse(sale);
+  }
+
+  async findOneByIdFinancing(id: string): Promise<Sale> {
+    const sale = await this.saleRepository.findOne({
+      where: { financing: { id } },
+      relations: ['lot'],
+    });
+    if (!sale)
+      throw new NotFoundException(`La venta no tiene un financiamiento con ID ${id}`);
+    return sale;
   }
 
   async findAllLeadsByDay(

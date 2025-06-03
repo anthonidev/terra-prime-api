@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { PaymentsController } from './payments.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Payment } from './entities/payment.entity';
@@ -8,9 +8,13 @@ import { PaymentsDetailService } from './services/payments-detail.service';
 import { CommonModule } from 'src/common/common.module';
 import { FilesModule } from 'src/files/files.module';
 import { PaymentsConfigModule } from '../payments-config/payments-config.module';
+import { SalesModule } from 'src/admin-sales/sales/sales.module';
+import { FinancingInstallmentsService } from 'src/admin-sales/financing/services/financing-installments.service';
+import { FinancingModule } from 'src/admin-sales/financing/financing.module';
+import { ProjectModule } from 'src/project/project.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Payment, PaymentDetails]), CommonModule, FilesModule, PaymentsConfigModule],
+  imports: [TypeOrmModule.forFeature([Payment, PaymentDetails]), CommonModule, FilesModule, PaymentsConfigModule, forwardRef(() => SalesModule), FinancingModule, ProjectModule],
   controllers: [PaymentsController],
   providers: [PaymentsService, PaymentsDetailService],
   exports: [PaymentsService],

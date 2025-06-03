@@ -12,6 +12,7 @@ export interface SaleResponse {
     phone: string;
   };
   lot: {
+    id: string;
     name: string;
     lotPrice: number;
   };
