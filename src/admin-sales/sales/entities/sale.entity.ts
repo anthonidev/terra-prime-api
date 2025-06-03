@@ -56,9 +56,9 @@ export class Sale extends Timestamped {
 
   @Column({
     type: 'timestamp',
-    nullable: false,
+    nullable: true,
   })
-  contractDate: Date;
+  contractDate?: Date;
   
   @Column({
     type: 'timestamp',

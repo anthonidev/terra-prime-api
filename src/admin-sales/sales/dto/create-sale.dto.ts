@@ -33,8 +33,8 @@ export class CreateSaleDto {
 	saleDate: string;
 
 	@IsDateString({}, { message: 'La fecha de contrato debe ser válida' })
-	@IsNotEmpty({ message: 'La fecha de contrato es requerida' })
-  contractDate: string;
+	@IsOptional()
+  contractDate?: string;
 
 	@IsNumber({}, { message: 'El monto total debe ser un número válido' })
 	@IsNotEmpty({ message: 'El monto total es requerido' })
