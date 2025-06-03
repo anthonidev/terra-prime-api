@@ -14,11 +14,15 @@ import { ExcelService } from './services/excel.service';
 import { LotService } from './services/lot.service';
 import { ProjectService } from './services/project.service';
 import { StageService } from './services/stage.service';
-import { SalesService } from 'src/admin-sales/sales/sales.service';
+import { UpdatePriceToken } from './entities/update-price-token.entity';
+import { UpdatePriceTokenService } from './services/update-price-token.service';
+import { UsersService } from 'src/user/user.service';
+import { UsersModule } from 'src/user/user.module';
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Project, Stage, Block, Lot]),
+    TypeOrmModule.forFeature([Project, Stage, Block, Lot, UpdatePriceToken]),
     FilesModule,
+    UsersModule,
   ],
   controllers: [
     ProjectController,
@@ -32,7 +36,8 @@ import { SalesService } from 'src/admin-sales/sales/sales.service';
     BlockService,
     LotService,
     StageService,
+    UpdatePriceTokenService,
   ],
-  exports: [TypeOrmModule, ProjectService, StageService, BlockService, LotService],
+  exports: [TypeOrmModule, ProjectService, StageService, BlockService, LotService, UpdatePriceTokenService],
 })
 export class ProjectModule { }

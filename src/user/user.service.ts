@@ -242,4 +242,16 @@ export class UsersService {
       throw new InternalServerErrorException('Error al obtener los vendedores');
     }
   }
+
+  async isValidSalesManager(id: string): Promise<User> {
+    try {
+      const user = await this.findOne(id);
+      if (user.role.code !== 'JVE')
+        throw new NotFoundException('El usuario asignado con ID ' + id + ' no es un jefe de ventas');
+      return user;
+    } catch (error) {
+      this.logger.error(`Error fetching user ${id}: ${error.message}`);
+      throw error;
+    }
+  }
 }

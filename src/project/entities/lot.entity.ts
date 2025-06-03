@@ -23,6 +23,7 @@ import { Transform } from 'class-transformer';
 import { Block } from './block.entity';
 import { Reservation } from 'src/admin-sales/reservations/entities/reservation.entity';
 import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
+import { UpdatePriceToken } from './update-price-token.entity';
 export enum LotStatus {
   ACTIVE = 'Activo',
   INACTIVE = 'Inactivo',
@@ -82,6 +83,9 @@ export class Lot {
 
   @OneToMany(() => Sale, (sale) => sale.lot)
   sales: Sale[];
+
+  @OneToMany(() => UpdatePriceToken, (updatePriceToken) => updatePriceToken.lot)
+  updatePriceTokens: UpdatePriceToken[];
   
   @CreateDateColumn()
   createdAt: Date;

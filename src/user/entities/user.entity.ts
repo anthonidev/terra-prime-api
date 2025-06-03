@@ -26,6 +26,7 @@ import { Exclude, Transform } from 'class-transformer';
 import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
 import { Reservation } from 'src/admin-sales/reservations/entities/reservation.entity';
 import { Lead } from 'src/lead/entities/lead.entity';
+import { UpdatePriceToken } from 'src/project/entities/update-price-token.entity';
 @Entity()
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -130,6 +131,9 @@ export class User {
 
   @OneToMany(() => Sale, (sale) => sale.vendor)
   sales: Sale[];
+
+  @OneToMany(() => UpdatePriceToken, (updatePriceToken) => updatePriceToken.generatedBy)
+  generatedPriceTokens: UpdatePriceToken[];
 
   @OneToMany(() => Reservation, (reservation) => reservation.vendor)
   reservations: User[];
