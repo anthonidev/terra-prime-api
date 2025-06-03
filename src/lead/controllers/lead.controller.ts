@@ -122,6 +122,7 @@ export class LeadController {
           data: null,
         };
       }
+      console.error('Error al actualizar el lead:', error);
       throw new HttpException(
         {
           success: false,

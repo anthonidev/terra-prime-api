@@ -164,7 +164,7 @@ export class LeadService {
     if (!lead) {
       throw new NotFoundException(`Lead con ID ${id} no encontrado`);
     }
-    const { sourceId, ubigeoId, ...updateFields } = updateDto;
+    const { sourceId, ubigeoId, isNewLead, ...updateFields } = updateDto;
     const updateData: Partial<Lead> = { ...updateFields };
     if (updateDto.sourceId) {
       const source = await this.leadSourceRepository.findOne({
