@@ -171,7 +171,6 @@ export class PaymentsService {
     reviewedById: string,
   ): Promise<PaymentResponse> {
     const payment = await this.isValidPayment(paymentId);
-
     return await this.transactionService.runInTransaction(async (queryRunner) => {
       payment.status = StatusPayment.REJECTED;
       payment.rejectionReason = rejectionReason;
@@ -179,32 +178,6 @@ export class PaymentsService {
       payment.reviewedAt = new Date();
       const canceledPayment = await queryRunner.manager.save(payment);
 
-      // POR DEFINIR
-      if (payment.relatedEntityType === 'sale' && payment.relatedEntityId) {
-        const sale = await this.salesService.findOneById(payment.relatedEntityId);
-        await this.salesService.updateStatusSale(
-          payment.relatedEntityId,
-          StatusSale.REJECTED,
-          queryRunner,
-        );
-        await this.lotService.updateStatus(sale.lot.id, LotStatus.ACTIVE, queryRunner);
-      }
-      if (payment.relatedEntityType === 'financing' && payment.relatedEntityId) {
-        const sale = await this.salesService.findOneByIdFinancing(payment.relatedEntityId);
-        await this.salesService.updateStatusSale(
-          sale.id,
-          StatusSale.REJECTED,
-          queryRunner,
-        );
-        await this.lotService.updateStatus(sale.lot.id, LotStatus.ACTIVE, queryRunner);
-      }
-      if (payment.relatedEntityType === 'financingInstallments' && payment.relatedEntityId)
-        await this.financingInstallmentsService.updateStatus(
-          payment.relatedEntityId,
-          StatusFinancingInstallments.PENDING,
-          queryRunner,
-        );
-      // HASTA AQUI
       return {
         ...formatPaymentsResponse(canceledPayment),
         vouchers: payment.details.map(detail => ({
