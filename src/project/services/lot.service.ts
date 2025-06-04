@@ -294,6 +294,15 @@ export class LotService {
     return lot;
   }
 
+  async isLotValidForSaleReservation(lotId: string): Promise<Lot> {
+    const lot = await this.lotRepository.findOne({
+      where: { id: lotId, status: LotStatus.RESERVED },
+    });
+    if (!lot)
+      throw new NotFoundException(`El lote con ID ${lotId} no se encuentra separado`);
+    return lot;
+  }
+
   async updateStatus(
     id: string,
     status: LotStatus,

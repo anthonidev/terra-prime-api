@@ -61,6 +61,7 @@ import { CreatePaymentSaleDto } from './dto/create-payment-sale.dto';
 import { Financing } from '../financing/entities/financing.entity';
 import { CreateSecondaryClientDto } from '../secondary-client/dto/create-secondary-client.dto';
 import { SecondaryClientService } from '../secondary-client/secondary-client.service';
+import { Reservation } from '../reservations/entities/reservation.entity';
 
 @Injectable()
 export class SalesService {
@@ -91,9 +92,14 @@ export class SalesService {
     try {
       const { clientId, lotId, guarantorId, saleDate, paymentDate, firstPaymentDateHu, reservationId, secondaryClientsIds = [] } = createSaleDto;
       validateSaleDates({ saleDate, paymentDate, firstPaymentDateHu });
+
+      if (reservationId)
+        await this.isValidReservationForSale(reservationId, clientId, lotId);
+      if (!reservationId)
+        await this.lotService.isLotValidForSale(lotId);
+
       await Promise.all([
         this.clientService.isValidClient(clientId),
-        this.lotService.isLotValidForSale(lotId),
         (guarantorId) ? this.guarantorService.isValidGuarantor(guarantorId): null,
         (reservationId) ? this.reservationService.isValidReservation(reservationId): null,
         ...secondaryClientsIds.map(id => this.secondaryClientService.isValidSecondaryClient(id)),
@@ -129,7 +135,6 @@ export class SalesService {
         });
       }
       return await this.findOneById(sale.id);
-      // return savedSale;
     } catch (error) {
       throw error;
     }
@@ -457,6 +462,15 @@ export class SalesService {
           amount: createSaleDto.totalAmountUrbanDevelopment,
           initialAmount: createSaleDto.initialAmountUrbanDevelopment,
       }, queryRunner);
+  }
+
+  private async isValidReservationForSale(reservationId: string, clientId: number, lotId: string) {
+    const reservation = await this.reservationService.isValidReservation(reservationId);
+    await this.lotService.isLotValidForSaleReservation(lotId);
+    if (reservation.client.id !== clientId)
+      throw new BadRequestException(`El cliente de la reserva no es el mismo del cliente de la venta`);
+    if (reservation.lot.id !== lotId)
+      throw new BadRequestException(`El lote de la reserva no es el mismo del lote de la venta`);
   }
 
   private isValidUrbanDevelopmentDataSaLe(
