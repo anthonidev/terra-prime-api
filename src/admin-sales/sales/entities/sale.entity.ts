@@ -12,6 +12,7 @@ import { SaleType } from "../enums/sale-type.enum";
 import { Guarantor } from "src/admin-sales/guarantors/entities/guarantor.entity";
 import { SecondaryClient } from "src/admin-sales/secondary-client/entities/secondary-client.entity";
 import { SecondaryClientSale } from "src/admin-sales/secondary-client/entities/secondary-client-sale.entity";
+import { SaleWithdrawal } from "src/admin-sales/sales-withdrawal/entities/sale-withdrawal.entity";
 
 @Entity('sales')
 export class Sale extends Timestamped {
@@ -83,4 +84,7 @@ export class Sale extends Timestamped {
 
   @OneToMany(() => SecondaryClientSale, (secondaryClient) => secondaryClient.sale)
   secondaryClientSales: SecondaryClientSale[];
+
+  @OneToOne(() => SaleWithdrawal, (saleWithdrawal) => saleWithdrawal.sale)
+  withdrawal: SaleWithdrawal;
 }
