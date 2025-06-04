@@ -191,7 +191,9 @@ export class SalesService {
         'guarantor',
         'reservation',
         'vendor',
-        'financing.financingInstallments'
+        'financing.financingInstallments',
+        'secondaryClientSales',
+        'secondaryClientSales.secondaryClient',
       ],
     });
     if (!sale)
@@ -399,7 +401,8 @@ export class SalesService {
   ) {
     return await this.transactionService.runInTransaction(async (queryRunner) => {
       const savedSale = await saleSpecificLogic(queryRunner, createSaleDto);
-      if (createSaleDto.secondaryClientsIds.length > 0)
+      const { secondaryClientsIds = [] } = createSaleDto;
+      if (!secondaryClientsIds && secondaryClientsIds.length > 0)
         await Promise.all(
           createSaleDto.secondaryClientsIds.map(async (id) => {
             const secondaryClientSale = await this.secondaryClientService.createSecondaryClientSale(savedSale.id, id, queryRunner);
@@ -546,4 +549,13 @@ export class SalesService {
     }
   }
 
+  async isValidSaleForWithdrawal(saleId: string) {
+    const sale = await this.findOneById(saleId);
+    if (!sale)
+      throw new NotFoundException(`La venta con ID ${saleId} no se encuentra registrada`);
+    if (sale.status == StatusSale.COMPLETED)
+        throw new BadRequestException(`La venta con ID ${saleId} no se puede desistir porque ya fue completada`);
+    if (sale.status == StatusSale.REJECTED)
+        throw new BadRequestException(`La venta con ID ${saleId} no se puede desistir porque ya fue cancelada`);
+  }
 }

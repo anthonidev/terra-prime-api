@@ -27,6 +27,7 @@ import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
 import { Reservation } from 'src/admin-sales/reservations/entities/reservation.entity';
 import { Lead } from 'src/lead/entities/lead.entity';
 import { UpdatePriceToken } from 'src/project/entities/update-price-token.entity';
+import { SaleWithdrawal } from 'src/admin-sales/sales-withdrawal/entities/sale-withdrawal.entity';
 @Entity()
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -140,4 +141,7 @@ export class User {
 
   @OneToMany(() => Lead, (lead) => lead.vendor)
   leads: Lead[];
+
+  @OneToMany(() => SaleWithdrawal, (saleWithdrawal) => saleWithdrawal.reviewedBy)
+  withdrawals: SaleWithdrawal[];
 }

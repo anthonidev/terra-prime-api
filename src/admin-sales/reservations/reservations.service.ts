@@ -35,6 +35,7 @@ export class ReservationsService {
   async isValidReservation(reservationId: string): Promise<Reservation> {
     const reservation = await this.reservationRepository.findOne({
       where: { id: reservationId, status: StatusReservation.PENDING },
+      relations: ['client', 'lot'],
     });
     if (!reservation)
       throw new NotFoundException(`La reserva con ID ${reservationId} no se encuentra disponible`);

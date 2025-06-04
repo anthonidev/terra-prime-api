@@ -11,6 +11,12 @@ export interface SaleResponse {
     lastName: string;
     phone: string;
   };
+  secondaryClients: {
+    address: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+  }[];
   lot: {
     id: string;
     name: string;

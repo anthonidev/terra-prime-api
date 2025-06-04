@@ -14,6 +14,14 @@ export function formatSaleResponse(sale: Sale) {
       lastName: sale.client?.lead?.lastName,
       phone: sale.client?.lead?.phone,
     },
+    secondaryClients: sale.secondaryClientSales.map((secondaryClientSale) => {
+      return {
+        address: secondaryClientSale.secondaryClient.address,
+        firstName: secondaryClientSale.secondaryClient.firstName,
+        lastName: secondaryClientSale.secondaryClient.lastName,
+        phone: secondaryClientSale.secondaryClient.phone,
+      };
+    }),
     lot: {
       id: sale.lot?.id,
       name: sale.lot?.name,
