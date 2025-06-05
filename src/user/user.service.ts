@@ -256,6 +256,20 @@ export class UsersService {
     }
   }
 
+  async findAllCollectors(): Promise<User[]> {
+    try {
+      const users = await this.userRepository.find({
+        where: { 
+          isActive: true,
+          role: { code: 'COB' } },
+      });
+      return users;
+    } catch (error) {
+      this.logger.error(`Error fetching collectors: ${error.message}`);
+      throw new InternalServerErrorException('Error al obtener los cobradores');
+    }
+  }
+
   async isValidSalesManager(id: string): Promise<User> {
     try {
       const user = await this.findOne(id);

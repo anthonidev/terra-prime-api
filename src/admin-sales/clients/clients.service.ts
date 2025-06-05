@@ -10,6 +10,8 @@ import { formatClientResponse } from './helpers/format-client-response.helper';
 import { formatClientResponseSale } from './helpers/format-client-response-sale.helper';
 import { ClientSaleResponse } from './interfaces/client-sale-response.interface';
 import { UsersService } from 'src/user/user.service';
+import { SaleType } from '../sales/enums/sale-type.enum';
+import { StatusSale } from '../sales/enums/status-sale.enum';
 
 @Injectable()
 export class ClientsService {
@@ -122,7 +124,27 @@ export class ClientsService {
 
     if (!client)
       throw new NotFoundException(`Cliente con ID ${id} no encontrado`);
+    return client;
+  }
 
+  async findOneClientByIdWithCollections(id: number): Promise<Client> {
+    const client = await this.clientRepository
+      .createQueryBuilder('client')
+      .leftJoinAndSelect('client.lead', 'lead')
+      .leftJoinAndSelect('lead.source', 'source')
+      .leftJoinAndSelect('lead.ubigeo', 'ubigeo')
+      .leftJoinAndSelect('client.collector', 'collector')
+      .innerJoinAndSelect(
+        'client.sales',
+        'sales',
+        'sales.type = :type AND sales.status = :status',
+        { type: SaleType.FINANCED, status: StatusSale.IN_PAYMENT_PROCESS }
+      )
+      .where('client.id = :id', { id })
+      .getOne();
+    
+    if (!client)
+      throw new NotFoundException(`Cliente con ID ${id} no disponible para asignar cobrador`);
     return client;
   }
 
@@ -131,7 +153,7 @@ export class ClientsService {
     collectorId: string
   ): Promise<Client[]> {
     const collector = await this.userService.findOneCollector(collectorId);
-    const clients = await Promise.all(clientsId.map((id) => this.findOneClientById(id)));
+    const clients = await Promise.all(clientsId.map((id) => this.findOneClientByIdWithCollections(id)));
 
     const updatedClients = clients.map((client) => {
       client.collector = collector;
@@ -139,5 +161,15 @@ export class ClientsService {
     });
 
     return await this.clientRepository.save(updatedClients);
+  }
+
+  async findAllByUser(
+    userId: string,
+  ): Promise<Client[]> {
+    const clients = await this.clientRepository.find({
+      where: { collector: { id: userId } },
+      relations: ['lead', 'lead.source', 'lead.ubigeo'],
+    });
+    return clients;
   }
 }

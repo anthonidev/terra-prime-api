@@ -62,6 +62,7 @@ import { Financing } from '../financing/entities/financing.entity';
 import { CreateSecondaryClientDto } from '../secondary-client/dto/create-secondary-client.dto';
 import { SecondaryClientService } from '../secondary-client/secondary-client.service';
 import { Reservation } from '../reservations/entities/reservation.entity';
+import { formatSaleCollectionResponse } from './helpers/format-sale-collection-response.helper';
 
 @Injectable()
 export class SalesService {
@@ -106,11 +107,11 @@ export class SalesService {
       ]);
 
       let sale;
-      if (createSaleDto.saleType === SaleType.DIRECT_PAYMENT) {
+      if (createSaleDto.saleType === SaleType.DIRECT_PAYMENT)
         sale = await this.handleSaleCreation(createSaleDto, userId, async (queryRunner, data) => {
-          return this.createSale(data, userId, null, queryRunner);
+          return await this.createSale(data, userId, null, queryRunner);
         });
-      } else if (createSaleDto.saleType === SaleType.FINANCED) {
+      if (createSaleDto.saleType === SaleType.FINANCED)
         sale = await this.handleSaleCreation(createSaleDto, userId, async (queryRunner, data) => {
           const { initialAmount, interestRate, quantitySaleCoutes, paymentDate, totalAmount, financingInstallments, reservationId } = data;
           const reservationAmount = reservationId ? await this.reservationService.getAmountReservation(reservationId) : 0;
@@ -131,9 +132,8 @@ export class SalesService {
             financingInstallments: financingInstallments
           };
           const financingSale = await this.financingService.create(financingData, queryRunner);
-          return this.createSale(data, userId, financingSale.id, queryRunner);
+          return await this.createSale(data, userId, financingSale.id, queryRunner);
         });
-      }
       return await this.findOneById(sale.id);
     } catch (error) {
       throw error;
@@ -201,6 +201,48 @@ export class SalesService {
     if (!sale)
       throw new NotFoundException(`La venta con ID ${id} no se encuentra registrado`);
     return formatSaleResponse(sale);
+  }
+
+  async findOneByIdWithCollections(id: string): Promise<SaleResponse> {
+    const sale = await this.saleRepository.findOne({
+      where: { id },
+      relations: [
+        'client',
+        'lot',
+        'financing',
+        'guarantor',
+        'reservation',
+        'vendor',
+        'financing.financingInstallments',
+        'secondaryClientSales',
+        'secondaryClientSales.secondaryClient',
+      ],
+    });
+    if (!sale)
+      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrado`);
+    return formatSaleCollectionResponse(sale);
+  }
+
+  async findAllByClient(clientId: number): Promise<SaleResponse[]> {
+    const sales = await this.saleRepository.find({
+      relations: [
+        'client', 
+        'lot', 
+        'financing', 
+        'guarantor', 
+        'reservation', 
+        'vendor', 
+        'financing.financingInstallments',
+        'secondaryClientSales',
+        'secondaryClientSales.secondaryClient',
+      ],
+      where: {
+        client: { id: clientId },
+        type: SaleType.FINANCED,
+        status: StatusSale.IN_PAYMENT_PROCESS,
+      },
+    });
+    return sales.map(formatSaleResponse);
   }
 
   async findOneByIdFinancing(id: string): Promise<Sale> {
