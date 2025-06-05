@@ -1,6 +1,7 @@
 import { Sale } from "../entities/sale.entity";
 
 export function formatSaleResponse(sale: Sale) {
+  const { secondaryClientSales = [] } = sale;
   return {
     id: sale.id,
     type: sale.type,
@@ -14,7 +15,7 @@ export function formatSaleResponse(sale: Sale) {
       lastName: sale.client?.lead?.lastName,
       phone: sale.client?.lead?.phone,
     },
-    secondaryClients: sale.secondaryClientSales ? 
+    secondaryClients: secondaryClientSales.length > 0 ?
       sale.secondaryClientSales.map((secondaryClientSale) => {
         return {
           address: secondaryClientSale.secondaryClient.address,

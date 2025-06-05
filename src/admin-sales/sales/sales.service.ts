@@ -174,7 +174,9 @@ export class SalesService {
         'guarantor', 
         'reservation', 
         'vendor', 
-        'financing.financingInstallments'
+        'financing.financingInstallments',
+        'secondaryClientSales',
+        'secondaryClientSales.secondaryClient',
       ],
       where: whereCondition,
     });
