@@ -8,6 +8,11 @@ export const formatClientResponse = (client: Client) => {
     id: client.id,
     address: client.address,
     lead: formatFindAllLedsByDayResponse(client.lead),
+    collector: client.collector ? {
+      id: client.collector.id,
+      firstName: client.collector.firstName,
+      lastName: client.collector.lastName,
+    } : null,
     createdAt: client.createdAt,
   };
 };

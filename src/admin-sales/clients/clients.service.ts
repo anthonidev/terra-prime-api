@@ -9,6 +9,7 @@ import { ClientResponse } from './interfaces/client-response.interface';
 import { formatClientResponse } from './helpers/format-client-response.helper';
 import { formatClientResponseSale } from './helpers/format-client-response-sale.helper';
 import { ClientSaleResponse } from './interfaces/client-sale-response.interface';
+import { UsersService } from 'src/user/user.service';
 
 @Injectable()
 export class ClientsService {
@@ -17,6 +18,7 @@ export class ClientsService {
     private readonly clientRepository: Repository<Client>,
     private readonly leadService: LeadService,
     private readonly guarantorService: GuarantorsService,
+    private readonly userService: UsersService,
   ) {}
   // Methods for endpoints
   async create(
@@ -110,5 +112,32 @@ export class ClientsService {
         `El cliente con ID ${clientId} no se encuentra registrado`
       );
     return client;
+  }
+
+  async findOneClientById(id: number): Promise<Client> {
+    const client = await this.clientRepository.findOne({
+      where: { id },
+      relations: ['lead', 'lead.source', 'lead.ubigeo', 'collector'],
+    });
+
+    if (!client)
+      throw new NotFoundException(`Cliente con ID ${id} no encontrado`);
+
+    return client;
+  }
+
+  async assignClientsToCollector(
+    clientsId: number[],
+    collectorId: string
+  ): Promise<Client[]> {
+    const collector = await this.userService.findOneCollector(collectorId);
+    const clients = await Promise.all(clientsId.map((id) => this.findOneClientById(id)));
+
+    const updatedClients = clients.map((client) => {
+      client.collector = collector;
+      return client;
+    });
+
+    return await this.clientRepository.save(updatedClients);
   }
 }

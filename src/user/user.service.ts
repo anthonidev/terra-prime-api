@@ -229,6 +229,19 @@ export class UsersService {
     }
   }
 
+  async findOneCollector(id: string): Promise<User> {
+    const user = await this.userRepository.findOne({
+      where: { id },
+      relations: ['role'],
+    });
+
+    if (!user)
+      throw new NotFoundException(`El usuario con ID ${id} no existe`);
+    if (user.role.code !== 'COB')
+      throw new ForbiddenException(`El usuario con ID ${id} no es de cobranzas`);
+    return user;
+  }
+
   async findAllVendors(): Promise<User[]> {
     try {
       const users = await this.userRepository.find({
