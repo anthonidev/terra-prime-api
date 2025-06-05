@@ -17,6 +17,8 @@ import {
   provinciasData,
 } from './data/ubigeo.data';
 import { UsersData } from './data/user.data';
+import { PaymentConfig } from 'src/admin-payments/payments-config/entities/payments-config.entity';
+import { paymentConfigsData } from './data/payment-configs.data';
 @Injectable()
 export class SeedService {
   private readonly logger = new Logger(SeedService.name);
@@ -33,6 +35,8 @@ export class SeedService {
     private readonly linerRepository: Repository<Liner>,
     @InjectRepository(LeadSource)
     private readonly leadSourceRepository: Repository<LeadSource>,
+    @InjectRepository(PaymentConfig)
+    private readonly paymentConfigRepository: Repository<PaymentConfig>,
   ) {}
   private async createView(viewData: any, parentView?: View): Promise<View> {
     const { code, name, url, order, icon } = viewData;
@@ -401,6 +405,76 @@ export class SeedService {
       };
     } catch (error) {
       this.logger.error(`Error durante el seed: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async seedPaymentConfigs() {
+    this.logger.log('Iniciando seed de configuraciones de pago...');
+    try {
+      const results = await Promise.all(
+        paymentConfigsData.map(async (configData) => {
+          try {
+            const existingConfig = await this.paymentConfigRepository.findOne({
+              where: { code: configData.code },
+            });
+
+            if (existingConfig) {
+              this.logger.debug(
+                `Configuración de pago existente encontrada: ${configData.code}`,
+              );
+
+              Object.assign(existingConfig, configData);
+              await this.paymentConfigRepository.save(existingConfig);
+
+              return { status: 'updated', code: configData.code };
+            }
+
+            const config = this.paymentConfigRepository.create({
+              code: configData.code,
+              name: configData.name,
+              description: configData.description,
+              requiresApproval: configData.requiresApproval,
+              isActive: configData.isActive,
+              minimumAmount: configData.minimumAmount,
+              maximumAmount: configData.maximumAmount,
+            });
+
+            await this.paymentConfigRepository.save(config);
+            this.logger.log(
+              `Configuración de pago creada exitosamente: ${configData.code}`,
+            );
+            return { status: 'created', code: configData.code };
+          } catch (error) {
+            this.logger.error(
+              `Error al crear configuración de pago ${configData.code}: ${error.message}`,
+            );
+            return {
+              status: 'error',
+              code: configData.code,
+              error: error.message,
+            };
+          }
+        }),
+      );
+
+      const created = results.filter((r) => r.status === 'created').length;
+      const updated = results.filter((r) => r.status === 'updated').length;
+      const errors = results.filter((r) => r.status === 'error').length;
+      this.logger.log(
+        `Seed de configuraciones de pago completado. Creados: ${created}, Actualizados: ${updated}, Errores: ${errors}`,
+      );
+
+      return {
+        created,
+        updated,
+        errors,
+        details: results,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error general en seedPaymentConfigs: ${error.message}`,
+      );
       throw error;
     }
   }

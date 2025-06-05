@@ -15,7 +15,7 @@ export class PaymentsConfigService {
     });
     if (!paymentConfig || !paymentConfig.isActive)
       throw new BadRequestException(
-          'La opción de pago para órdenes no está disponible',
+          'La opción de pago no está disponible o no está activo',
       );
     return paymentConfig;
   }

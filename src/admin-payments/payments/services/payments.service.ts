@@ -53,7 +53,7 @@ export class PaymentsService {
         metadata,
       } = createPaymentDto;
 
-      const paymentConfig = await this.paymentConfigService.findOneByCode('SALE_PAYMENT');
+      const paymentConfig = await this.isValidPaymentConfig(relatedEntityType);
       const payment = this.paymentRepository.create({
         user: { id: userId },
         paymentConfig: { id: paymentConfig.id },
@@ -328,5 +328,18 @@ export class PaymentsService {
         );
     }
     return payment;
+  }
+
+  private async isValidPaymentConfig(relatedEntityType: string) {
+    let paymentConfig;
+    if (relatedEntityType === 'sale')
+      paymentConfig = await this.paymentConfigService.findOneByCode('SALE_PAYMENT');
+    if (relatedEntityType === 'financing')
+      paymentConfig = await this.paymentConfigService.findOneByCode('FINANCING_PAYMENT');
+    if (relatedEntityType === 'financingInstallments')
+      paymentConfig = await this.paymentConfigService.findOneByCode('FINANCING_INSTALLMENTS_PAYMENT');
+    if (relatedEntityType === 'reservation')
+      paymentConfig = await this.paymentConfigService.findOneByCode('RESERVATION_PAYMENT');
+    return paymentConfig;
   }
 }

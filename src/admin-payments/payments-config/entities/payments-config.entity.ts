@@ -15,7 +15,7 @@ export class PaymentConfig {
 
   @Column({
     type: 'varchar',
-    length: 25,
+    length: 60,
     nullable: false
   })
   name: string;
