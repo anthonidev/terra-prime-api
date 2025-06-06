@@ -602,4 +602,11 @@ export class SalesService {
     if (sale.status == StatusSale.REJECTED)
         throw new BadRequestException(`La venta con ID ${saleId} no se puede desistir porque ya fue cancelada`);
   }
+
+  async findOneSaleWithPayments(id: string): Promise<Sale> {
+    return await this.saleRepository.findOne({
+        where: { id },
+        relations: ['client', 'lot'],
+      });
+  }
 }

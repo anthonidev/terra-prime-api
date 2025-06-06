@@ -81,4 +81,11 @@ export class ReservationsService {
     });
     return formatReservationResponse(reservationSaved);
   }
+
+  async findOneWithPayments(id: string): Promise<Reservation> {
+    return await this.reservationRepository.findOne({
+      where: { id },
+      relations: ['client', 'lot'],
+    });
+  }
 }

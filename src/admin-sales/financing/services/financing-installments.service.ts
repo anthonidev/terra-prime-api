@@ -36,4 +36,16 @@ export class FinancingInstallmentsService {
     financingInstallments.status = status;
     await repository.save(financingInstallments);
   }
+
+  async findOneWithPayments(id: string): Promise<FinancingInstallments> {
+    return await this.financingInstallmentsRepository.findOne({
+      where: { id },
+      relations: [
+        'financing',
+        'financing.sale',
+        'financing.sale.client',
+        'financing.sale.lot',
+      ],
+    });
+  }
 }

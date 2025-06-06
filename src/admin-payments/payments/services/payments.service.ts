@@ -20,6 +20,10 @@ import { LotService } from 'src/project/services/lot.service';
 import { LotStatus } from 'src/project/entities/lot.entity';
 import { FindPaymentsDto } from '../dto/find-payments.dto';
 import { PaginationHelper } from 'src/common/helpers/pagination.helper';
+import { ReservationsService } from 'src/admin-sales/reservations/reservations.service';
+import { FinancingService } from 'src/admin-sales/financing/services/financing.service';
+import { PaymentAllResponse } from '../interfaces/payment-all-response.interface';
+import { Paginated } from 'src/common/interfaces/paginated.interface';
 
 @Injectable()
 export class PaymentsService {
@@ -32,6 +36,8 @@ export class PaymentsService {
     private readonly salesService: SalesService,
     private readonly transactionService: TransactionService,
     private readonly financingInstallmentsService: FinancingInstallmentsService,
+    private readonly financingService: FinancingService,
+    private readonly reservationService: ReservationsService,
     private readonly lotService: LotService,
   ){}
   // Methods for endpoints
@@ -192,7 +198,7 @@ export class PaymentsService {
     });
   }
 
-  async findAllPayments(filters: FindPaymentsDto) {
+  async findAllPayments(filters: FindPaymentsDto): Promise<Paginated<PaymentAllResponse>> {
     try {
       const {
         page = 1,
@@ -255,6 +261,8 @@ export class PaymentsService {
         'payment.banckName',
         'payment.dateOperation',
         'payment.numberTicket',
+        'payment.relatedEntityType',
+        'payment.relatedEntityId',
         'paymentConfig.name',
         'reviewer.id',
         'reviewer.email',
@@ -265,8 +273,10 @@ export class PaymentsService {
 
       const [items, totalItems] = await queryBuilder.getManyAndCount();
 
+      const enrichedItems = await this.enrichPaymentsWithRelatedEntities(items);
+
       const paginationResponse = PaginationHelper.createPaginatedResponse(
-        items,
+        enrichedItems,
         totalItems,
         filters,
       );
@@ -282,7 +292,121 @@ export class PaymentsService {
     }
   }
 
+  async findOne(paymentId: number): Promise<PaymentAllResponse> {
+    // Obtenemos el pago con todas las relaciones necesarias
+    const payment = await this.paymentRepository
+      .createQueryBuilder('payment')
+      .leftJoinAndSelect('payment.paymentConfig', 'paymentConfig')
+      .leftJoinAndSelect('payment.reviewedBy', 'reviewer')
+      .leftJoinAndSelect('payment.user', 'user')
+      .leftJoinAndSelect('payment.details', 'details')
+      .where('payment.id = :id', { id: paymentId })
+      .select([
+        'payment.id',
+        'payment.amount',
+        'payment.status',
+        'payment.createdAt',
+        'payment.reviewedAt',
+        'payment.codeOperation',
+        'payment.banckName',
+        'payment.dateOperation',
+        'payment.numberTicket',
+        'payment.relatedEntityType',
+        'payment.relatedEntityId',
+        'details',
+        'paymentConfig.name',
+        'reviewer.id',
+        'reviewer.email',
+        'user.id',
+        'user.photo',
+        'user.email',
+      ])
+      .getOne();
+
+    if (!payment) {
+      throw new NotFoundException(`Payment with ID ${paymentId} not found`);
+    }
+    const [enrichedPayment] = await this.enrichPaymentsWithRelatedEntities([payment]);
+    
+    const response: PaymentAllResponse = {
+      ...enrichedPayment,
+      vouchers: payment.details?.map(detail => ({
+        id: detail.id,
+        url: detail.url,
+        amount: detail.amount,
+        bankName: detail.bankName,
+        transactionReference: detail.transactionReference,
+        transactionDate: detail.transactionDate,
+      })) || []
+    };
+
+    return response;
+  }
+
   // Internal helpers methods
+  private async enrichPaymentsWithRelatedEntities(payments: Payment[]): Promise<any[]> {
+    return await Promise.all(
+      payments.map(async (payment) => {
+        const type = payment.relatedEntityType;
+        const id = payment.relatedEntityId;
+
+        if (!type || !id) return payment;
+
+        const basePayment = {
+          id: payment.id,
+          amount: payment.amount,
+          status: payment.status,
+          createdAt: payment.createdAt,
+          reviewedAt: payment.reviewedAt,
+          reviewBy: payment.reviewedBy,
+          codeOperation: payment.codeOperation,
+          banckName: payment.banckName,
+          dateOperation: payment.dateOperation,
+          numberTicket: payment.numberTicket,
+          paymentConfig: payment.paymentConfig.name,
+          user: payment.user
+        };
+
+        const getSaleData = async () => {
+          switch (type) {
+            case 'sale':
+              return await this.salesService.findOneSaleWithPayments(id);
+            case 'financing':
+              return (await this.financingService.findOneWithPayments(id))?.sale;
+            case 'financingInstallments':
+              return (await this.financingInstallmentsService.findOneWithPayments(id))?.financing?.sale;
+            case 'reservation':
+              return await this.reservationService.findOneWithPayments(id);
+            default:
+              return null;
+          }
+        };
+
+        const sale = await getSaleData();
+        if (!sale) return basePayment;
+
+        return {
+          ...basePayment,
+          client: sale.client && {
+            address: sale.client.address,
+            lead: {
+              firstName: sale.client.lead?.firstName,
+              lastName: sale.client.lead?.lastName,
+              document: sale.client.lead?.document
+            }
+          },
+          lot: sale.lot && {
+            name: sale.lot.name,
+            lotPrice: sale.lot.lotPrice,
+            block: sale.lot.block?.name,
+            stage: sale.lot.block?.stage?.name,
+            project: sale.lot.block?.stage?.project?.name
+          }
+        };
+      })
+    );
+  }
+
   private isValidPaymentsItems(
     amount: number,
     paymentDetails: CreateDetailPaymentDto[],

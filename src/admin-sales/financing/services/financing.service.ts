@@ -136,4 +136,18 @@ export class FinancingService {
       throw new NotFoundException(`El financiamiento con ID ${id} no se encuentra registrado`);
     return financing;
   }
+
+  async findOneWithPayments(id: string): Promise<Financing> {
+    return await this.financingRepository.findOne({
+      where: { id },
+      relations: [
+        'sale',
+        'sale.client',
+        'sale.lot',
+        'sale.lot.block',
+        'sale.lot.block.stage',
+        'sale.lot.block.stage.project'
+      ],
+    });
+  }
 }

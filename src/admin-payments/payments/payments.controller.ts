@@ -42,4 +42,12 @@ export class PaymentsController {
   ) {
     return this.paymentsService.findAllPayments(filters);
   }
+
+  @Get('details/:id')
+  @Roles('JVE')
+  async findOnePayment(
+    @Param('id') id: number,
+  ) {
+    return this.paymentsService.findOne(id);
+  }
 }
