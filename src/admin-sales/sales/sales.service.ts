@@ -201,7 +201,7 @@ export class SalesService {
     if (!sale)
       throw new NotFoundException(`La venta con ID ${id} no se encuentra registrado`);
     
-    const paymentsSummary = await this.getPaymentsSummaryForSale(id, sale);
+    const paymentsSummary = await this.getPaymentsSummaryForSale(id);
     const formattedSale = formatSaleResponse(sale);
 
 
@@ -211,39 +211,67 @@ export class SalesService {
     };
   }
 
-  private async getPaymentsSummaryForSale(saleId: string, sale: Sale): Promise<any[]> {
-    const salePayments = await this.paymentsService.findPaymentsByRelatedEntity('sale', saleId);
-    let financingPayments = [];
-    const financing = await this.financingService.findBySaleId(saleId);
-    if (financing) {
-      financingPayments = await this.paymentsService.findPaymentsByRelatedEntity('financing', financing.id);
-      const installmentsIds = financing.financingInstallments.map(i => i.id);
-      const installmentsPayments = await this.paymentsService.findPaymentsByRelatedEntities('financingInstallments', installmentsIds);
-      financingPayments = [...financingPayments, ...installmentsPayments];
+  private async getPaymentsSummaryForSale(saleId: string): Promise<any[]> {
+    // Primero obtenemos la venta con las relaciones necesarias
+    const sale = await this.saleRepository.findOne({
+        where: { id: saleId },
+        relations: ['reservation', 'financing', 'financing.financingInstallments'],
+    });
+
+    if (!sale) {
+        throw new NotFoundException(`Venta con ID ${saleId} no encontrada`);
     }
+
+    // 1. Pagos directos a la venta
+    const salePayments = await this.paymentsService.findPaymentsByRelatedEntity('sale', saleId);
+    
+    // 2. Pagos de financiación (si existe)
+    let financingPayments = [];
+    let installmentsPayments = [];
+    
+    if (sale.financing) {
+        // Pagos asociados al financing
+        financingPayments = await this.paymentsService.findPaymentsByRelatedEntity('financing', sale.financing.id);
+        
+        // Pagos de cuotas de financiación (si existen installments)
+        if (sale.financing.financingInstallments && sale.financing.financingInstallments.length > 0) {
+            const installmentsIds = sale.financing.financingInstallments.map(i => i.id);
+            installmentsPayments = await this.paymentsService.findPaymentsByRelatedEntities('financingInstallments', installmentsIds);
+        }
+    }
+    
+    // 3. Pagos de reserva (si existe)
     let reservationPayments = [];
     if (sale.reservation) {
-      reservationPayments = await this.paymentsService.findPaymentsByRelatedEntity('reservation', sale.reservation.id);
+        reservationPayments = await this.paymentsService.findPaymentsByRelatedEntity('reservation', sale.reservation.id);
     }
+    
     // Combinar todos los pagos
-    const allPayments = [...salePayments, ...financingPayments, ...reservationPayments];
+    const allPayments = [
+        ...salePayments,
+        ...financingPayments,
+        ...installmentsPayments,
+        ...reservationPayments
+    ];
+    
+    // Formatear según el formato requerido
     return allPayments.map(payment => ({
-      id: payment.id,
-      amount: payment.amount,
-      status: payment.status,
-      createdAt: payment.createdAt,
-      reviewedAt: payment.reviewedAt,
-      reviewBy: payment.reviewedBy ? { 
-        id: payment.reviewedBy.id,
-        email: payment.reviewedBy.email 
-      } : null,
-      codeOperation: payment.codeOperation,
-      banckName: payment.banckName,
-      dateOperation: payment.dateOperation,
-      numberTicket: payment.numberTicket,
-      paymentConfig: payment.paymentConfig.name,
+        id: payment.id,
+        amount: payment.amount,
+        status: payment.status,
+        createdAt: payment.createdAt,
+        reviewedAt: payment.reviewedAt,
+        reviewBy: payment.reviewedBy ? { 
+            id: payment.reviewedBy.id,
+            email: payment.reviewedBy.email 
+        } : null,
+        codeOperation: payment.codeOperation,
+        banckName: payment.banckName,
+        dateOperation: payment.dateOperation,
+        numberTicket: payment.numberTicket,
+        paymentConfig: payment.paymentConfig.name,
     }));
-  }
+}
 
   async findOneByIdWithCollections(id: string): Promise<SaleResponse> {
     const sale = await this.saleRepository.findOne({

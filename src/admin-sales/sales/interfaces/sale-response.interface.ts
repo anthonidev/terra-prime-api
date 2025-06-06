@@ -43,7 +43,7 @@ export interface SaleResponse {
     firstName: string;
     lastName: string;
   };
-  paymentsSummary?: Array<{
+  paymentsSummary?: {
     id: number;
     amount: number;
     status: StatusPayment;
@@ -54,5 +54,5 @@ export interface SaleResponse {
     dateOperation: string | null;
     numberTicket: string | null;
     paymentConfig: string;
-  }>;
+  }[];
 }
