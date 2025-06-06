@@ -466,4 +466,24 @@ export class PaymentsService {
       paymentConfig = await this.paymentConfigService.findOneByCode('RESERVATION_PAYMENT');
     return paymentConfig;
   }
+
+  async findPaymentsByRelatedEntity(relatedEntityType: string, relatedEntityId: string): Promise<Payment[]> {
+    return this.paymentRepository.find({
+      where: {
+        relatedEntityType,
+        relatedEntityId,
+      },
+      relations: ['paymentConfig'],
+    });
+  }
+
+  async findPaymentsByRelatedEntities(relatedEntityType: string, relatedEntityIds: string[]): Promise<Payment[]> {
+    if (!relatedEntityIds.length) return [];
+    return this.paymentRepository
+      .createQueryBuilder('payment')
+      .leftJoinAndSelect('payment.paymentConfig', 'paymentConfig')
+      .where('payment.relatedEntityType = :type', { type: relatedEntityType })
+      .andWhere('payment.relatedEntityId IN (:...ids)', { ids: relatedEntityIds })
+      .getMany();
+  }
 }

@@ -1,3 +1,5 @@
+import { StatusPayment } from "src/admin-payments/payments/enums/status-payments.enum";
+
 export interface SaleResponse {
   id: string;
   type: string;
@@ -41,4 +43,16 @@ export interface SaleResponse {
     firstName: string;
     lastName: string;
   };
+  paymentsSummary?: Array<{
+    id: number;
+    amount: number;
+    status: StatusPayment;
+    createdAt: string;
+    reviewedAt: string | null;
+    codeOperation: string | null;
+    banckName: string | null;
+    dateOperation: string | null;
+    numberTicket: string | null;
+    paymentConfig: string;
+  }>;
 }

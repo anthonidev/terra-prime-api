@@ -137,6 +137,16 @@ export class FinancingService {
     return financing;
   }
 
+  async findBySaleId(id: string): Promise<Financing> {
+    const financing = await this.financingRepository.findOne({
+      where: { sale: { id } },
+      relations: ['sale'],
+    });
+    // if (!financing)
+    //   throw new NotFoundException(`El financiamiento con ID de venta ${id} no se encuentra registrado`);
+    return financing;
+  }
+
   async findOneWithPayments(id: string): Promise<Financing> {
     return await this.financingRepository.findOne({
       where: { id },
