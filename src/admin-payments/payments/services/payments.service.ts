@@ -263,6 +263,7 @@ export class PaymentsService {
         'payment.banckName',
         'payment.dateOperation',
         'payment.numberTicket',
+        'payment.rejectionReason',
         'payment.relatedEntityType',
         'payment.relatedEntityId',
         'paymentConfig.name',
@@ -315,6 +316,7 @@ export class PaymentsService {
         'payment.banckName',
         'payment.dateOperation',
         'payment.numberTicket',
+        'payment.rejectionReason',
         'payment.relatedEntityType',
         'payment.relatedEntityId',
         'details',
@@ -423,7 +425,6 @@ export class PaymentsService {
         };
 
         const sale = await getSaleData();
-        console.log(sale);
         if (!sale) return basePayment;
 
         return {

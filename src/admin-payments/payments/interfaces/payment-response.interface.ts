@@ -9,6 +9,9 @@ export interface PaymentResponse {
   methodPayment: MethodPayment;
   status: StatusPayment;
   createdAt: Date;
+  rejectionReason: string | null;
+  codeOperation: string | null;
+  numberTicker: string | null;
   vouchers: {
     id: number;
     url: string;
