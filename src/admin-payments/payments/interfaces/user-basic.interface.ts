@@ -1,5 +1,7 @@
 export interface UserBasic {
   id: string;
   email: string;
-  photo?: string;
+  firstName: string;
+  lastName: string;
+  document: string;
 }

@@ -267,7 +267,9 @@ export class PaymentsService {
         'reviewer.id',
         'reviewer.email',
         'user.id',
-        'user.photo',
+        'user.firstName',
+        'user.lastName',
+        'user.document',
         'user.email',
       ]);
 
@@ -318,13 +320,15 @@ export class PaymentsService {
         'reviewer.id',
         'reviewer.email',
         'user.id',
-        'user.photo',
+        'user.firstName',
+        'user.lastName',
+        'user.document',
         'user.email',
       ])
       .getOne();
 
     if (!payment) {
-      throw new NotFoundException(`Payment with ID ${paymentId} not found`);
+      throw new NotFoundException(`El pago con ID ${paymentId} no se encuentra registrado`);
     }
     const [enrichedPayment] = await this.enrichPaymentsWithRelatedEntities([payment]);
     
@@ -383,10 +387,12 @@ export class PaymentsService {
         };
 
         const sale = await getSaleData();
+        console.log(sale);
         if (!sale) return basePayment;
 
         return {
           ...basePayment,
+          currency: sale.lot.block?.stage?.project?.currency,
           client: sale.client && {
             address: sale.client.address,
             lead: {
@@ -400,7 +406,7 @@ export class PaymentsService {
             lotPrice: sale.lot.lotPrice,
             block: sale.lot.block?.name,
             stage: sale.lot.block?.stage?.name,
-            project: sale.lot.block?.stage?.project?.name
+            project: sale.lot.block?.stage?.project?.name,
           }
         };
       })

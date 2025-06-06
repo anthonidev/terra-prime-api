@@ -1,4 +1,5 @@
 import { StatusPayment } from "src/admin-payments/payments/enums/status-payments.enum";
+import { CurrencyType } from "src/project/entities/project.entity";
 
 export interface SaleResponse {
   id: string;
@@ -7,6 +8,7 @@ export interface SaleResponse {
   contractDate: string;
   saleDate: string;
   status: string;
+  currency: CurrencyType;
   client: {
     address: string;
     firstName: string;

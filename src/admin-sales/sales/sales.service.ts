@@ -169,7 +169,10 @@ export class SalesService {
     const sales = await this.saleRepository.find({
       relations: [
         'client', 
-        'lot', 
+        'lot',
+        'lot.block',
+        'lot.block.stage',
+        'lot.block.stage.project',
         'financing', 
         'guarantor', 
         'reservation', 
@@ -189,6 +192,9 @@ export class SalesService {
       relations: [
         'client',
         'lot',
+        'lot.block',
+        'lot.block.stage',
+        'lot.block.stage.project',
         'financing',
         'guarantor',
         'reservation',
@@ -279,6 +285,9 @@ export class SalesService {
       relations: [
         'client',
         'lot',
+        'block',
+        'stage',
+        'project',
         'financing',
         'guarantor',
         'reservation',

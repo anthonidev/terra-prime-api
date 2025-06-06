@@ -4,6 +4,8 @@ import { StatusPayment } from "../enums/status-payments.enum";
 import { ClientBasic } from "./client-basic.interface";
 import { LotBasic } from "./lot-basic.interface";
 import { UserBasic } from "./user-basic.interface";
+import { CurrencyType } from "src/project/entities/project.entity";
+import { ReviewByBasic } from "./review-by-basic.interface";
 
 export interface PaymentAllResponse {
   id: number;
@@ -11,13 +13,14 @@ export interface PaymentAllResponse {
   status: string;
   createdAt: Date;
   reviewedAt?: Date;
-  reviewBy?: User | null;
+  reviewBy?: ReviewByBasic | null;
   codeOperation?: string;
   banckName?: string;
   dateOperation?: Date;
   numberTicket?: string;
   paymentConfig: string;
   user: UserBasic;
+  currency?: CurrencyType;
   client?: ClientBasic;
   lot?: LotBasic;
   vouchers?: {

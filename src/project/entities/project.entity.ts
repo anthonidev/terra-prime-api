@@ -19,7 +19,7 @@ import {
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { Stage } from './stage.entity';
-enum CurrencyType {
+export enum CurrencyType {
   USD = 'USD',
   PEN = 'PEN',
 }
