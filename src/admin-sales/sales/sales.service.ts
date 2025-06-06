@@ -182,6 +182,7 @@ export class SalesService {
         'secondaryClientSales.secondaryClient',
       ],
       where: whereCondition,
+      order: { createdAt: 'DESC' },
     });
     return PaginationHelper.createPaginatedResponse(sales.map(formatSaleResponse), sales.length, paginationDto);
   }
@@ -276,6 +277,7 @@ export class SalesService {
         dateOperation: payment.dateOperation,
         numberTicket: payment.numberTicket,
         paymentConfig: payment.paymentConfig.name,
+        reason: payment?.rejectionReason? payment.rejectionReason: null,
     }));
 }
 
@@ -524,8 +526,8 @@ export class SalesService {
   ) {
     return await this.transactionService.runInTransaction(async (queryRunner) => {
       const savedSale = await saleSpecificLogic(queryRunner, createSaleDto);
-      const { secondaryClientsIds = [] } = createSaleDto;
-      if (!secondaryClientsIds && secondaryClientsIds.length > 0)
+      const { secondaryClientsIds } = createSaleDto;
+      if (secondaryClientsIds && secondaryClientsIds.length > 0)
         await Promise.all(
           createSaleDto.secondaryClientsIds.map(async (id) => {
             const secondaryClientSale = await this.secondaryClientService.createSecondaryClientSale(savedSale.id, id, queryRunner);

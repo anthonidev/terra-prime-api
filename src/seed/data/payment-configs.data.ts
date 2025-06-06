@@ -2,7 +2,7 @@ export const paymentConfigsData = [
   {
     code: 'SALE_PAYMENT',
     name: 'Pago total de venta',
-    description: 'Pago del monto total de la venta',
+    description: 'Monto total',
     requiresApproval: true,
     isActive: true,
     minimumAmount: 0, 
@@ -10,7 +10,7 @@ export const paymentConfigsData = [
   },
   {
     code: 'FINANCING_PAYMENT',
-    name: 'Pago inicial de financiación de la venta',
+    name: 'Monto inicial',
     description:
       'Pago inicial de financiación de la venta',
     requiresApproval: true,
@@ -22,7 +22,7 @@ export const paymentConfigsData = [
     code: 'FINANCING_INSTALLMENTS_PAYMENT',
     name: 'Pago de cuotas de financiación de la venta',
     description:
-      'Pago de cuotas de financiación de la venta',
+      'Monto de cuota',
     requiresApproval: true,
     isActive: true,
     minimumAmount: 0,
@@ -30,7 +30,7 @@ export const paymentConfigsData = [
   },
   {
     code: 'RESERVATION_PAYMENT',
-    name: 'Pago de reserva de la venta',
+    name: 'Monto de reserva',
     description: 'Pago de reserva de la venta',
     requiresApproval: true,
     isActive: true,

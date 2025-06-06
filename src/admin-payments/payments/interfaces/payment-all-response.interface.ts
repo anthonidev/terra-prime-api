@@ -19,6 +19,7 @@ export interface PaymentAllResponse {
   dateOperation?: Date;
   numberTicket?: string;
   paymentConfig: string;
+  reason?: string | null;
   user: UserBasic;
   currency?: CurrencyType;
   client?: ClientBasic;

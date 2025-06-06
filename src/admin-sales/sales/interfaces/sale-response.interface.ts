@@ -56,5 +56,6 @@ export interface SaleResponse {
     dateOperation: string | null;
     numberTicket: string | null;
     paymentConfig: string;
+    reason: string | null;
   }[];
 }
