@@ -7,6 +7,8 @@ export const formatPaymentsResponse = (payment: Payment) => {
     relatedEntityId: payment.relatedEntityId,
     amount: payment.amount,
     methodPayment: payment.methodPayment,
+    numberTicker: payment.numberTicket,
+    codeOperation: payment.codeOperation,
     status: payment.status,
     createdAt: payment.createdAt,
   }

@@ -25,6 +25,7 @@ import { FinancingService } from 'src/admin-sales/financing/services/financing.s
 import { PaymentAllResponse } from '../interfaces/payment-all-response.interface';
 import { Paginated } from 'src/common/interfaces/paginated.interface';
 import { query } from 'express';
+import { CompletePaymentDto } from '../dto/complete-payment.dto';
 
 @Injectable()
 export class PaymentsService {
@@ -346,6 +347,39 @@ export class PaymentsService {
     };
 
     return response;
+  }
+
+  async updateDataOrcompletePayment(
+    paymentId: number,
+    reviewerId: string,
+    completePaymentDto: CompletePaymentDto,
+  ) {
+    const { codeOperation, numberTicket } = completePaymentDto;
+    if (!codeOperation && !numberTicket)
+      throw new BadRequestException(
+        'Se requiere al menos un código de operación o número de ticket',
+      );
+    
+    return await this.transactionService.runInTransaction(async (queryRunner) => {
+      const payment = await this.paymentRepository.findOne({
+        where: { id: paymentId },
+        relations: ['user', 'paymentConfig', 'details'],
+      });
+
+      if (!payment) throw new NotFoundException(`Pago con ID ${paymentId} no encontrado`);
+
+      if (payment.status !== StatusPayment.APPROVED)
+        throw new BadRequestException(`El pago tiene que estar aprobado previamente`);
+
+      payment.codeOperation = codeOperation || payment.codeOperation;
+      payment.numberTicket = numberTicket || payment.numberTicket;
+
+      if (payment.codeOperation && payment.numberTicket)
+        payment.status = StatusPayment.COMPLETED;
+
+      await queryRunner.manager.save(payment);
+      return formatPaymentsResponse(payment);
+    });
   }
 
   // Internal helpers methods
