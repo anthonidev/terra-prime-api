@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   InternalServerErrorException,
@@ -287,19 +288,31 @@ export class LotService {
 
   async isLotValidForSale(lotId: string): Promise<Lot> {
     const lot = await this.lotRepository.findOne({
-      where: { id: lotId, status: LotStatus.ACTIVE },
+      where: { id: lotId },
     });
     if (!lot)
-      throw new NotFoundException(`El lote con ID ${lotId} no se encuentra registrado`);
+      throw new NotFoundException(`El lote no se encuentra registrado`);
+    if(lot.status === LotStatus.INACTIVE)
+      throw new BadRequestException(`El lote ${lot.name} no se encuentra activado`);
+    if(lot.status === LotStatus.RESERVED)
+      throw new BadRequestException(`El lote ${lot.name} está reservado`);
+    if(lot.status === LotStatus.SOLD)
+      throw new BadRequestException(`El lote ${lot.name} ya se ha vendido`);
     return lot;
   }
 
   async isLotValidForSaleReservation(lotId: string): Promise<Lot> {
     const lot = await this.lotRepository.findOne({
-      where: { id: lotId, status: LotStatus.RESERVED },
+      where: { id: lotId },
     });
     if (!lot)
-      throw new NotFoundException(`El lote con ID ${lotId} no se encuentra separado`);
+      throw new NotFoundException(`El lote ${lot.name} no se encuentra separado`);
+    if(lot.status === LotStatus.INACTIVE)
+      throw new BadRequestException(`El lote ${lot.name} no se encuentra activado`);
+    if(lot.status === LotStatus.RESERVED)
+      throw new BadRequestException(`El lote ${lot.name} está reservado`);
+    if(lot.status === LotStatus.SOLD)
+      throw new BadRequestException(`El lote ${lot.name} ya se ha vendido`);
     return lot;
   }
 

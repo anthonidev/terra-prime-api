@@ -17,7 +17,7 @@ export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Post('approve/:id')
-  @Roles('JVE')
+  @Roles('FAC')
   async approvePayment(
     @Param('id') id: number,
     @GetUser() user: User,
@@ -27,7 +27,7 @@ export class PaymentsController {
   }
 
   @Post('reject/:id')
-  @Roles('JVE')
+  @Roles('FAC')
   async rejectPayment(
     @Param('id') id: number,
     @Body() rejectionDto: RejectionDto,
@@ -37,7 +37,7 @@ export class PaymentsController {
   }
 
   @Get('list')
-  @Roles('JVE')
+  @Roles('FAC')
   async findAllPayments(
     @Query() filters: FindPaymentsDto,
   ) {
@@ -45,7 +45,7 @@ export class PaymentsController {
   }
 
   @Get('details/:id')
-  @Roles('JVE')
+  @Roles('FAC')
   async findOnePayment(
     @Param('id') id: number,
   ) {
@@ -53,7 +53,7 @@ export class PaymentsController {
   }
 
   @Patch('complete-payment/:id')
-  @Roles('JVE')
+  @Roles('FAC')
   completePayment(
     @Param('id', ParseIntPipe) id: number,
     @GetUser() user: User,

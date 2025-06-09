@@ -687,7 +687,13 @@ export class SalesService {
   async findOneSaleWithPayments(id: string): Promise<Sale> {
     return await this.saleRepository.findOne({
         where: { id },
-        relations: ['client', 'lot'],
+        relations: [
+          'client',
+          'lot',
+          'lot.block',
+          'lot.block.stage',
+          'lot.block.stage.project'
+        ],
       });
   }
 }

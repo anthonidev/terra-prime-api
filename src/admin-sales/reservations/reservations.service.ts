@@ -85,7 +85,13 @@ export class ReservationsService {
   async findOneWithPayments(id: string): Promise<Reservation> {
     return await this.reservationRepository.findOne({
       where: { id },
-      relations: ['client', 'lot'],
+      relations: [
+        'client',
+        'lot',
+        'lot.block',
+        'lot.block.stage',
+        'lot.block.stage.project'
+      ],
     });
   }
 }
