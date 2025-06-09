@@ -10,7 +10,6 @@ import { LateTee } from "src/admin-sales/late-fee/entities/lafe-tee.entity";
 import { UrbanDevelopment } from "src/admin-sales/urban-development/entities/urban-development.entity";
 import { SaleType } from "../enums/sale-type.enum";
 import { Guarantor } from "src/admin-sales/guarantors/entities/guarantor.entity";
-import { SecondaryClient } from "src/admin-sales/secondary-client/entities/secondary-client.entity";
 import { SecondaryClientSale } from "src/admin-sales/secondary-client/entities/secondary-client-sale.entity";
 import { SaleWithdrawal } from "src/admin-sales/sales-withdrawal/entities/sale-withdrawal.entity";
 
@@ -62,12 +61,6 @@ export class Sale extends Timestamped {
     nullable: true,
   })
   contractDate?: Date;
-  
-  @Column({
-    type: 'timestamp',
-    nullable: false,
-  })
-  saleDate: Date;
 
   @Column({
     type: 'enum',

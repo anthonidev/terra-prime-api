@@ -29,14 +29,6 @@ export class CreateSaleDto {
 	@Type(() => Number) 
 	secondaryClientsIds?: number[];
 
-	@IsDateString({}, { message: 'La fecha de pago debe ser válida' })
-	@IsNotEmpty({ message: 'La fecha de pago es requerida' })
-  paymentDate: string;
-
-	@IsDateString({}, { message: 'La fecha de venta debe ser válida' })
-	@IsNotEmpty({ message: 'La fecha de venta es requerida' })
-	saleDate: string;
-
 	@IsDateString({}, { message: 'La fecha de contrato debe ser válida' })
 	@IsOptional()
   contractDate?: string;

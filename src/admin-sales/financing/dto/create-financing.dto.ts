@@ -14,10 +14,6 @@ export class CreateFinancingDto {
   @IsNumber({}, { message: 'El monto inicial de la financiación debe ser un número' })
   initialAmount: number;
 
-  @IsNotEmpty({ message: 'La fecha de pago inicial es requerida' })
-  @IsDateString({}, { message: 'La fecha de pago inicial debe ser válida' })
-  initialPaymentDate: string;
-
   @IsNotEmpty({ message: 'El interes porcentual es requerido' })
   @IsNumber({}, { message: 'El interes porcentual debe ser un número' })
   interestRate: number;

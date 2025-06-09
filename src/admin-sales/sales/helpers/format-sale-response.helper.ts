@@ -6,8 +6,7 @@ export function formatSaleResponse(sale: Sale) {
     id: sale.id,
     type: sale.type,
     totalAmount: sale.totalAmount,
-    contractDate: sale.contractDate.toISOString(),
-    saleDate: sale.saleDate.toISOString(),
+    contractDate: sale.contractDate?.toISOString(),
     status: sale.status,
     currency: sale.lot.block?.stage?.project?.currency,
     client: {

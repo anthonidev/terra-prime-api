@@ -6,7 +6,6 @@ export interface SaleResponse {
   type: string;
   totalAmount: number;
   contractDate: string;
-  saleDate: string;
   status: string;
   currency: CurrencyType;
   client: {

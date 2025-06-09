@@ -91,8 +91,8 @@ export class SalesService {
     userId: string,
   ): Promise<SaleResponse> {
     try {
-      const { clientId, lotId, guarantorId, saleDate, paymentDate, firstPaymentDateHu, reservationId, secondaryClientsIds = [] } = createSaleDto;
-      validateSaleDates({ saleDate, paymentDate, firstPaymentDateHu });
+      const { clientId, lotId, guarantorId, firstPaymentDateHu, reservationId, secondaryClientsIds = [] } = createSaleDto;
+      validateSaleDates({ firstPaymentDateHu });
 
       if (reservationId)
         await this.isValidReservationForSale(reservationId, clientId, lotId);
@@ -113,7 +113,7 @@ export class SalesService {
         });
       if (createSaleDto.saleType === SaleType.FINANCED)
         sale = await this.handleSaleCreation(createSaleDto, userId, async (queryRunner, data) => {
-          const { initialAmount, interestRate, quantitySaleCoutes, paymentDate, totalAmount, financingInstallments, reservationId } = data;
+          const { initialAmount, interestRate, quantitySaleCoutes, totalAmount, financingInstallments, reservationId } = data;
           const reservationAmount = reservationId ? await this.reservationService.getAmountReservation(reservationId) : 0;
           this.isValidFinancingDataSaLe(
             totalAmount,
@@ -128,7 +128,6 @@ export class SalesService {
             initialAmount,
             interestRate,
             quantityCoutes: quantitySaleCoutes,
-            initialPaymentDate: paymentDate,
             financingInstallments: financingInstallments
           };
           const financingSale = await this.financingService.create(financingData, queryRunner);
@@ -571,7 +570,6 @@ export class SalesService {
       : null,
       vendor: { id: userId },
       totalAmount: createSaleDto.totalAmount,
-      saleDate: createSaleDto.saleDate,
       contractDate: createSaleDto.contractDate,
       financing: { id: financingId },
     });

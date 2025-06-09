@@ -38,12 +38,6 @@ export class Financing extends Timestamped {
   initialAmount: number;
 
   @Column({
-    type: 'timestamp',
-    nullable: false,
-  })
-  initialPaymentDate: Date;
-
-  @Column({
     type: 'numeric',
     precision: 10,
     scale: 2,

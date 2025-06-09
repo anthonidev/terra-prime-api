@@ -7,7 +7,6 @@ export function formatSaleCollectionResponse(sale: Sale) {
     type: sale.type,
     totalAmount: sale.totalAmount,
     contractDate: sale.contractDate.toISOString(),
-    saleDate: sale.saleDate.toISOString(),
     status: sale.status,
     currency: sale.lot.block?.stage?.project?.currency,
     client: {
