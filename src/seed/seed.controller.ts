@@ -12,4 +12,9 @@ export class SeedController {
   seedPaymentConfigs() {
     return this.seedService.seedPaymentConfigs();
   }
+
+  @Post('cut-configs')
+  seedCutConfigurations() {
+    return this.seedService.seedCutConfigurations();
+  }
 }

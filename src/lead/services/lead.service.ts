@@ -1,10 +1,11 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Raw, Repository } from 'typeorm';
+import { Between, IsNull, Not, QueryRunner, Raw, Repository } from 'typeorm';
 import { Lead } from '../entities/lead.entity';
 import { Ubigeo } from '../entities/ubigeo.entity';
 import { LeadSource } from '../entities/lead-source.entity';
@@ -17,8 +18,11 @@ import {
   PaginationHelper,
 } from 'src/common/helpers/pagination.helper';
 import { UsersService } from 'src/user/user.service';
+import { TransactionService } from 'src/common/services/transaction.service';
+import { CutsResponse } from 'src/cuts/interfaces/cuts-response.interface';
 @Injectable()
 export class LeadService {
+  private readonly logger = new Logger(LeadService.name);
   constructor(
     @InjectRepository(Lead)
     private readonly leadRepository: Repository<Lead>,
@@ -29,6 +33,7 @@ export class LeadService {
     @InjectRepository(LeadVisit)
     private readonly leadVisitRepository: Repository<LeadVisit>,
     private readonly userService: UsersService,
+    private readonly transactionService: TransactionService,
   ) { }
   async findByDocument(
     findDto: FindLeadByDocumentDto,
@@ -345,5 +350,135 @@ export class LeadService {
     if (!lead)
       throw new NotFoundException(`Lead con ID ${id} no encontrado`);
     return lead;
+  }
+
+  async updateIsOfficeAndAssignVendor(): Promise<CutsResponse> {
+    return await this.transactionService.runInTransaction(async (queryRunner) => {
+    let processed = 0;
+    let successful = 0;
+    let failed = 0;
+    let totalPoints = 0;
+
+    try {
+      // Ejecutar ambas operaciones y capturar sus resultados
+      const [isOfficeResult, desassignVendorResult] = await Promise.all([
+        this.updateIsOffice(queryRunner),
+        this.updateDesassignVendor(queryRunner),
+      ]);
+
+      // Sumar los resultados
+      processed = isOfficeResult.processed + desassignVendorResult.processed;
+      successful = isOfficeResult.successful + desassignVendorResult.successful;
+      failed = isOfficeResult.failed + desassignVendorResult.failed;
+      totalPoints = isOfficeResult.totalPoints + desassignVendorResult.totalPoints;
+
+      return { processed, successful, failed, totalPoints };
+    } catch (error) {
+      // Manejar errores si es necesario
+      throw error;
+    }
+  });
+  }
+
+  async updateIsOffice(
+  queryRunner?: QueryRunner,
+  ): Promise<CutsResponse> {
+    const repository = queryRunner
+      ? queryRunner.manager.getRepository(Lead)
+      : this.leadRepository;
+    
+    const leadsIsInOffice = await repository.find({
+      where: { isInOffice: true },
+    });
+    
+    if (leadsIsInOffice.length === 0) {
+      this.logger.log('No hay leads con isOffice en true para actualizar.');
+      return {
+        processed: 0,
+        successful: 0,
+        failed: 0,
+        totalPoints: 0
+      };
+    }
+
+    const updatedLeads = leadsIsInOffice.map(lead => {
+      lead.isInOffice = false;
+      return lead;
+    });
+
+    try {
+      await repository.save(updatedLeads);
+      this.logger.log(`Se actualizaron ${updatedLeads.length} leads: isOffice cambió a false.`);
+      
+      return {
+        processed: updatedLeads.length,
+        successful: updatedLeads.length,
+        failed: 0,
+        totalPoints: updatedLeads.length
+      };
+    } catch (error) {
+      this.logger.error(`Error al actualizar isOffice: ${error.message}`);
+      
+      return {
+        processed: updatedLeads.length,
+        successful: 0,
+        failed: updatedLeads.length,
+        totalPoints: 0
+      };
+    }
+  }
+
+  async updateDesassignVendor(
+    queryRunner?: QueryRunner,
+  ): Promise<{
+    processed: number;
+    successful: number;
+    failed: number;
+    totalPoints: number;
+  }> {
+    const repository = queryRunner
+      ? queryRunner.manager.getRepository(Lead)
+      : this.leadRepository;
+    
+    const updatedLeadsWithVendor = await repository.find({
+      where: { vendor: Not(IsNull()) },
+      relations: ['vendor'],
+    });
+    
+    if (updatedLeadsWithVendor.length === 0) {
+      this.logger.log('No hay leads con vendor para actualizar.');
+      return {
+        processed: 0,
+        successful: 0,
+        failed: 0,
+        totalPoints: 0
+      };
+    }
+
+    const updatedLeadsWithVendorIds = updatedLeadsWithVendor.map(lead => {
+      lead.vendor = null;
+      return lead;
+    });
+
+    try {
+      await repository.save(updatedLeadsWithVendorIds);
+      this.logger.log(`Se actualizaron ${updatedLeadsWithVendorIds.length} leads: vendor cambió a null.`);
+      
+      return {
+        processed: updatedLeadsWithVendorIds.length,
+        successful: updatedLeadsWithVendorIds.length,
+        failed: 0,
+        totalPoints: updatedLeadsWithVendorIds.length // O algún cálculo específico si aplica
+      };
+    } catch (error) {
+      this.logger.error(`Error al desasignar vendor: ${error.message}`);
+      
+      return {
+        processed: updatedLeadsWithVendorIds.length,
+        successful: 0,
+        failed: updatedLeadsWithVendorIds.length,
+        totalPoints: 0
+      };
+    }
   }
 }

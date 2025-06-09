@@ -16,10 +16,12 @@ import { LeadVisit } from './entities/lead-visit.entity';
 import { BulkLeadController } from './controllers/bulk-lead.controller';
 import { BulkLeadService } from './services/bulk-lead.service';
 import { UsersModule } from 'src/user/user.module';
+import { CommonModule } from 'src/common/common.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Lead, Liner, Ubigeo, LeadSource, LeadVisit]),
-    UsersModule
+    UsersModule,
+    CommonModule,
   ],
   controllers: [
     LeadController,

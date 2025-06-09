@@ -1,8 +1,41 @@
-import { Module } from '@nestjs/common';import { TypeOrmModule } from '@nestjs/typeorm';import { AuthModule } from './auth/auth.module';import { envs } from './config/envs';import { UsersModule } from './user/user.module';import { SeedModule } from './seed/seed.module';import { ProjectModule } from './project/project.module';import { DashboardModule } from './dashboard/dashboard.module';import { LeadModule } from './lead/lead.module';
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuthModule } from './auth/auth.module';
+import { envs } from './config/envs';
+import { UsersModule } from './user/user.module';
+import { SeedModule } from './seed/seed.module';
+import { ProjectModule } from './project/project.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { LeadModule } from './lead/lead.module';
 import { AdminSalesModule } from './admin-sales/admin-sales.module';
 import { AdminPaymentsModule } from './admin-payments/admin-payments.module';
 import { EmailModule } from './email/email.module';
 import { FilesModule } from './files/files.module';
 import { SystemsModule } from './systems/systems.module';
 import { AdminCollectionsModule } from './admin-collections/admin-collections.module';
-import * as crypto from 'crypto';@Module({  imports: [    TypeOrmModule.forRootAsync({      useFactory: () => ({        type: 'postgres',        host: envs.dbHost,        port: envs.dbPort,        database: envs.dbName,        username: envs.dbUsername,        password: envs.dbPassword,        autoLoadEntities: true,        synchronize: true,      }),    }),    AuthModule,    UsersModule,    SeedModule,    ProjectModule,    DashboardModule,    LeadModule, AdminSalesModule, AdminPaymentsModule, EmailModule, FilesModule, SystemsModule, AdminCollectionsModule,  ],})export class AppModule {}
+import { ScheduleModule } from '@nestjs/schedule';
+import { CutsModule } from './cuts/cuts.module';
+@Module({
+  imports: [
+    TypeOrmModule.forRootAsync({
+      useFactory: () => ({
+        type: 'postgres',
+        host: envs.dbHost,
+        port: envs.dbPort,
+        database: envs.dbName,
+        username: envs.dbUsername,
+        password: envs.dbPassword,
+        autoLoadEntities: true,
+        synchronize: true,
+      }),
+    }),
+    ScheduleModule.forRoot(),
+    AuthModule,
+    UsersModule,
+    SeedModule,
+    ProjectModule,
+    DashboardModule,
+    LeadModule, AdminSalesModule, AdminPaymentsModule, EmailModule, FilesModule, SystemsModule, AdminCollectionsModule, CutsModule,
+  ],
+})
+export class AppModule {}
