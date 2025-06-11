@@ -61,9 +61,9 @@ export class ClientsService {
         ? queryRunner.manager.getRepository(Client)
         : this.clientRepository;
       const lead = await this.leadService.findOneById(leadId);
-      if (lead.vendor.id !== userId)
+      if (lead.vendor?.id !== userId)
         throw new NotFoundException(
-          `El cliente con ID ${leadId} no se encuentra asignado al vendedor activo`,
+          `El lead con ID ${leadId} no se encuentra asignado al vendedor activo`,
         );
       const client = await this.clientRepository.findOne({
         where: { lead: { id: leadId } },

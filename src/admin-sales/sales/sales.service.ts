@@ -421,7 +421,7 @@ export class SalesService {
     userId: string
   }): Promise<ClientAndGuarantorResponse> {
     return await this.transactionService.runInTransaction(async (queryRunner) => {
-      const { createClient, createGuarantor, createSecondaryClient, userId } = data;
+      const { createClient, createGuarantor, createSecondaryClient = [], userId } = data;
       const  client = await this.clientService.createOrUpdate(createClient, userId, queryRunner);
       const guarantor = createGuarantor ? await this.guarantorService.createOrUpdate(createGuarantor, queryRunner) : null;
       let secondaryClientIds: number[] = [];
