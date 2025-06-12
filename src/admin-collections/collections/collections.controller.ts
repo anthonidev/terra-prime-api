@@ -33,9 +33,9 @@ export class CollectionsController {
     return this.collectionsService.findAllCollectors(paginationDto);
   }
 
-  @Get('collectors/list-actives')
+  @Get('clients/list')
   @Roles('SCO')
-  findAllActiveCollectors(
+  findAllClientsWithCollection(
     @Query() paginationDto: PaginationDto,
   ) {
     return this.collectionsService.findAllClientsWithCollection(paginationDto);
