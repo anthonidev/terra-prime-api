@@ -69,8 +69,8 @@ export class Sale extends Timestamped {
   })
   status: StatusSale;
 
-  @OneToMany(() => LateTee, (lateFeeTee) => lateFeeTee.sale)
-  lateFeeTee: LateTee[];
+  // @OneToMany(() => LateTee, (lateFeeTee) => lateFeeTee.sale)
+  // lateFeeTee: LateTee[];
 
   @OneToMany(() => UrbanDevelopment, (urbanDevelopment) => urbanDevelopment.sale)
   urbanDevelopment: UrbanDevelopment[];

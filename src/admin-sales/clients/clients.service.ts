@@ -127,6 +127,22 @@ export class ClientsService {
     return client;
   }
 
+  async findAllClientsWithCollection(): Promise<Client[]> {
+    const clients = await this.clientRepository
+      .createQueryBuilder('client')
+      .leftJoinAndSelect('client.lead', 'lead')
+      .leftJoinAndSelect('lead.source', 'source')
+      .leftJoinAndSelect('lead.ubigeo', 'ubigeo')
+      .leftJoinAndSelect('client.collector', 'collector')
+      .innerJoinAndSelect(
+        'client.sales',
+        'sales',
+        'sales.type = :type AND sales.status = :status',
+        { type: SaleType.FINANCED, status: StatusSale.IN_PAYMENT_PROCESS }
+      ).getMany();
+    return clients;
+  }
+
   async findOneClientByIdWithCollections(id: number): Promise<Client> {
     const client = await this.clientRepository
       .createQueryBuilder('client')

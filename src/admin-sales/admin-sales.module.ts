@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { SalesModule } from './sales/sales.module';
 import { ClientsModule } from './clients/clients.module';
 import { FinancingModule } from './financing/financing.module';
@@ -10,6 +10,16 @@ import { SecondaryClientModule } from './secondary-client/secondary-client.modul
 import { SalesWithdrawalModule } from './sales-withdrawal/sales-withdrawal.module';
 
 @Module({
-  imports: [SalesModule, ClientsModule, FinancingModule, ReservationsModule, GuarantorsModule, LateFeeModule, UrbanDevelopmentModule, SecondaryClientModule, SalesWithdrawalModule]
+  imports: [
+    SalesModule,
+    ClientsModule,
+    forwardRef(() => FinancingModule),
+    ReservationsModule,
+    GuarantorsModule,
+    LateFeeModule,
+    UrbanDevelopmentModule,
+    SecondaryClientModule,
+    SalesWithdrawalModule
+  ]
 })
 export class AdminSalesModule {}

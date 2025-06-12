@@ -12,6 +12,9 @@ import { PaginationHelper } from 'src/common/helpers/pagination.helper';
 import { ClientResponse } from 'src/admin-sales/clients/interfaces/client-response.interface';
 import { SalesService } from 'src/admin-sales/sales/sales.service';
 import { SaleResponse } from 'src/admin-sales/sales/interfaces/sale-response.interface';
+import { FinancingInstallmentsService } from 'src/admin-sales/financing/services/financing-installments.service';
+import { QueryRunner } from 'typeorm';
+import { CreateDetailPaymentDto } from 'src/admin-payments/payments/dto/create-detail-payment.dto';
 
 @Injectable()
 export class CollectionsService {
@@ -19,6 +22,7 @@ export class CollectionsService {
     private readonly clientService: ClientsService,
     private readonly userService: UsersService,
     private readonly saleService: SalesService,
+    private readonly financingInstallmentsService: FinancingInstallmentsService,
   ){}
 
   async assignClientsToCollector(
@@ -53,6 +57,17 @@ export class CollectionsService {
     });
   }
 
+  async findAllClientsWithCollection(
+    paginationDto: PaginationDto,
+  ): Promise<Paginated<ClientResponse>> {
+    const clients = await this.clientService.findAllClientsWithCollection();
+    return PaginationHelper.createPaginatedResponse(
+      clients.map(formatClientResponse),
+      clients.length,
+      paginationDto,
+    );
+  }
+
   async findAllSalesByClient(
     clientId: number,
   ): Promise<SaleResponse[]> {
@@ -65,5 +80,16 @@ export class CollectionsService {
   ): Promise<SaleResponse> {
     const sale = await this.saleService.findOneByIdWithCollections(saleId);
     return sale;
+  }
+
+  async paidInstallments(
+    financingId: string,
+    amountPaid: number,
+    paymentDetails: CreateDetailPaymentDto[],
+    files: Express.Multer.File[],
+    userId: string,
+    queryRunner?: QueryRunner,
+  ): Promise<void> {
+    await this.financingInstallmentsService.payInstallments(financingId, amountPaid, paymentDetails, files, userId, queryRunner);
   }
 }

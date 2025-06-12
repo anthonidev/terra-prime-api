@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, UseInterceptors, ValidationPipe, UsePipes, UploadedFiles, ParseFilePipeBuilder, HttpStatus } from '@nestjs/common';
 import { CollectionsService } from './collections.service';
 import { CreateCollectionDto } from './dto/create-collection.dto';
 import { UpdateCollectionDto } from './dto/update-collection.dto';
@@ -9,6 +9,8 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/user/entities/user.entity';
+import { PaidInstallmentsDto } from './dto/paid-installments.dto';
+import { FilesInterceptor } from '@nestjs/platform-express';
 
 @Controller('collections')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -29,6 +31,14 @@ export class CollectionsController {
     @Query() paginationDto: PaginationDto,
   ) {
     return this.collectionsService.findAllCollectors(paginationDto);
+  }
+
+  @Get('collectors/list-actives')
+  @Roles('SCO')
+  findAllActiveCollectors(
+    @Query() paginationDto: PaginationDto,
+  ) {
+    return this.collectionsService.findAllClientsWithCollection(paginationDto);
   }
 
   @Get('clients/list-by-user')
@@ -53,5 +63,37 @@ export class CollectionsController {
     @Param('saleId') saleId: string,
   ) {
     return this.collectionsService.findOneSaleByIdForClient(saleId);
+  }
+
+  @Post('financing/installments/paid/:financingId')
+  @Roles('COB', 'SCO')
+  @UseInterceptors(FilesInterceptor('files'))
+  @UsePipes(new ValidationPipe({ transform: true }))
+  paidInstallments(
+    @Param('financingId') financingId: string,
+    @Body() paidInstallmentsDto: PaidInstallmentsDto,
+    @GetUser() user: User,
+      @UploadedFiles(
+        new ParseFilePipeBuilder()
+          .addFileTypeValidator({
+            fileType: /(jpg|jpeg|png|webp)$/,
+          })
+          .addMaxSizeValidator({
+            maxSize: 1024 * 1024 * 2,
+          })
+          .build({
+            errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+            fileIsRequired: false,
+          }),
+      )
+      files: Array<Express.Multer.File>,
+  ) {
+    return this.collectionsService.paidInstallments(
+      financingId,
+      paidInstallmentsDto.amountPaid,
+      paidInstallmentsDto.paymentDetails,
+      files,
+      user.id
+    );
   }
 }

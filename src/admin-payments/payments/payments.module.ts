@@ -15,7 +15,15 @@ import { ProjectModule } from 'src/project/project.module';
 import { ReservationsModule } from 'src/admin-sales/reservations/reservations.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Payment, PaymentDetails]), CommonModule, FilesModule, PaymentsConfigModule, forwardRef(() => SalesModule), FinancingModule, ProjectModule, ReservationsModule],
+  imports: [
+    TypeOrmModule.forFeature([Payment, PaymentDetails]),
+    CommonModule, FilesModule,
+    PaymentsConfigModule,
+    forwardRef(() => SalesModule),
+    forwardRef(() => FinancingModule),
+    ProjectModule,
+    ReservationsModule
+  ],
   controllers: [PaymentsController],
   providers: [PaymentsService, PaymentsDetailService],
   exports: [PaymentsService],

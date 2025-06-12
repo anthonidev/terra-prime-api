@@ -38,6 +38,33 @@ export class FinancingInstallments extends Timestamped {
   })
   expectedPaymentDate: Date;
 
+  @Column({
+    type: 'numeric',
+    precision: 10,
+    scale: 2,
+    nullable: false,
+    default: 0,
+  })
+  lateFeeAmount: number;
+
+  @Column({
+    type: 'numeric',
+    precision: 10,
+    scale: 2,
+    nullable: false,
+    default: 0,
+  })
+  lateFeeAmountPending: number;
+
+  @Column({
+    type: 'numeric',
+    precision: 10,
+    scale: 2,
+    nullable: false,
+    default: 0,
+  })
+  lateFeeAmountPaid: number;
+
   @ManyToOne(() => Financing, (financing) => financing.financingInstallments)
   financing: Financing;
 

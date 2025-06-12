@@ -15,8 +15,8 @@ export class LateTee extends Timestamped {
   })
   amount: number;
 
-  @ManyToOne(() => Sale, (sale) => sale.lateFeeTee)
-  sale: Sale;
+  // @ManyToOne(() => Sale, (sale) => sale.lateFeeTee)
+  // sale: Sale;
 
   @Column({
     type: 'boolean',
