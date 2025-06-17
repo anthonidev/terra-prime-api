@@ -286,9 +286,9 @@ export class SalesService {
       relations: [
         'client',
         'lot',
-        'block',
-        'stage',
-        'project',
+        'lot.block',
+        'lot.block.stage',
+        'lot.block.stage.project',
         'financing',
         'guarantor',
         'reservation',

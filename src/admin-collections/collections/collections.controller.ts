@@ -91,7 +91,7 @@ export class CollectionsController {
     return this.collectionsService.paidInstallments(
       financingId,
       paidInstallmentsDto.amountPaid,
-      paidInstallmentsDto.paymentDetails,
+      paidInstallmentsDto.payments,
       files,
       user.id
     );

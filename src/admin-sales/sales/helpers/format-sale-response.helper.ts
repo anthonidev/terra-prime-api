@@ -28,6 +28,9 @@ export function formatSaleResponse(sale: Sale) {
       id: sale.lot?.id,
       name: sale.lot?.name,
       lotPrice: sale.lot?.lotPrice,
+      block : sale.lot?.block?.name,
+      stage : sale.lot?.block?.stage?.name,
+      project : sale.lot?.block?.stage?.project?.name,
     },
     financing: sale.financing ? {
       id: sale.financing.id,
@@ -38,7 +41,7 @@ export function formatSaleResponse(sale: Sale) {
         return {
           id: installment.id,
           couteAmount: installment.couteAmount,
-          expectedPaymentDate: installment.expectedPaymentDate.toISOString(),
+          expectedPaymentDate: installment.expectedPaymentDate?.toISOString(),
         };
       }),
     } : null,

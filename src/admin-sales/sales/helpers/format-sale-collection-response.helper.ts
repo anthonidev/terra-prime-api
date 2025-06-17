@@ -6,7 +6,7 @@ export function formatSaleCollectionResponse(sale: Sale) {
     id: sale.id,
     type: sale.type,
     totalAmount: sale.totalAmount,
-    contractDate: sale.contractDate.toISOString(),
+    contractDate: sale.contractDate?.toISOString(),
     status: sale.status,
     currency: sale.lot.block?.stage?.project?.currency,
     client: {
@@ -28,6 +28,9 @@ export function formatSaleCollectionResponse(sale: Sale) {
       id: sale.lot?.id,
       name: sale.lot?.name,
       lotPrice: sale.lot?.lotPrice,
+      block : sale.lot?.block?.name,
+      stage : sale.lot?.block?.stage?.name,
+      project : sale.lot?.block?.stage?.project?.name,
     },
     financing: sale.financing ? {
       id: sale.financing.id,
@@ -40,7 +43,7 @@ export function formatSaleCollectionResponse(sale: Sale) {
           couteAmount: installment.couteAmount,
           coutePending: installment.coutePending,
           coutePaid: installment.coutePaid,
-          expectedPaymentDate: installment.expectedPaymentDate.toISOString(),
+          expectedPaymentDate: installment.expectedPaymentDate?.toISOString(),
           status: installment.status,
         };
       }),

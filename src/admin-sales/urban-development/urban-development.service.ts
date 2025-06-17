@@ -37,4 +37,11 @@ export class UrbanDevelopmentService {
     });
     return await repository.save(urbanDevelopment);
   }
+
+  async findOneBySaleId(saleId: string): Promise<UrbanDevelopment> {
+    return await this.urbanDevelopmentRepository.findOne({
+      where: { sale: { id: saleId } },
+      relations: ['sale', 'financing', 'financing.financingInstallments'],
+    });
+  }
 }

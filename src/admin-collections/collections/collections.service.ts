@@ -15,6 +15,10 @@ import { SaleResponse } from 'src/admin-sales/sales/interfaces/sale-response.int
 import { FinancingInstallmentsService } from 'src/admin-sales/financing/services/financing-installments.service';
 import { QueryRunner } from 'typeorm';
 import { CreateDetailPaymentDto } from 'src/admin-payments/payments/dto/create-detail-payment.dto';
+import { PaymentResponse } from 'src/admin-payments/payments/interfaces/payment-response.interface';
+import { UrbanDevelopment } from '../../admin-sales/urban-development/entities/urban-development.entity';
+import { UrbanDevelopmentService } from 'src/admin-sales/urban-development/urban-development.service';
+import { SaleDetailCollectionResponse } from './interfaces/sale-detail-collection-response.interface';
 
 @Injectable()
 export class CollectionsService {
@@ -23,6 +27,7 @@ export class CollectionsService {
     private readonly userService: UsersService,
     private readonly saleService: SalesService,
     private readonly financingInstallmentsService: FinancingInstallmentsService,
+    private readonly urbanDevelopmentService: UrbanDevelopmentService,
   ){}
 
   async assignClientsToCollector(
@@ -77,9 +82,13 @@ export class CollectionsService {
 
   async findOneSaleByIdForClient(
     saleId: string,
-  ): Promise<SaleResponse> {
+  ): Promise<SaleDetailCollectionResponse> {
     const sale = await this.saleService.findOneByIdWithCollections(saleId);
-    return sale;
+    const urbanDevelopment = await this.urbanDevelopmentService.findOneBySaleId(saleId);
+    return {
+      sale,
+      urbanDevelopment,
+    };
   }
 
   async paidInstallments(
@@ -88,8 +97,7 @@ export class CollectionsService {
     paymentDetails: CreateDetailPaymentDto[],
     files: Express.Multer.File[],
     userId: string,
-    queryRunner?: QueryRunner,
-  ): Promise<void> {
-    await this.financingInstallmentsService.payInstallments(financingId, amountPaid, paymentDetails, files, userId, queryRunner);
+  ): Promise<PaymentResponse> {
+    return await this.financingInstallmentsService.payInstallments(financingId, amountPaid, paymentDetails, files, userId);
   }
 }

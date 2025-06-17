@@ -24,6 +24,9 @@ export interface SaleResponse {
     id: string;
     name: string;
     lotPrice: number;
+    block: string;
+    stage: string;
+    project: string;
   };
   financing: {
     id: string;
