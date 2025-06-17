@@ -1,7 +1,7 @@
 import { UrbanDevelopment } from '../../../admin-sales/urban-development/entities/urban-development.entity';
 export const formatHuInstallmentsResponse = (urbanDevelopment: UrbanDevelopment) => {
   return {
-      financing: urbanDevelopment.financing ? {
+      financing: urbanDevelopment?.financing ? {
         id: urbanDevelopment.financing.id,
         initialAmount: urbanDevelopment.financing.initialAmount,
         interestRate: urbanDevelopment.financing.interestRate,

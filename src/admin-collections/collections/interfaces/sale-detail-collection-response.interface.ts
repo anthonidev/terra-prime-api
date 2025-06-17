@@ -4,7 +4,7 @@ import { UrbanDevelopment } from "src/admin-sales/urban-development/entities/urb
 
 export interface SaleDetailCollectionResponse {
   sale: SaleResponse;
-  urbanDevelopment: {
+  urbanDevelopment?: {
     financing: {
       id: string;
       initialAmount: number;
