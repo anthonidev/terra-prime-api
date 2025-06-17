@@ -19,6 +19,7 @@ import { PaymentResponse } from 'src/admin-payments/payments/interfaces/payment-
 import { UrbanDevelopment } from '../../admin-sales/urban-development/entities/urban-development.entity';
 import { UrbanDevelopmentService } from 'src/admin-sales/urban-development/urban-development.service';
 import { SaleDetailCollectionResponse } from './interfaces/sale-detail-collection-response.interface';
+import { formatHuInstallmentsResponse } from './helpers/format-hu-installments-response.helper';
 
 @Injectable()
 export class CollectionsService {
@@ -87,7 +88,7 @@ export class CollectionsService {
     const urbanDevelopment = await this.urbanDevelopmentService.findOneBySaleId(saleId);
     return {
       sale,
-      urbanDevelopment,
+      urbanDevelopment: formatHuInstallmentsResponse(urbanDevelopment),
     };
   }
 
