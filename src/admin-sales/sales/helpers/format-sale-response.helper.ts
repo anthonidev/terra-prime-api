@@ -41,7 +41,10 @@ export function formatSaleResponse(sale: Sale) {
         return {
           id: installment.id,
           couteAmount: installment.couteAmount,
+          coutePending: installment.coutePending,
+          coutePaid: installment.coutePaid,
           expectedPaymentDate: installment.expectedPaymentDate?.toISOString(),
+          status: installment.status,
         };
       }),
     } : null,
