@@ -37,16 +37,33 @@ export function formatSaleCollectionResponse(sale: Sale) {
       initialAmount: sale.financing.initialAmount,
       interestRate: sale.financing.interestRate,
       quantityCoutes: sale.financing.quantityCoutes,
-      financingInstallments: sale.financing.financingInstallments.map((installment) => {
-        return {
-          id: installment.id,
-          couteAmount: installment.couteAmount,
-          coutePending: installment.coutePending,
-          coutePaid: installment.coutePaid,
-          expectedPaymentDate: installment.expectedPaymentDate?.toISOString(),
-          status: installment.status,
-        };
-      }),
+      financingInstallments: sale.financing.financingInstallments
+        .map((installment) => {
+          return {
+            id: installment.id,
+            couteAmount: installment.couteAmount,
+            coutePending: installment.coutePending,
+            coutePaid: installment.coutePaid,
+            expectedPaymentDate: installment.expectedPaymentDate?.toISOString(), // Se mantiene el formato ISO string
+            status: installment.status,
+          };
+        })
+        .sort((a, b) => { // <-- ¡Aquí aplicamos el ordenamiento!
+          // Convertir las fechas ISO string a objetos Date para compararlas
+          const dateA = a.expectedPaymentDate ? new Date(a.expectedPaymentDate) : null;
+          const dateB = b.expectedPaymentDate ? new Date(b.expectedPaymentDate) : null;
+
+          // Manejar casos donde la fecha sea nula (opcional, decide tu lógica)
+          // Si dateA es nula y dateB no, b va primero (más grande)
+          if (dateA === null && dateB !== null) return 1;
+          // Si dateB es nula y dateA no, a va primero (más pequeño)
+          if (dateB === null && dateA !== null) return -1;
+          // Si ambas son nulas o iguales, mantener el orden
+          if (dateA === null && dateB === null) return 0;
+
+          // Comparar las fechas: a - b para orden ascendente (más antiguo primero)
+          return dateA.getTime() - dateB.getTime();
+        }),
     } : null,
     guarantor: sale.guarantor ? {
       firstName: sale.guarantor.firstName,
