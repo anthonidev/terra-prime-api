@@ -327,48 +327,13 @@ export class LotService {
     await repository.update({ id }, { status });
   }
 
-  async createPinBySalesManager(userId: string, lotId: string): Promise<{ pin: string }> {
-    return await this.updatePriceTokenService.createPin(userId, lotId);
+  async getActiveTokenInfo(): Promise<{ pin: string | null; expiresAt?: Date }> {
+    return await this.updatePriceTokenService.getActiveTokenInfo();
   }
 
-  async updateLotPriceByVendor(
-    id: string,
-    updatePriceByVendorDto: UpdatePriceByVendorDto,
-  ): Promise<LotDetailResponseDto> {
-    const { token, newLotPrice } = updatePriceByVendorDto;
-    try {
-      const tokenEntity = await this.updatePriceTokenService.getValidTokenByLot(token, id);
-
-      const lot = await this.lotRepository.findOne({
-        where: { id },
-        relations: ['block', 'block.stage', 'block.stage.project'],
-      });
-      if (!lot)
-        throw new NotFoundException(`Lote con ID ${id} no encontrado.`);
-      if (lot.status !== LotStatus.ACTIVE)
-        throw new ConflictException(`No se puede actualizar el precio del lote porque no está activo.`);
-
-      lot.lotPrice = newLotPrice;
-      await this.lotRepository.save(lot);
-      await this.updatePriceTokenService.markTokenAsUsed(tokenEntity);
-
-      const updatedLot = await this.lotRepository.findOne({
-        where: { id },
-        relations: ['block', 'block.stage', 'block.stage.project'],
-      });
-      return this.transformLotToDetailDto(updatedLot);
-
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof ConflictException
-      )
-        throw error;
-      this.logger.error(
-        `Error al actualizar precio del lote ${id}: ${error.message}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException('Error al actualizar el precio del lote.');
-    }
+  async createPinBySalesManager(
+    userId: string,
+  ): Promise<{ pin: string }> {
+    return await this.updatePriceTokenService.createPin(userId);
   }
 }

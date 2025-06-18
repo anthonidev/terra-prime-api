@@ -35,21 +35,26 @@ export class LotController {
     return this.lotService.findLotById(id);
   }
 
-  @Post('update-price-token/create/:id')
+  @Get('update-price-token/active')
+  @Roles('SYS', 'JVE')
+  async getActiveTokenInfo() {
+    return this.lotService.getActiveTokenInfo();
+  }
+
+  @Post('update-price-token/create')
   @Roles('SYS', 'JVE')
   async createPricePin(
     @GetUser() user: User,
-    @Param('id') lotId: string,
   ) {
-    return this.lotService.createPinBySalesManager(user.id, lotId);
+    return this.lotService.createPinBySalesManager(user.id);
   }
 
-  @Patch('update-price/:id')
-  @Roles('VEN', 'JVE')
-  async updateLotPriceByVendor(
-    @Param('id') id: string,
-    @Body() updatePriceByVendorDto: UpdatePriceByVendorDto,
-  ) {
-    return this.lotService.updateLotPriceByVendor(id, updatePriceByVendorDto);
-  }
+  // @Patch('update-price/:id')
+  // @Roles('VEN', 'JVE')
+  // async updateLotPriceByVendor(
+  //   @Param('id') id: string,
+  //   @Body() updatePriceByVendorDto: UpdatePriceByVendorDto,
+  // ) {
+  //   return this.lotService.updateLotPriceByVendor(id, updatePriceByVendorDto);
+  // }
 }

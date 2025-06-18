@@ -38,64 +38,54 @@ export class UpdatePriceTokenService {
     return result;
   }
 
-  async createPin(userId: string, lotId: string): Promise<{pin: string}> {
-    await this.lotService.isLotValidForSale(lotId);
-    await this.userService.isValidSalesManager(userId);
-
+  async getActiveTokenInfo(): Promise<{ pin: string | null; expiresAt?: Date }> {
     const now = new Date();
-    const expiration = new Date(now.getTime() + 15 * 60 * 1000);
-    const pin = this.generateCode();
-    const hashedPin = await bcrypt.hash(pin, 10);
-
-    const existingToken = await this.updatePriceTokenRepository.findOne({
-      where: {
-        lot: { id: lotId },
-        isUsed: false,
-      },
+    const token = await this.updatePriceTokenRepository.findOne({
+      where: { expiresAt: MoreThan(now) },
     });
 
-    if (existingToken) {
-      existingToken.codeHash = hashedPin;
-      existingToken.expiresAt = expiration;
-      await this.updatePriceTokenRepository.save(existingToken);
-      return { pin };
-    }
+    if (!token) return { pin: null};
+    return { pin: token.codeHash, expiresAt: token.expiresAt };
+  }
+
+  async createPin(
+    userId: string,
+  ): Promise<{ pin: string, expiresAt: Date }> {
+    const now = new Date();
+    const existingToken = await this.updatePriceTokenRepository.findOne({
+      where: {
+        expiresAt: MoreThan(now),
+      },
+    });
+    if (existingToken)
+      throw new ConflictException('Ya existe un token vigente. Espere a que expire antes de generar uno nuevo.');
+
+    const expiration = new Date(now.getTime() + 15 * 60 * 1000);
+    const pin = this.generateCode();
 
     const newToken = this.updatePriceTokenRepository.create({
-      codeHash: hashedPin,
-      lot: { id: lotId },
-      expiresAt: expiration,
       generatedBy: { id: userId },
-      isUsed: false,
+      codeHash: pin,
+      expiresAt: expiration,
     });
 
     await this.updatePriceTokenRepository.save(newToken);
-    return { pin };
+    return { pin, expiresAt: expiration };
   }
 
-  async getValidTokenByLot(token: string, lotId: string): Promise<UpdatePriceToken> {
+  async validateToken(token: string): Promise<void> {
     const now = new Date();
-    const tokenEntity = await this.updatePriceTokenRepository.findOne({
+    const tokens = await this.updatePriceTokenRepository.find({
       where: {
-        lot: { id: lotId },
-        isUsed: false,
         expiresAt: MoreThan(now),
       },
-      relations: ['lot'],
     });
 
-    if (!tokenEntity)
-      throw new NotFoundException('No se encontró un token válido para este lote.');
+    for (const t of tokens) {
+      const isMatch = await bcrypt.compare(token, t.codeHash);
+      if (isMatch) return;
+    }
 
-    const isMatch = await bcrypt.compare(token, tokenEntity.codeHash);
-    if (!isMatch)
-      throw new ConflictException('El token ingresado no es válido.');
-
-    return tokenEntity;
-  }
-
-  async markTokenAsUsed(tokenEntity: UpdatePriceToken): Promise<void> {
-    tokenEntity.isUsed = true;
-    await this.updatePriceTokenRepository.save(tokenEntity);
+    throw new ConflictException('El token ingresado no es válido o ha expirado.');
   }
 }
