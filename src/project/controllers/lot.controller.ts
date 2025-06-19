@@ -49,12 +49,11 @@ export class LotController {
     return this.lotService.createPinBySalesManager(user.id);
   }
 
-  // @Patch('update-price/:id')
-  // @Roles('VEN', 'JVE')
-  // async updateLotPriceByVendor(
-  //   @Param('id') id: string,
-  //   @Body() updatePriceByVendorDto: UpdatePriceByVendorDto,
-  // ) {
-  //   return this.lotService.updateLotPriceByVendor(id, updatePriceByVendorDto);
-  // }
+  @Get('update-price-token/validate/:token')
+  @Roles('SYS', 'JVE')
+  async validateToken(
+    @Param('token') token: string,
+  ) {
+    return this.lotService.validateToken(token);
+  }
 }

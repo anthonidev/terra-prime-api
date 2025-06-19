@@ -74,18 +74,15 @@ export class UpdatePriceTokenService {
   }
 
   async validateToken(token: string): Promise<void> {
-    const now = new Date();
-    const tokens = await this.updatePriceTokenRepository.find({
-      where: {
-        expiresAt: MoreThan(now),
-      },
+    const tokenFound = await this.updatePriceTokenRepository.findOne({
+      where: { codeHash: token },
     });
 
-    for (const t of tokens) {
-      const isMatch = await bcrypt.compare(token, t.codeHash);
-      if (isMatch) return;
-    }
+    if (!tokenFound)
+      throw new ConflictException('El token ingresado no es válido.');
 
-    throw new ConflictException('El token ingresado no es válido o ha expirado.');
+    const now = new Date();
+    if (tokenFound.expiresAt <= now)
+      throw new ConflictException('El token ha expirado.');
   }
 }

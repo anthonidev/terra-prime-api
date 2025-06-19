@@ -336,4 +336,8 @@ export class LotService {
   ): Promise<{ pin: string }> {
     return await this.updatePriceTokenService.createPin(userId);
   }
+
+  async validateToken(token: string): Promise<void> {
+    return await this.updatePriceTokenService.validateToken(token);
+  }
 }
