@@ -10,7 +10,7 @@ import { MethodPayment } from "src/admin-payments/payments/enums/method-payment.
 import { PaymentsService } from "src/admin-payments/payments/services/payments.service";
 import { PaymentResponse } from "src/admin-payments/payments/interfaces/payment-response.interface";
 import { TransactionService } from "src/common/services/transaction.service";
-import { query } from 'express';
+import { Sale } from "src/admin-sales/sales/entities/sale.entity";
 
 export class FinancingInstallmentsService {
   constructor(
@@ -48,16 +48,34 @@ export class FinancingInstallmentsService {
     await repository.save(financingInstallments);
   }
 
-  async findOneWithPayments(id: string): Promise<FinancingInstallments> {
-    return await this.financingInstallmentsRepository.findOne({
-      where: { id },
+  async findOneWithPayments(id: string): Promise<Sale | null> {
+    const financingInstallments = await this.financingInstallmentsRepository.findOne({
+      where: { financing: { id } },
       relations: [
         'financing',
         'financing.sale',
         'financing.sale.client',
         'financing.sale.lot',
+        'financing.sale.lot.block',
+        'financing.sale.lot.block.stage',
+        'financing.sale.lot.block.stage.project',
+        'financing.urbanDevelopment',
+        'financing.urbanDevelopment.sale',
+        'financing.urbanDevelopment.sale.client',
+        'financing.urbanDevelopment.sale.lot',
+        'financing.urbanDevelopment.sale.lot.block',
+        'financing.urbanDevelopment.sale.lot.block.stage',
+        'financing.urbanDevelopment.sale.lot.block.stage.project'
       ],
     });
+
+    if (!financingInstallments) return null;
+
+    return (
+      financingInstallments.financing.sale ||
+      financingInstallments.financing.urbanDevelopment?.sale ||
+      null
+    );
   }
 
   async payInstallments(

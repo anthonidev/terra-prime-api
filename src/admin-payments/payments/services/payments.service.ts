@@ -416,7 +416,7 @@ export class PaymentsService {
             case 'financing':
               return (await this.financingService.findOneWithPayments(id))?.sale;
             case 'financingInstallments':
-              return (await this.financingInstallmentsService.findOneWithPayments(id))?.financing?.sale;
+              return (await this.financingInstallmentsService.findOneWithPayments(id));
             case 'reservation':
               return await this.reservationService.findOneWithPayments(id);
             default:
@@ -425,6 +425,7 @@ export class PaymentsService {
         };
 
         const sale = await getSaleData();
+        console.log(sale);
         if (!sale) return basePayment;
 
         return {
