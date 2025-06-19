@@ -337,7 +337,7 @@ export class LotService {
     return await this.updatePriceTokenService.createPin(userId);
   }
 
-  async validateToken(token: string): Promise<void> {
+  async validateToken(token: string): Promise<boolean> {
     return await this.updatePriceTokenService.validateToken(token);
   }
 }

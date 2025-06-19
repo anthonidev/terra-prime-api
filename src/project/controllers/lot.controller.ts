@@ -50,7 +50,7 @@ export class LotController {
   }
 
   @Get('update-price-token/validate/:token')
-  @Roles('SYS', 'JVE')
+  @Roles('SYS', 'JVE', 'VEN')
   async validateToken(
     @Param('token') token: string,
   ) {

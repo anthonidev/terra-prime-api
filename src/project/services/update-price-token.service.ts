@@ -73,7 +73,7 @@ export class UpdatePriceTokenService {
     return { pin, expiresAt: expiration };
   }
 
-  async validateToken(token: string): Promise<void> {
+  async validateToken(token: string): Promise<boolean> {
     const tokenFound = await this.updatePriceTokenRepository.findOne({
       where: { codeHash: token },
     });
@@ -84,5 +84,7 @@ export class UpdatePriceTokenService {
     const now = new Date();
     if (tokenFound.expiresAt <= now)
       throw new ConflictException('El token ha expirado.');
+
+    return true;
   }
 }
