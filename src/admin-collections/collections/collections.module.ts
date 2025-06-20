@@ -7,9 +7,10 @@ import { SalesModule } from 'src/admin-sales/sales/sales.module';
 import { FinancingModule } from 'src/admin-sales/financing/financing.module';
 import { CommonModule } from 'src/common/common.module';
 import { UrbanDevelopmentModule } from 'src/admin-sales/urban-development/urban-development.module';
+import { PaymentsModule } from 'src/admin-payments/payments/payments.module';
 
 @Module({
-  imports: [ClientsModule, UsersModule, SalesModule, FinancingModule, CommonModule, UrbanDevelopmentModule],
+  imports: [ClientsModule, UsersModule, SalesModule, FinancingModule, CommonModule, UrbanDevelopmentModule, PaymentsModule],
   controllers: [CollectionsController],
   providers: [CollectionsService],
 })

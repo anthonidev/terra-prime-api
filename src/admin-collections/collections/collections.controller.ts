@@ -11,6 +11,7 @@ import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/user/entities/user.entity';
 import { PaidInstallmentsDto } from './dto/paid-installments.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { FindPaymentsDto } from 'src/admin-payments/payments/dto/find-payments.dto';
 
 @Controller('collections')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -63,6 +64,23 @@ export class CollectionsController {
     @Param('saleId') saleId: string,
   ) {
     return this.collectionsService.findOneSaleByIdForClient(saleId);
+  }
+
+  @Get('list/payments')
+  @Roles('COB', 'SCO')
+  async findAllPayments(
+    @Query() filters: FindPaymentsDto,
+    @GetUser() user: User,
+  ) {
+    return this.collectionsService.findAllPaymentsByCollector(filters, user.id);
+  }
+
+  @Get('payments/details/:id')
+  @Roles('COB', 'SCO')
+  async findOnePayment(
+    @Param('id') id: number,
+  ) {
+    return this.collectionsService.findOnePaymentByCollector(id);
   }
 
   @Post('financing/installments/paid/:financingId')

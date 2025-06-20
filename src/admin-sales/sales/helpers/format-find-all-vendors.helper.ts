@@ -9,5 +9,6 @@ export const formatFindAllVendors = (user: User) => {
     document: user.document,
     photo: user.photo,
     createdAt: user.createdAt,
+    isActive: user.isActive,
   };
 };

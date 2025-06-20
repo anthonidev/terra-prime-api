@@ -36,13 +36,13 @@ export class LotController {
   }
 
   @Get('update-price-token/active')
-  @Roles('SYS', 'JVE')
+  @Roles('ADM')
   async getActiveTokenInfo() {
     return this.lotService.getActiveTokenInfo();
   }
 
   @Post('update-price-token/create')
-  @Roles('SYS', 'JVE')
+  @Roles('ADM')
   async createPricePin(
     @GetUser() user: User,
   ) {

@@ -29,14 +29,8 @@ export class UpdatePriceTokenService {
   ) {}
 
   private generateCode(): string {
-    const chars =
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let i = 0; i < 5; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-  }
+  return Math.floor(100000 + Math.random() * 900000).toString().slice(1);
+}
 
   async getActiveTokenInfo(): Promise<{ pin: string | null; expiresAt?: Date }> {
     const now = new Date();

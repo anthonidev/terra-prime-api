@@ -200,7 +200,7 @@ export class PaymentsService {
     });
   }
 
-  async findAllPayments(filters: FindPaymentsDto): Promise<Paginated<PaymentAllResponse>> {
+  async findAllPayments(filters: FindPaymentsDto, userId?: string): Promise<Paginated<PaymentAllResponse>> {
     try {
       const {
         page = 1,
@@ -247,6 +247,9 @@ export class PaymentsService {
           endDate: endOfDay,
         });
       }
+
+      if (userId)
+        queryBuilder.andWhere('payment.user.id = :userId', { userId });
 
       queryBuilder
         .orderBy('payment.createdAt', order)

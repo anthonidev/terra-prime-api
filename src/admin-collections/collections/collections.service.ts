@@ -20,6 +20,9 @@ import { UrbanDevelopment } from '../../admin-sales/urban-development/entities/u
 import { UrbanDevelopmentService } from 'src/admin-sales/urban-development/urban-development.service';
 import { SaleDetailCollectionResponse } from './interfaces/sale-detail-collection-response.interface';
 import { formatHuInstallmentsResponse } from './helpers/format-hu-installments-response.helper';
+import { FindPaymentsDto } from 'src/admin-payments/payments/dto/find-payments.dto';
+import { PaymentAllResponse } from 'src/admin-payments/payments/interfaces/payment-all-response.interface';
+import { PaymentsService } from 'src/admin-payments/payments/services/payments.service';
 
 @Injectable()
 export class CollectionsService {
@@ -29,6 +32,7 @@ export class CollectionsService {
     private readonly saleService: SalesService,
     private readonly financingInstallmentsService: FinancingInstallmentsService,
     private readonly urbanDevelopmentService: UrbanDevelopmentService,
+    private readonly paymentsService: PaymentsService,
   ){}
 
   async assignClientsToCollector(
@@ -100,5 +104,14 @@ export class CollectionsService {
     userId: string,
   ): Promise<PaymentResponse> {
     return await this.financingInstallmentsService.payInstallments(financingId, amountPaid, paymentDetails, files, userId);
+  }
+
+  async findAllPaymentsByCollector(filters: FindPaymentsDto, userId: string)
+  : Promise<Paginated<PaymentAllResponse>> {
+    return await this.paymentsService.findAllPayments(filters, userId);
+  }
+
+  async findOnePaymentByCollector(paymentId: number): Promise<PaymentAllResponse> {
+    return await this.paymentsService.findOne(paymentId);
   }
 }
