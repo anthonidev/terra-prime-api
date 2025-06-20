@@ -22,4 +22,9 @@ export class SeedController {
   seedViewsData() {
     return this.seedService.seedViews();
   }
+
+  @Post('user-system-data')
+  seedSystemUser() {
+    return this.seedService.seedSystemUser();
+  }
 }

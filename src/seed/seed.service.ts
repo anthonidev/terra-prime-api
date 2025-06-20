@@ -21,6 +21,7 @@ import { PaymentConfig } from 'src/admin-payments/payments-config/entities/payme
 import { paymentConfigsData } from './data/payment-configs.data';
 import { CutConfiguration } from 'src/cuts/entities/cut_configurations.entity';
 import { cutConfigurationsData } from './data/cuts.data';
+import { SYSTEM_USER_CONFIG } from './data/user-system.data';
 @Injectable()
 export class SeedService {
   private readonly logger = new Logger(SeedService.name);
@@ -212,6 +213,57 @@ export class SeedService {
       throw error;
     }
   }
+  async seedSystemUser() {
+    this.logger.log('Iniciando seed de usuario SYSTEM...');
+    try {
+      // Buscar el rol SYSTEM
+      const systemRole = await this.roleRepository.findOne({ 
+        where: { code: SYSTEM_USER_CONFIG.roleCode } 
+      });
+      
+      if (!systemRole) {
+        this.logger.error(`Rol SYSTEM no encontrado con código: ${SYSTEM_USER_CONFIG.roleCode}`);
+        throw new Error('Rol SYSTEM no encontrado');
+      }
+
+      // Verificar si el usuario ya existe
+      const existingUser = await this.userRepository.findOne({
+        where: { email: SYSTEM_USER_CONFIG.email },
+      });
+
+      const hashedPassword = await bcrypt.hash(SYSTEM_USER_CONFIG.password, 10);
+      
+      if (existingUser) {
+        // Actualizar el usuario existente
+        existingUser.password = hashedPassword;
+        existingUser.document = SYSTEM_USER_CONFIG.document;
+        existingUser.firstName = SYSTEM_USER_CONFIG.firstName;
+        existingUser.lastName = SYSTEM_USER_CONFIG.lastName;
+        existingUser.role = systemRole;
+        
+        await this.userRepository.save(existingUser);
+        this.logger.log(`Usuario SYSTEM actualizado: ${SYSTEM_USER_CONFIG.email}`);
+        return;
+      }
+
+      // Crear nuevo usuario si no existe
+      const user = this.userRepository.create({
+        email: SYSTEM_USER_CONFIG.email,
+        password: hashedPassword,
+        document: SYSTEM_USER_CONFIG.document,
+        firstName: SYSTEM_USER_CONFIG.firstName,
+        lastName: SYSTEM_USER_CONFIG.lastName,
+        role: systemRole,
+      });
+
+      await this.userRepository.save(user);
+      this.logger.log(`Usuario SYSTEM creado exitosamente: ${SYSTEM_USER_CONFIG.email}`);
+      
+    } catch (error) {
+      this.logger.error(`Error en seedSystemUser: ${error.message}`);
+      throw error;
+    }
+  }
   async seedUbigeo() {
     this.logger.log('Iniciando seed de ubigeo...');
     try {
@@ -396,9 +448,10 @@ export class SeedService {
       const startTime = Date.now();
       await this.seedViews();
       await this.seedRoles();
-      await this.seedUsers();
+      // await this.seedUsers();
+      await this.seedSystemUser();
       await this.seedUbigeo();
-      await this.seedLiners();
+      // await this.seedLiners();
       await this.seedLeadSources();
       const duration = Date.now() - startTime;
       this.logger.log(`Seed completo exitosamente en ${duration}ms`);
