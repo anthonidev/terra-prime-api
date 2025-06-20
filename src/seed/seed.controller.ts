@@ -17,4 +17,9 @@ export class SeedController {
   seedCutConfigurations() {
     return this.seedService.seedCutConfigurations();
   }
+
+  @Post('views-data')
+  seedViewsData() {
+    return this.seedService.seedViews();
+  }
 }
