@@ -23,6 +23,11 @@ export class SeedController {
     return this.seedService.seedViews();
   }
 
+  @Post('roles-data')
+  seedRolesData() {
+    return this.seedService.seedRoles();
+  }
+
   @Post('user-system-data')
   seedSystemUser() {
     return this.seedService.seedSystemUser();

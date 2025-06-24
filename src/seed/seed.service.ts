@@ -112,28 +112,38 @@ export class SeedService {
           try {
             const existingRole = await this.roleRepository.findOne({
               where: { code: roleData.code },
+              relations: ['views'], // ✅ Cargar vistas existentes
             });
-            if (existingRole) {
-              this.logger.debug(`Rol existente encontrado: ${roleData.code}`);
-              return { status: 'existing', code: roleData.code };
-            }
+
             const views = await this.viewRepository.findBy({
               code: In(roleData.views),
             });
+
             this.logger.debug(
               `Encontradas ${views.length}/${roleData.views.length} vistas para rol ${roleData.code}`,
             );
-            const role = this.roleRepository.create({
-              name: roleData.name,
-              code: roleData.code,
-              views: views,
-            });
-            await this.roleRepository.save(role);
-            this.logger.log(`Rol creado exitosamente: ${roleData.code}`);
-            return { status: 'created', code: roleData.code };
+
+            if (existingRole) {
+              // ✅ Actualizar rol existente
+              existingRole.name = roleData.name;
+              existingRole.views = views;
+              await this.roleRepository.save(existingRole);
+              this.logger.log(`Rol actualizado exitosamente: ${roleData.code}`);
+              return { status: 'updated', code: roleData.code };
+            } else {
+              // ✅ Crear nuevo rol
+              const role = this.roleRepository.create({
+                name: roleData.name,
+                code: roleData.code,
+                views: views,
+              });
+              await this.roleRepository.save(role);
+              this.logger.log(`Rol creado exitosamente: ${roleData.code}`);
+              return { status: 'created', code: roleData.code };
+            }
           } catch (error) {
             this.logger.error(
-              `Error al crear rol ${roleData.code}: ${error.message}`,
+              `Error al procesar rol ${roleData.code}: ${error.message}`,
             );
             return {
               status: 'error',
@@ -143,11 +153,13 @@ export class SeedService {
           }
         }),
       );
+
       const created = results.filter((r) => r.status === 'created').length;
-      const existing = results.filter((r) => r.status === 'existing').length;
+      const updated = results.filter((r) => r.status === 'updated').length;
       const errors = results.filter((r) => r.status === 'error').length;
+
       this.logger.log(
-        `Seed de roles completado. Creados: ${created}, Existentes: ${existing}, Errores: ${errors}`,
+        `Seed de roles completado. Creados: ${created}, Actualizados: ${updated}, Errores: ${errors}`,
       );
     } catch (error) {
       this.logger.error(`Error en seedRoles: ${error.message}`);

@@ -8,6 +8,7 @@ import { LateFeeModule } from './late-fee/late-fee.module';
 import { UrbanDevelopmentModule } from './urban-development/urban-development.module';
 import { SecondaryClientModule } from './secondary-client/secondary-client.module';
 import { SalesWithdrawalModule } from './sales-withdrawal/sales-withdrawal.module';
+import { ParticipantsModule } from './participants/participants.module';
 
 @Module({
   imports: [
@@ -19,7 +20,8 @@ import { SalesWithdrawalModule } from './sales-withdrawal/sales-withdrawal.modul
     LateFeeModule,
     UrbanDevelopmentModule,
     SecondaryClientModule,
-    SalesWithdrawalModule
+    SalesWithdrawalModule,
+    ParticipantsModule
   ]
 })
 export class AdminSalesModule {}
