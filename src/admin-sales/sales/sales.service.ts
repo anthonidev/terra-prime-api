@@ -2,7 +2,7 @@ import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException 
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Sale } from './entities/sale.entity';
-import { QueryRunner, Repository } from 'typeorm';
+import { MoreThanOrEqual, QueryRunner, Repository } from 'typeorm';
 import { LeadService } from 'src/lead/services/lead.service';
 import { FindAllLeadsByDayDto } from './dto/find-all-leads-by-day.dto';
 import { formatFindAllLedsByDayResponse } from './helpers/format-find-all-leds-by-day-response.helper';
@@ -63,6 +63,9 @@ import { CreateSecondaryClientDto } from '../secondary-client/dto/create-seconda
 import { SecondaryClientService } from '../secondary-client/secondary-client.service';
 import { Reservation } from '../reservations/entities/reservation.entity';
 import { formatSaleCollectionResponse } from './helpers/format-sale-collection-response.helper';
+import { AssignParticipantsToSaleDto } from './dto/assign-participants-to-sale.dto';
+import { ParticipantsService } from '../participants/participants.service';
+import { ParticipantType } from '../participants/entities/participant.entity';
 
 @Injectable()
 export class SalesService {
@@ -84,6 +87,7 @@ export class SalesService {
     private readonly reservationService: ReservationsService,
     private readonly paymentsService: PaymentsService,
     private readonly secondaryClientService: SecondaryClientService,
+    private readonly participantsService: ParticipantsService,
   ) {}
 
   async create(
@@ -163,8 +167,64 @@ export class SalesService {
     }
   }
 
+  async assignParticipantsToSale(
+    saleId: string,
+    assignParticipantsDto: AssignParticipantsToSaleDto,
+  ): Promise<SaleResponse> {
+    try {
+      // Mapeo de campos DTO a validaciones de tipo
+      const participantValidations = [
+        { id: assignParticipantsDto.linerId, type: ParticipantType.LINER, field: 'liner' },
+        { id: assignParticipantsDto.telemarketingSupervisorId, type: ParticipantType.TELEMARKETING_SUPERVISOR, field: 'telemarketingSupervisor' },
+        { id: assignParticipantsDto.telemarketingConfirmerId, type: ParticipantType.TELEMARKETING_CONFIRMER, field: 'telemarketingConfirmer' },
+        { id: assignParticipantsDto.telemarketerId, type: ParticipantType.TELEMARKETER, field: 'telemarketer' },
+        { id: assignParticipantsDto.fieldManagerId, type: ParticipantType.FIELD_MANAGER, field: 'fieldManager' },
+        { id: assignParticipantsDto.fieldSupervisorId, type: ParticipantType.FIELD_SUPERVISOR, field: 'fieldSupervisor' },
+        { id: assignParticipantsDto.fieldSellerId, type: ParticipantType.FIELD_SELLER, field: 'fieldSeller' },
+      ];
+
+      // Validar participantes que se están asignando
+      await Promise.all(participantValidations
+        .filter(({ id }) => id !== undefined && id !== null)
+        .map(({ id, type }) => this.participantsService.validateParticipantByType(id, type)));
+
+      // Preparar datos para preload
+      const updateData: any = { id: saleId };
+      
+      participantValidations.forEach(({ id, field }) => {
+        if (id !== undefined) {
+          updateData[field] = id ? { id } : null;
+        }
+      });
+
+      // Usar preload para actualizar
+      const saleToUpdate = await this.saleRepository.preload(updateData);
+      
+      if (!saleToUpdate)
+        throw new NotFoundException(`La venta con ID ${saleId} no se encuentra registrada`);
+
+      await this.saleRepository.save(saleToUpdate);
+      return await this.findOneById(saleId);
+
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(`Error al asignar participantes a la venta: ${error.message}`);
+    }
+  }
+
   async findAll(paginationDto: PaginationDto, userId?: string): Promise<Paginated<SaleResponse>> {
-    const whereCondition = userId ? { vendor: { id: userId } } : {};
+    let whereCondition: any = {};
+    if (userId) {
+      whereCondition = { vendor: { id: userId } };
+    } else {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      whereCondition = {
+        createdAt: MoreThanOrEqual(thirtyDaysAgo)
+      };
+    }
     const sales = await this.saleRepository.find({
       relations: [
         'client', 
@@ -179,6 +239,13 @@ export class SalesService {
         'financing.financingInstallments',
         'secondaryClientSales',
         'secondaryClientSales.secondaryClient',
+        'liner',
+        'telemarketingSupervisor',
+        'telemarketingConfirmer',
+        'telemarketer',
+        'fieldManager',
+        'fieldSupervisor',
+        'fieldSeller',
       ],
       where: whereCondition,
       order: { createdAt: 'DESC' },
@@ -202,6 +269,13 @@ export class SalesService {
         'financing.financingInstallments',
         'secondaryClientSales',
         'secondaryClientSales.secondaryClient',
+        'liner',
+        'telemarketingSupervisor',
+        'telemarketingConfirmer',
+        'telemarketer',
+        'fieldManager',
+        'fieldSupervisor',
+        'fieldSeller',
       ],
     });
     if (!sale)

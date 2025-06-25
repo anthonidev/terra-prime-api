@@ -48,6 +48,35 @@ export function formatSaleResponse(sale: Sale) {
         };
       }),
     } : null,
+    // Participantes
+    liner: sale.liner ? {
+      firstName: sale.liner.firstName,
+      lastName: sale.liner.lastName,
+    } : null,
+    telemarketingSupervisor: sale.telemarketingSupervisor ? {
+      firstName: sale.telemarketingSupervisor.firstName,
+      lastName: sale.telemarketingSupervisor.lastName,
+    } : null,
+    telemarketingConfirmer: sale.telemarketingConfirmer ? {
+      firstName: sale.telemarketingConfirmer.firstName,
+      lastName: sale.telemarketingConfirmer.lastName,
+    } : null,
+    telemarketer: sale.telemarketer ? {
+      firstName: sale.telemarketer.firstName,
+      lastName: sale.telemarketer.lastName,
+    } : null,
+    fieldManager: sale.fieldManager ? {
+      firstName: sale.fieldManager.firstName,
+      lastName: sale.fieldManager.lastName,
+    } : null,
+    fieldSupervisor: sale.fieldSupervisor ? {
+      firstName: sale.fieldSupervisor.firstName,
+      lastName: sale.fieldSupervisor.lastName,
+    } : null,
+    fieldSeller: sale.fieldSeller ? {
+      firstName: sale.fieldSeller.firstName,
+      lastName: sale.fieldSeller.lastName,
+    } : null,
     guarantor: sale.guarantor ? {
       firstName: sale.guarantor.firstName,
       lastName: sale.guarantor.lastName,

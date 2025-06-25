@@ -38,6 +38,34 @@ export interface SaleResponse {
     firstName: string;
     lastName: string;
   };
+  liner?: {
+    firstName: string;
+    lastName: string;
+  };
+  telemarketingSupervisor?: {
+    firstName: string;
+    lastName: string;
+  };
+  telemarketingConfirmer?: {
+    firstName: string;
+    lastName: string;
+  };
+  telemarketer?: {
+    firstName: string;
+    lastName: string;
+  };
+  fieldManager?: {
+    firstName: string;
+    lastName: string;
+  };
+  fieldSupervisor?: {
+    firstName: string;
+    lastName: string;
+  };
+  fieldSeller?: {
+    firstName: string;
+    lastName: string;
+  };
   reservation: {
     id: string;
     amount: number;

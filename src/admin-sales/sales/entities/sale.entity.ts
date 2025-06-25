@@ -12,6 +12,7 @@ import { SaleType } from "../enums/sale-type.enum";
 import { Guarantor } from "src/admin-sales/guarantors/entities/guarantor.entity";
 import { SecondaryClientSale } from "src/admin-sales/secondary-client/entities/secondary-client-sale.entity";
 import { SaleWithdrawal } from "src/admin-sales/sales-withdrawal/entities/sale-withdrawal.entity";
+import { Participant } from "src/admin-sales/participants/entities/participant.entity";
 
 @Entity('sales')
 export class Sale extends Timestamped {
@@ -80,4 +81,25 @@ export class Sale extends Timestamped {
 
   @OneToOne(() => SaleWithdrawal, (saleWithdrawal) => saleWithdrawal.sale)
   withdrawal: SaleWithdrawal;
+
+  @ManyToOne(() => Participant, (participant) => participant.liner, { nullable: true })
+  liner?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.telemarketingSupervisor, { nullable: true })
+  telemarketingSupervisor?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.telemarketingConfirmer, { nullable: true })
+  telemarketingConfirmer?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.telemarketer, { nullable: true })
+  telemarketer?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.fieldManager, { nullable: true })
+  fieldManager?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.fieldSupervisor, { nullable: true })
+  fieldSupervisor?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.fieldSeller, { nullable: true })
+  fieldSeller?: Participant;
 }

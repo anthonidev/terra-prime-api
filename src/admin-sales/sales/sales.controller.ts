@@ -17,6 +17,7 @@ import { PaginationDto } from 'src/common/dto/paginationDto';
 import { CreateDetailPaymentDto } from 'src/admin-payments/payments/dto/create-detail-payment.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { CreatePaymentSaleDto } from './dto/create-payment-sale.dto';
+import { AssignParticipantsToSaleDto } from './dto/assign-participants-to-sale.dto';
 
 @Controller('sales')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -30,6 +31,15 @@ export class SalesController {
     @GetUser() user: User,
   ) {
     return this.salesService.create(createSaleDto, user.id);
+  }
+
+  @Post('assign/participants/:id')
+  @Roles('JVE')
+  async assignParticipantsToSale(
+    @Body() assignParticipantsDto: AssignParticipantsToSaleDto,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.salesService.assignParticipantsToSale(id, assignParticipantsDto);
   }
 
   @Get('all/list')

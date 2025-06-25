@@ -14,6 +14,7 @@ import { UrbanDevelopmentModule } from '../urban-development/urban-development.m
 import { ReservationsModule } from '../reservations/reservations.module';
 import { PaymentsModule } from 'src/admin-payments/payments/payments.module';
 import { SecondaryClientModule } from '../secondary-client/secondary-client.module';
+import { ParticipantsModule } from '../participants/participants.module';
 
 @Module({
   imports: [
@@ -27,7 +28,8 @@ import { SecondaryClientModule } from '../secondary-client/secondary-client.modu
     ReservationsModule,
     forwardRef(() => UrbanDevelopmentModule),
     PaymentsModule,
-    SecondaryClientModule
+    SecondaryClientModule,
+    ParticipantsModule
   ],
   controllers: [SalesController],
   providers: [SalesService],
