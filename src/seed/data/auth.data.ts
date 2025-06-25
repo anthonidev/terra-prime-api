@@ -16,16 +16,10 @@ export const rolData = [
       'WELCOME',
       'G_SALE',
       'WELCOME_JVE',
-      'WELCOME_ASSIGN',
-      'CREATE_SALE',
       'LOTS',
       'PAYMENTS',
-      'ACTIVE_SELLERS',
       'SALES',
       'G_COLLECTION',
-      'ASSIGN_COLLECTORS',
-      'ASSIGNED_CLIENTS',
-      'GENERATE_PIN',
     ],
   },
   {
@@ -51,7 +45,11 @@ export const rolData = [
   {
     name: 'Administrador',
     code: 'ADM',
-    views: ['PROFILE'],
+    views: [
+      'PROFILE',
+      'G_PROJECT',
+      'GENERATE_PIN',
+    ],
   },
   {
     name: 'Jefe de ventas',
@@ -63,7 +61,7 @@ export const rolData = [
       'G_SALE',
       'WELCOME_JVE',
       'ACTIVE_SELLERS',
-      'GENERATE_PIN',
+      'SALES_ALL',
     ],
   },
   {
@@ -127,6 +125,15 @@ export const vistaData = [
         children: null,
         parent: 'G_PROJECT',
       },
+      {
+        name: 'Generar PIN',
+        url: '/generate-pin',
+        order: 3,
+        icon: 'pin',
+        code: 'GENERATE_PIN',
+        children: null,
+        parent: 'G_PROJECT',
+      }
     ],
   },
   {
@@ -247,14 +254,14 @@ export const vistaData = [
         parent: 'G_SALE',
       },
       {
-        name: 'Generar PIN',
-        url: '/generate-pin',
+        name: 'Ventas Generales',
+        url: '/ventas/ventas-generales',
         order: 8,
-        icon: 'pin',
-        code: 'GENERATE_PIN',
+        icon: 'sales',
+        code: 'SALES_ALL',
         children: null,
         parent: 'G_SALE',
-      }
+      },
     ],
   },
   {
