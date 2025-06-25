@@ -255,7 +255,7 @@ export const vistaData = [
       },
       {
         name: 'Ventas Generales',
-        url: '/ventas/ventas-generales',
+        url: '/ventas/generales',
         order: 8,
         icon: 'sales',
         code: 'SALES_ALL',
