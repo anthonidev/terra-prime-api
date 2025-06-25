@@ -15,6 +15,7 @@ import { ReservationsModule } from '../reservations/reservations.module';
 import { PaymentsModule } from 'src/admin-payments/payments/payments.module';
 import { SecondaryClientModule } from '../secondary-client/secondary-client.module';
 import { ParticipantsModule } from '../participants/participants.module';
+import { Financing } from '../financing/entities/financing.entity';
 
 @Module({
   imports: [
@@ -22,14 +23,16 @@ import { ParticipantsModule } from '../participants/participants.module';
     LeadModule, UsersModule,
     ProjectModule,
     ClientsModule,
-    FinancingModule,
+    forwardRef(() => FinancingModule),
+    // FinancingModule,
     CommonModule,
     GuarantorsModule,
     ReservationsModule,
     forwardRef(() => UrbanDevelopmentModule),
     PaymentsModule,
     SecondaryClientModule,
-    ParticipantsModule
+    ParticipantsModule,
+    
   ],
   controllers: [SalesController],
   providers: [SalesService],

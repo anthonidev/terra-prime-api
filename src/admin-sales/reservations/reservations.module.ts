@@ -12,6 +12,6 @@ import { UsersModule } from 'src/user/user.module';
   imports: [TypeOrmModule.forFeature([Reservation]), CommonModule, ClientsModule, ProjectModule, UsersModule],
   controllers: [ReservationsController],
   providers: [ReservationsService],
-  exports: [ReservationsService],
+  exports: [ReservationsService, TypeOrmModule],
 })
 export class ReservationsModule {}

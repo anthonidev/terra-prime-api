@@ -215,92 +215,124 @@ export class SalesService {
   }
 
   async findAll(paginationDto: PaginationDto, userId?: string): Promise<Paginated<SaleResponse>> {
-    let whereCondition: any = {};
+    const { page = 1, limit = 10, order = 'DESC' } = paginationDto;
+    const skip = (page - 1) * limit;
+
+    // Construir el QueryBuilder principal
+    let queryBuilder = this.saleRepository.createQueryBuilder('sale')
+      // Seleccionar campos específicos de Sale
+      // Client y Lead
+      .leftJoinAndSelect('sale.client', 'client')
+      .leftJoinAndSelect('client.lead', 'lead')
+      // Vendor
+      .leftJoinAndSelect('sale.vendor', 'vendor')
+      // Lot, Block, Stage, Project - jerarquía completa
+      .leftJoinAndSelect('sale.lot', 'lot')
+      .leftJoinAndSelect('lot.block', 'block')
+      .leftJoinAndSelect('block.stage', 'stage')
+      .leftJoinAndSelect('stage.project', 'project')
+      // Guarantor (puede ser null)
+      .leftJoinAndSelect('sale.guarantor', 'guarantor')
+      // Reservation (puede ser null)
+      .leftJoinAndSelect('sale.reservation', 'reservation')
+      // Financing y sus installments
+      .leftJoinAndSelect('sale.financing', 'financing')
+      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
+      // Secondary Clients
+      .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
+      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
+      // Participants (todos pueden ser null)
+      .leftJoinAndSelect('sale.liner', 'liner')
+      .leftJoinAndSelect('sale.telemarketingSupervisor', 'telemarketingSupervisor')
+      .leftJoinAndSelect('sale.telemarketingConfirmer', 'telemarketingConfirmer')
+      .leftJoinAndSelect('sale.telemarketer', 'telemarketer')
+      .leftJoinAndSelect('sale.fieldManager', 'fieldManager')
+      .leftJoinAndSelect('sale.fieldSupervisor', 'fieldSupervisor')
+      .leftJoinAndSelect('sale.fieldSeller', 'fieldSeller');
+
+    // Aplicar filtros condicionales
     if (userId) {
-      whereCondition = { vendor: { id: userId } };
+      queryBuilder.where('vendor.id = :userId', { userId });
     } else {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      whereCondition = {
-        createdAt: MoreThanOrEqual(thirtyDaysAgo)
-      };
+      queryBuilder.where('sale.createdAt >= :thirtyDaysAgo', { thirtyDaysAgo });
     }
-    const sales = await this.saleRepository.find({
-      relations: [
-        'client', 
-        'lot',
-        'lot.block',
-        'lot.block.stage',
-        'lot.block.stage.project',
-        'financing', 
-        'guarantor', 
-        'reservation', 
-        'vendor', 
-        'financing.financingInstallments',
-        'secondaryClientSales',
-        'secondaryClientSales.secondaryClient',
-        'liner',
-        'telemarketingSupervisor',
-        'telemarketingConfirmer',
-        'telemarketer',
-        'fieldManager',
-        'fieldSupervisor',
-        'fieldSeller',
-      ],
-      where: whereCondition,
-      order: { createdAt: 'DESC' },
-    });
-    return PaginationHelper.createPaginatedResponse(sales.map(formatSaleResponse), sales.length, paginationDto);
+
+    // Obtener total count para paginación
+    const totalCount = await queryBuilder.getCount();
+
+    // Aplicar paginación y orden
+    const sales = await queryBuilder
+      .orderBy('sale.createdAt', order)
+      .skip(skip)
+      .take(limit)
+      .getMany();
+
+    // Formatear respuesta
+    const formattedSales = sales.map(formatSaleResponse);
+
+    return PaginationHelper.createPaginatedResponse(formattedSales, totalCount, paginationDto);
   }
 
   async findOneById(id: string): Promise<SaleResponse> {
-    const sale = await this.saleRepository.findOne({
-      where: { id },
-      relations: [
-        'client',
-        'lot',
-        'lot.block',
-        'lot.block.stage',
-        'lot.block.stage.project',
-        'financing',
-        'guarantor',
-        'reservation',
-        'vendor',
-        'financing.financingInstallments',
-        'secondaryClientSales',
-        'secondaryClientSales.secondaryClient',
-        'liner',
-        'telemarketingSupervisor',
-        'telemarketingConfirmer',
-        'telemarketer',
-        'fieldManager',
-        'fieldSupervisor',
-        'fieldSeller',
-      ],
-    });
+  // Versión con QueryBuilder - Una sola consulta optimizada
+    const sale = await this.saleRepository.createQueryBuilder('sale')
+      // Client y Lead
+      .leftJoinAndSelect('sale.client', 'client')
+      .leftJoinAndSelect('client.lead', 'lead')
+      // Vendor
+      .leftJoinAndSelect('sale.vendor', 'vendor')
+      // Lot hierarchy completa
+      .leftJoinAndSelect('sale.lot', 'lot')
+      .leftJoinAndSelect('lot.block', 'block')
+      .leftJoinAndSelect('block.stage', 'stage')
+      .leftJoinAndSelect('stage.project', 'project')
+      // Guarantor (puede ser null)
+      .leftJoinAndSelect('sale.guarantor', 'guarantor')
+      // Reservation (puede ser null)
+      .leftJoinAndSelect('sale.reservation', 'reservation')
+      // Financing con installments
+      .leftJoinAndSelect('sale.financing', 'financing')
+      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
+      // Secondary clients
+      .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
+      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
+      // Participants (todos pueden ser null)
+      .leftJoinAndSelect('sale.liner', 'liner')
+      .leftJoinAndSelect('sale.telemarketingSupervisor', 'telemarketingSupervisor')
+      .leftJoinAndSelect('sale.telemarketingConfirmer', 'telemarketingConfirmer')
+      .leftJoinAndSelect('sale.telemarketer', 'telemarketer')
+      .leftJoinAndSelect('sale.fieldManager', 'fieldManager')
+      .leftJoinAndSelect('sale.fieldSupervisor', 'fieldSupervisor')
+      .leftJoinAndSelect('sale.fieldSeller', 'fieldSeller')
+      .where('sale.id = :id', { id })
+      .getOne();
+
     if (!sale)
-      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrado`);
-    
+      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrada`);
+
+    // Obtener resumen de pagos
     const paymentsSummary = await this.getPaymentsSummaryForSale(id);
     const formattedSale = formatSaleResponse(sale);
 
-
     return {
       ...formattedSale,
-      paymentsSummary, // Agregamos el resumen de pagos
+      paymentsSummary,
     };
   }
 
   private async getPaymentsSummaryForSale(saleId: string): Promise<any[]> {
     // Primero obtenemos la venta con las relaciones necesarias
-    const sale = await this.saleRepository.findOne({
-        where: { id: saleId },
-        relations: ['reservation', 'financing', 'financing.financingInstallments'],
-    });
+    const sale = await this.saleRepository.createQueryBuilder('sale')
+      .leftJoin('sale.reservation', 'reservation')
+      .leftJoin('sale.financing', 'financing')
+      .leftJoin('financing.financingInstallments', 'financingInstallments')
+      .where('sale.id = :saleId', { saleId })
+      .getOne();
 
-    if (!sale) {
+    if (!sale)
         throw new NotFoundException(`Venta con ID ${saleId} no encontrada`);
-    }
 
     // 1. Pagos directos a la venta
     const salePayments = await this.paymentsService.findPaymentsByRelatedEntity('sale', saleId);
@@ -352,53 +384,66 @@ export class SalesService {
         paymentConfig: payment.paymentConfig.name,
         reason: payment?.rejectionReason? payment.rejectionReason: null,
     }));
-}
+  }
 
   async findOneByIdWithCollections(id: string): Promise<SaleResponse> {
-    const sale = await this.saleRepository.findOne({
-      where: { id },
-      relations: [
-        'client',
-        'lot',
-        'lot.block',
-        'lot.block.stage',
-        'lot.block.stage.project',
-        'financing',
-        'guarantor',
-        'reservation',
-        'vendor',
-        'financing.financingInstallments',
-        'secondaryClientSales',
-        'secondaryClientSales.secondaryClient',
-      ],
-    });
+    const sale = await this.saleRepository.createQueryBuilder('sale')
+      // Client y Lead
+      .leftJoinAndSelect('sale.client', 'client')
+      .leftJoinAndSelect('client.lead', 'lead')
+      // Vendor
+      .leftJoinAndSelect('sale.vendor', 'vendor')
+      // Lot hierarchy
+      .leftJoinAndSelect('sale.lot', 'lot')
+      .leftJoinAndSelect('lot.block', 'block')
+      .leftJoinAndSelect('block.stage', 'stage')
+      .leftJoinAndSelect('stage.project', 'project')
+      // Guarantor (puede ser null)
+      .leftJoinAndSelect('sale.guarantor', 'guarantor')
+      // Reservation (puede ser null)
+      .leftJoinAndSelect('sale.reservation', 'reservation')
+      // Financing con installments
+      .leftJoinAndSelect('sale.financing', 'financing')
+      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
+      // Secondary clients
+      .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
+      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
+      .where('sale.id = :id', { id })
+      .getOne();
+
     if (!sale)
-      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrado`);
+      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrada`);
     return formatSaleCollectionResponse(sale);
   }
 
   async findAllByClient(clientId: number): Promise<SaleResponse[]> {
-    const sales = await this.saleRepository.find({
-      relations: [
-        'client', 
-        'lot', 
-        'lot.block',
-        'lot.block.stage',
-        'lot.block.stage.project',
-        'financing', 
-        'guarantor', 
-        'reservation', 
-        'vendor', 
-        'financing.financingInstallments',
-        'secondaryClientSales',
-        'secondaryClientSales.secondaryClient',
-      ],
-      where: {
-        client: { id: clientId },
-        type: SaleType.FINANCED,
-        status: StatusSale.IN_PAYMENT_PROCESS,
-      },
-    });
+    const sales = await this.saleRepository.createQueryBuilder('sale')
+      // Client y Lead
+      .leftJoinAndSelect('sale.client', 'client')
+      .leftJoinAndSelect('client.lead', 'lead')
+      // Vendor
+      .leftJoinAndSelect('sale.vendor', 'vendor')
+      // Lot hierarchy
+      .leftJoinAndSelect('sale.lot', 'lot')
+      .leftJoinAndSelect('lot.block', 'block')
+      .leftJoinAndSelect('block.stage', 'stage')
+      .leftJoinAndSelect('stage.project', 'project')
+      // Guarantor
+      .leftJoinAndSelect('sale.guarantor', 'guarantor')
+      // Reservation
+      .leftJoinAndSelect('sale.reservation', 'reservation')
+      // Financing con installments
+      .leftJoinAndSelect('sale.financing', 'financing')
+      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
+      // Secondary clients
+      .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
+      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
+      .where('client.id = :clientId', { clientId })
+      .andWhere('sale.type = :type', { type: SaleType.FINANCED })
+      .andWhere('sale.status = :status', { status: StatusSale.IN_PAYMENT_PROCESS })
+      .orderBy('sale.createdAt', 'DESC')
+      .getMany();
+
     return sales.map(formatSaleResponse);
   }
 

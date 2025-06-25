@@ -179,13 +179,15 @@ export class ClientsService {
     return await this.clientRepository.save(updatedClients);
   }
 
-  async findAllByUser(
-    userId: string,
-  ): Promise<Client[]> {
-    const clients = await this.clientRepository.find({
-      where: { collector: { id: userId } },
-      relations: ['lead', 'lead.source', 'lead.ubigeo'],
-    });
+  async findAllByUser(userId: string): Promise<Client[]> {
+    const clients = await this.clientRepository.createQueryBuilder('client')
+      .leftJoinAndSelect('client.lead', 'lead')
+      .leftJoinAndSelect('lead.source', 'source')
+      .leftJoinAndSelect('lead.ubigeo', 'ubigeo')
+      .leftJoinAndSelect('client.collector', 'collector')
+      .where('collector.id = :userId', { userId })
+      .orderBy('client.createdAt', 'DESC')
+      .getMany();
     return clients;
   }
 }

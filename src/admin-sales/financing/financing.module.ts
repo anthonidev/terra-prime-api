@@ -16,6 +16,6 @@ import { CommonModule } from 'src/common/common.module';
 ],
   controllers: [FinancingController],
   providers: [FinancingService, FinancingInstallmentsService],
-  exports: [FinancingService, FinancingInstallmentsService],
+  exports: [FinancingService, FinancingInstallmentsService, TypeOrmModule],
 })
 export class FinancingModule {}

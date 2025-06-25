@@ -9,6 +9,6 @@ import { SecondaryClientSale } from './entities/secondary-client-sale.entity';
   imports: [TypeOrmModule.forFeature([SecondaryClient, SecondaryClientSale])],
   controllers: [SecondaryClientController],
   providers: [SecondaryClientService],
-  exports: [SecondaryClientService],
+  exports: [SecondaryClientService, TypeOrmModule],
 })
 export class SecondaryClientModule {}
