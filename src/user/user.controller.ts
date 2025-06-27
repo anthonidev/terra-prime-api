@@ -47,10 +47,10 @@ export class UsersController {
     return this.usersService.allRoles();
   }
 
-  @Get('roles/delete')
+  @Get('views/delete')
   @Roles('SYS')
-  deleteAllRoles() {
-    return this.usersService.deleteAllRoles();
+  deleteAllViews() {
+    return this.usersService.deleteAllViews();
   }
   @Post('assign-to-role')
   @Roles('SYS')

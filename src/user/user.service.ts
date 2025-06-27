@@ -308,6 +308,18 @@ export class UsersService {
       throw new InternalServerErrorException('Error al eliminar los roles');
     }
   }
+  async deleteAllViews(): Promise<void> {
+    try {
+      const views = await this.viewRepository.find();
+      if (views.length === 0) {
+        throw new NotFoundException('No hay vistas para eliminar');
+      }
+      await this.viewRepository.remove(views);
+    } catch (error) {
+      this.logger.error(`Error deleting all views: ${error.message}`);
+      throw new InternalServerErrorException('Error al eliminar las vistas');
+    }
+  }
   async assignViewsToRole(assignRoleViewsDto: AssignRoleViewsDto) {
     try {
       // 1. Verificar que el rol existe
