@@ -358,7 +358,7 @@ export class SalesService {
         ...financingPayments,
         ...installmentsPayments,
         ...reservationPayments
-    ];
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());;
     
     // Formatear según el formato requerido
     return allPayments.map(payment => ({
