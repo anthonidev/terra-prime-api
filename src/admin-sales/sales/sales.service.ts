@@ -325,9 +325,9 @@ export class SalesService {
   private async getPaymentsSummaryForSale(saleId: string): Promise<any[]> {
     // Primero obtenemos la venta con las relaciones necesarias
     const sale = await this.saleRepository.createQueryBuilder('sale')
-      .leftJoin('sale.reservation', 'reservation')
-      .leftJoin('sale.financing', 'financing')
-      .leftJoin('financing.financingInstallments', 'financingInstallments')
+      .leftJoinAndSelect('sale.reservation', 'reservation')
+      .leftJoinAndSelect('sale.financing', 'financing')
+      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
       .where('sale.id = :saleId', { saleId })
       .getOne();
 
@@ -344,12 +344,6 @@ export class SalesService {
     if (sale.financing) {
         // Pagos asociados al financing
         financingPayments = await this.paymentsService.findPaymentsByRelatedEntity('financing', sale.financing.id);
-        
-        // Pagos de cuotas de financiación (si existen installments)
-        if (sale.financing.financingInstallments && sale.financing.financingInstallments.length > 0) {
-            const installmentsIds = sale.financing.financingInstallments.map(i => i.id);
-            installmentsPayments = await this.paymentsService.findPaymentsByRelatedEntities('financingInstallments', installmentsIds);
-        }
     }
     
     // 3. Pagos de reserva (si existe)

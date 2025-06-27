@@ -17,14 +17,12 @@ import { FinancingInstallmentsService } from 'src/admin-sales/financing/services
 import { ApprovePaymentDto } from '../dto/approve-payment.dto';
 import { SaleType } from 'src/admin-sales/sales/enums/sale-type.enum';
 import { LotService } from 'src/project/services/lot.service';
-import { LotStatus } from 'src/project/entities/lot.entity';
 import { FindPaymentsDto } from '../dto/find-payments.dto';
 import { PaginationHelper } from 'src/common/helpers/pagination.helper';
 import { ReservationsService } from 'src/admin-sales/reservations/reservations.service';
 import { FinancingService } from 'src/admin-sales/financing/services/financing.service';
 import { PaymentAllResponse } from '../interfaces/payment-all-response.interface';
 import { Paginated } from 'src/common/interfaces/paginated.interface';
-import { query } from 'express';
 import { CompletePaymentDto } from '../dto/complete-payment.dto';
 
 @Injectable()
@@ -177,14 +175,9 @@ export class PaymentsService {
           queryRunner,
         );
       }
-        
-      // if (payment.relatedEntityType === 'financingInstallments' && payment.relatedEntityId) {
-      //   await this.financingInstallmentsService.updateStatus(
-      //     payment.relatedEntityId,
-      //     StatusFinancingInstallments.PAID,
-      //     queryRunner,
-      //   );
-      // }
+      if (payment.relatedEntityType === 'financingInstallments' && payment.relatedEntityId) {
+        await this.revertInstallmentsPayment(paymentId, queryRunner);
+      }
 
       return {
         ...formatPaymentsResponse(canceledPayment),
@@ -198,6 +191,39 @@ export class PaymentsService {
         })),
       };
     });
+  }
+
+  async revertInstallmentsPayment(
+    paymentId: number,
+    queryRunner?: QueryRunner
+  ): Promise<void> {
+    const payment = await queryRunner.manager.getRepository(Payment).findOne({
+      where: { id: paymentId },
+      relations: ['details']
+    });
+
+    if (!payment || !payment.metadata?.installmentsBackup) {
+      throw new BadRequestException('No se encontró información de respaldo para revertir las cuotas');
+    }
+
+    try {
+      const installmentsBackup = JSON.parse(payment.metadata.installmentsBackup);
+      
+      // Restaurar cada cuota a su estado anterior
+      for (const backup of installmentsBackup) {
+        await this.financingInstallmentsService.updateAmountsPayment(
+          backup.id,
+          backup.previousLateFeeAmountPending,
+          backup.previousLateFeeAmountPaid,
+          backup.previousCoutePending,
+          backup.previousCoutePaid,
+          backup.previousStatus,
+          queryRunner,
+        );
+      }
+    } catch (error) {
+      throw new BadRequestException('Error al revertir las cuotas: ' + error.message);
+    }
   }
 
   async findAllPayments(filters: FindPaymentsDto, userId?: string): Promise<Paginated<PaymentAllResponse>> {
@@ -531,7 +557,7 @@ export class PaymentsService {
     return payment;
   }
 
-  private async isValidPaymentConfig(relatedEntityType: string, relatedEntityId: string) {
+  async isValidPaymentConfig(relatedEntityType: string, relatedEntityId: string) {
     let paymentConfig;
     let sale;
     if (relatedEntityType === 'sale') {
@@ -546,8 +572,15 @@ export class PaymentsService {
         throw new BadRequestException(`El pago porque tiene un pago pendiente en curso.`);
       paymentConfig = await this.paymentConfigService.findOneByCode('FINANCING_PAYMENT');
     }
-    if (relatedEntityType === 'financingInstallments')
+    if (relatedEntityType === 'financingInstallments'){
       paymentConfig = await this.paymentConfigService.findOneByCode('FINANCING_INSTALLMENTS_PAYMENT');
+      const pendingPayment = await this.paymentRepository.findOne({
+        where: { relatedEntityType, relatedEntityId, status: StatusPayment.PENDING },
+      });
+      if (pendingPayment)
+        throw new BadRequestException(`El pago de cuotas no se puede realizar porque tiene un pago pendiente en curso.`);
+    }
+    
     if (relatedEntityType === 'reservation')
       paymentConfig = await this.paymentConfigService.findOneByCode('RESERVATION_PAYMENT');
     return paymentConfig;
@@ -595,14 +628,6 @@ export class PaymentsService {
         await this.salesService.updateStatusSale(
           sale.id,
           StatusSale.IN_PAYMENT_PROCESS,
-          queryRunner,
-        );
-      }
-        
-      if (payment.relatedEntityType === 'financingInstallments' && payment.relatedEntityId) {
-        await this.financingInstallmentsService.updateStatus(
-          payment.relatedEntityId,
-          StatusFinancingInstallments.PAID,
           queryRunner,
         );
       }

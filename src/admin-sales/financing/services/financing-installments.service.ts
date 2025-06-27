@@ -88,6 +88,8 @@ export class FinancingInstallmentsService {
     if (amountPaid <= 0)
       throw new BadRequestException('El monto a pagar debe ser mayor a cero.');
     
+    await this.paymentsService.isValidPaymentConfig('financingInstallments', financingId);
+
     const installmentsToPay = await this.financingInstallmentsRepository.find({
       where: { 
         financing: { id: financingId },
@@ -106,7 +108,6 @@ export class FinancingInstallmentsService {
         return sum + currentPending + currentLateFeePending;
       }, 0).toFixed(2));
 
-      // Validar que el monto pagado no exceda el total pendiente (cuota + mora)
       if (amountPaid > totalPendingAmount)
         throw new BadRequestException(
           `El monto a pagar (${amountPaid.toFixed(2)}) excede el total pendiente de las cuotas y moras (${totalPendingAmount.toFixed(2)}).`
@@ -114,8 +115,19 @@ export class FinancingInstallmentsService {
 
       let remainingAmount = amountPaid;
       const paidInstallmentIds: string[] = [];
+      
+      // NUEVO: Guardar el estado anterior de las cuotas para poder revertir
+      const installmentsBackup = installmentsToPay.map(installment => ({
+        id: installment.id,
+        previousLateFeeAmountPending: installment.lateFeeAmountPending,
+        previousLateFeeAmountPaid: installment.lateFeeAmountPaid,
+        previousCoutePending: installment.coutePending,
+        previousCoutePaid: installment.coutePaid,
+        previousStatus: installment.status
+      }));
 
       await this.calculateAmountInCoutes(installmentsToPay, remainingAmount, queryRunner, paidInstallmentIds);
+      
       // Registrar el pago en el sistema de pagos general
       const createPaymentDto: CreatePaymentDto = {
         methodPayment: MethodPayment.VOUCHER,
@@ -126,12 +138,40 @@ export class FinancingInstallmentsService {
           'Concepto de pago': 'Pago de cuotas de financiación',
           'Fecha de pago': new Date().toISOString(),
           'Monto de pago': amountPaid,
-          'Cuotas afectadas': paidInstallmentIds.join(', ') // Para referencia
+          'Cuotas afectadas': paidInstallmentIds.join(', '),
+          // NUEVO: Guardar información para revertir
+          'installmentsBackup': JSON.stringify(installmentsBackup)
         },
         paymentDetails,
       };
+      
       return await this.paymentsService.create(createPaymentDto, files, userId, queryRunner);
     });
+  }
+
+  async updateAmountsPayment(
+    financingInstallmentsId: string,
+    lateFeeAmountPending: number,
+    lateFeeAmountPaid: number,
+    coutePending: number,
+    cuotePaid: number,
+    status: StatusFinancingInstallments,
+    queryRunner?: QueryRunner,
+  ): Promise<FinancingInstallments> {
+    const repository = queryRunner
+      ? queryRunner.manager.getRepository(FinancingInstallments)
+      : this.financingInstallmentsRepository;
+    const financingInstallments = await repository.findOne({
+      where: { id: financingInstallmentsId },
+    });
+    if (!financingInstallments)
+      throw new Error(`No se encontró una cuota de financiamiento con ID ${financingInstallmentsId}`);
+    financingInstallments.lateFeeAmountPending = lateFeeAmountPending;
+    financingInstallments.lateFeeAmountPaid = lateFeeAmountPaid;
+    financingInstallments.coutePending = coutePending;
+    financingInstallments.coutePaid = cuotePaid;
+    financingInstallments.status = status;
+    return await repository.save(financingInstallments);
   }
 
   // Método para buscar una cuota específica (podría ser útil para el frontend)
@@ -149,31 +189,34 @@ export class FinancingInstallmentsService {
     queryRunner: QueryRunner,
     paidInstallmentIds: string[],
   ) {
+    // Convertir remainingAmount a número preciso
+    let amountLeft = Number(remainingAmount.toFixed(2));
+    
     for (const installment of installmentsToPay) {
-      if (remainingAmount <= 0) break;
+        if (amountLeft <= 0) break;
 
-      // 1. Priorizar el pago de la mora pendiente
-      if (installment.lateFeeAmountPending > 0 && remainingAmount > 0) {
-        const payForLateFee = Math.min(remainingAmount, installment.lateFeeAmountPending);
-        installment.lateFeeAmountPaid = parseFloat((Number(installment.lateFeeAmountPaid ?? 0) + payForLateFee).toFixed(2));
-        installment.lateFeeAmountPending = parseFloat((Number(installment.lateFeeAmountPending ?? 0) - payForLateFee).toFixed(2));
-        remainingAmount = parseFloat((remainingAmount - payForLateFee).toFixed(2));
-      }
+        // Calcular el monto pendiente real de esta cuota
+        const pendingAmount = Number((installment.couteAmount - (installment.coutePaid || 0)).toFixed(2));
 
-      // 2. Luego, pagar la cuota principal pendiente
-      if (installment.coutePending > 0 && remainingAmount > 0) {
-        const payForCoute = Math.min(remainingAmount, installment.coutePending);
-        installment.coutePaid = parseFloat((Number(installment.coutePaid ?? 0) + payForCoute).toFixed(2));
-        installment.coutePending = parseFloat((Number(installment.coutePending ?? 0) - payForCoute).toFixed(2));
-        remainingAmount = parseFloat((remainingAmount - payForCoute).toFixed(2));
-      }
+        // Solo procesar si hay algo pendiente
+        if (pendingAmount > 0) {
+            const paymentAmount = Math.min(amountLeft, pendingAmount);
+            
+            // Actualizar valores
+            installment.coutePaid = Number((Number(installment.coutePaid || 0) + paymentAmount).toFixed(2));
+            installment.coutePending = Number((installment.couteAmount - installment.coutePaid).toFixed(2));
+            amountLeft = Number((amountLeft - paymentAmount).toFixed(2));
 
-      if (installment.coutePending <= 0 && installment.lateFeeAmountPending <= 0) {
-        installment.status = StatusFinancingInstallments.PAID;
-        paidInstallmentIds.push(installment.id);
-      }
+            // Marcar como PAID solo si está completamente pagada
+            if (installment.coutePending <= 0) {
+                installment.status = StatusFinancingInstallments.PAID;
+                paidInstallmentIds.push(installment.id);
+            } else {
+                installment.status = StatusFinancingInstallments.PENDING;
+            }
+        }
 
-      await queryRunner.manager.save(installment);
+        await queryRunner.manager.save(installment);
     }
   }
 }
