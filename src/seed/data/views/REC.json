@@ -1,0 +1,42 @@
+{
+    "code": "REC",
+    "views": [
+        {
+            "name": "Gestión de Leads",
+            "url": null,
+            "order": 4,
+            "icon": "g-lead",
+            "code": "G_LEAD",
+            "parent": null,
+            "children": [
+                {
+                    "name": "Fuentes de Leads",
+                    "url": "/leads/fuentes",
+                    "order": 1,
+                    "icon": "lead-source",
+                    "code": "LEAD_SOURCE",
+                    "children": null,
+                    "parent": "G_LEAD"
+                },
+                {
+                    "name": "Nuevo Lead",
+                    "url": "/leads/nuevo",
+                    "order": 2,
+                    "icon": "new-lead",
+                    "code": "NEW_LEAD",
+                    "children": null,
+                    "parent": "G_LEAD"
+                },
+                {
+                    "name": "Leads",
+                    "url": "/leads",
+                    "order": 3,
+                    "icon": "leads",
+                    "code": "LEADS",
+                    "children": null,
+                    "parent": "G_LEAD"
+                }
+            ]
+        }
+    ]
+}

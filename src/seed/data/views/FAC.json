@@ -1,0 +1,14 @@
+{
+    "code": "FAC",
+    "views": [
+        {
+            "name": "Pagos",
+            "url": "/ventas/pagos",
+            "order": 1,
+            "icon": "pagos",
+            "code": "FAC_PAGOS",
+            "parent": null,
+            "children": null
+        }
+    ]
+}

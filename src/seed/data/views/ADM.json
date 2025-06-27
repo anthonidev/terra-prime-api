@@ -1,0 +1,13 @@
+{
+    "code": "ADM",
+    "views": [
+        {
+            "name": "Pin",
+            "url": "/generate-pin",
+            "order": 1,
+            "icon": "pin",
+            "code": "ADM_PIN",
+            "parent": null
+        }
+    ]
+}

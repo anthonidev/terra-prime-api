@@ -1,0 +1,42 @@
+{
+    "code": "SYS",
+    "views": [
+        {
+            "name": "Usuarios",
+            "url": "/usuarios",
+            "order": 1,
+            "icon": "user",
+            "parent": null,
+            "children": null,
+            "code": "USER"
+        },
+        {
+            "name": "Gestión de Proyectos",
+            "url": null,
+            "order": 2,
+            "icon": "g-project",
+            "code": "G_PROJECT",
+            "parent": null,
+            "children": [
+                {
+                    "name": "Nuevo Proyecto",
+                    "url": "/proyectos/nuevo",
+                    "order": 1,
+                    "icon": "lote",
+                    "code": "NEW_PROJECT",
+                    "children": null,
+                    "parent": "G_PROJECT"
+                },
+                {
+                    "name": "Proyectos",
+                    "url": "/proyectos",
+                    "order": 2,
+                    "icon": "project",
+                    "code": "PROJECT",
+                    "children": null,
+                    "parent": "G_PROJECT"
+                }
+            ]
+        }
+    ]
+}

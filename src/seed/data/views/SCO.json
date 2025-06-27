@@ -1,0 +1,21 @@
+{
+    "code": "COB",
+    "views": [
+        {
+            "name": "Mis Clientes",
+            "url": "/cobranza/clientes-asignados",
+            "order": 1,
+            "icon": "clientes",
+            "code": "COB_CLIENTES",
+            "parent": null
+        },
+        {
+            "name": "Pagos",
+            "url": "/cobranza/pagos",
+            "order": 2,
+            "icon": "pagos",
+            "code": "COB_PAGOS",
+            "parent": null
+        }
+    ]
+}
