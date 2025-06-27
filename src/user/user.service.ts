@@ -18,6 +18,8 @@ import {
   PaginatedResult,
   PaginationHelper,
 } from 'src/common/helpers/pagination.helper';
+import { AssignRoleViewsDto } from './dto/assign-role-view.dto';
+import { View } from './entities/view.entity';
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -27,6 +29,8 @@ export class UsersService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Role)
     private readonly roleRepository: Repository<Role>,
+    @InjectRepository(View)
+    private readonly viewRepository: Repository<View>,
   ) {}
   private async findOneOrFail(
     criteria: FindOptionsWhere<User>,
@@ -195,7 +199,10 @@ export class UsersService {
   async update(id: string, dto: UpdateUserDto): Promise<User> {
     try {
       const user = await this.findOne(id);
-      await this.validateRoleAndEmail(dto.email !== user.email ? dto.email : null, dto.roleId);
+      await this.validateRoleAndEmail(
+        dto.email !== user.email ? dto.email : null,
+        dto.roleId,
+      );
       const updatedUser = await this.userRepository.save({
         ...user,
         ...dto,
@@ -215,15 +222,17 @@ export class UsersService {
   async findOneVendor(id: string): Promise<User> {
     try {
       const user = await this.userRepository.findOne({
-        where: { id  },
-        relations: ['role']
+        where: { id },
+        relations: ['role'],
       });
       if (!user)
         throw new NotFoundException(`El usuario con ID ${id} no existe`);
-      if(user.role.code !== 'VEN')
-        throw new ForbiddenException(`El usuario asignado con ID ${id} no es un vendedor`);
+      if (user.role.code !== 'VEN')
+        throw new ForbiddenException(
+          `El usuario asignado con ID ${id} no es un vendedor`,
+        );
       return user;
-    } catch (error) { 
+    } catch (error) {
       this.logger.error(`Error fetching user ${id}: ${error.message}`);
       throw error;
     }
@@ -235,19 +244,21 @@ export class UsersService {
       relations: ['role'],
     });
 
-    if (!user)
-      throw new NotFoundException(`El usuario con ID ${id} no existe`);
+    if (!user) throw new NotFoundException(`El usuario con ID ${id} no existe`);
     if (user.role.code !== 'COB')
-      throw new ForbiddenException(`El usuario con ID ${id} no es de cobranzas`);
+      throw new ForbiddenException(
+        `El usuario con ID ${id} no es de cobranzas`,
+      );
     return user;
   }
 
   async findAllVendors(): Promise<User[]> {
     try {
       const users = await this.userRepository.find({
-        where: { 
+        where: {
           isActive: true,
-          role: { code: 'VEN' } },
+          role: { code: 'VEN' },
+        },
       });
       return users;
     } catch (error) {
@@ -259,9 +270,10 @@ export class UsersService {
   async findAllCollectors(): Promise<User[]> {
     try {
       const users = await this.userRepository.find({
-        where: { 
+        where: {
           isActive: true,
-          role: { code: 'COB' } },
+          role: { code: 'COB' },
+        },
       });
       return users;
     } catch (error) {
@@ -274,11 +286,158 @@ export class UsersService {
     try {
       const user = await this.findOne(id);
       if (user.role.code !== 'JVE')
-        throw new NotFoundException('El usuario asignado con ID ' + id + ' no es un jefe de ventas');
+        throw new NotFoundException(
+          'El usuario asignado con ID ' + id + ' no es un jefe de ventas',
+        );
       return user;
     } catch (error) {
       this.logger.error(`Error fetching user ${id}: ${error.message}`);
       throw error;
     }
+  }
+
+  async deleteAllRoles(): Promise<void> {
+    try {
+      const roles = await this.roleRepository.find();
+      if (roles.length === 0) {
+        throw new NotFoundException('No hay roles para eliminar');
+      }
+      await this.roleRepository.remove(roles);
+    } catch (error) {
+      this.logger.error(`Error deleting all roles: ${error.message}`);
+      throw new InternalServerErrorException('Error al eliminar los roles');
+    }
+  }
+  async assignViewsToRole(assignRoleViewsDto: AssignRoleViewsDto) {
+    try {
+      // 1. Verificar que el rol existe
+      const role = await this.roleRepository.findOne({
+        where: { code: assignRoleViewsDto.code },
+        relations: ['views'],
+      });
+
+      if (!role) {
+        throw new NotFoundException(
+          `El rol con código ${assignRoleViewsDto.code} no existe`,
+        );
+      }
+
+      // 2. Procesar las vistas recursivamente
+      const processedViews = await this.processViews(assignRoleViewsDto.views);
+
+      // 3. Obtener todas las vistas creadas/actualizadas para asignar al rol
+      const allViewCodes = this.getAllViewCodes(assignRoleViewsDto.views);
+      const viewsToAssign = await this.viewRepository.find({
+        where: allViewCodes.map((code) => ({ code })),
+      });
+
+      // 4. Asignar las vistas al rol
+      role.views = viewsToAssign;
+      await this.roleRepository.save(role);
+
+      this.logger.log(
+        `Vistas asignadas exitosamente al rol ${assignRoleViewsDto.code}`,
+      );
+
+      return {
+        message: 'Vistas asignadas exitosamente al rol',
+        role: {
+          id: role.id,
+          code: role.code,
+          name: role.name,
+        },
+        viewsAssigned: viewsToAssign.length,
+        processedViews,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error asignando vistas al rol ${assignRoleViewsDto.code}: ${error.message}`,
+      );
+      throw error instanceof NotFoundException
+        ? error
+        : new InternalServerErrorException(
+            'Error al asignar las vistas al rol',
+          );
+    }
+  }
+  private async processViews(
+    views: any[],
+    parentView?: View,
+  ): Promise<{ created: number; updated: number }> {
+    let created = 0;
+    let updated = 0;
+
+    for (const viewData of views) {
+      const result = await this.createOrUpdateView(viewData, parentView);
+      if (result.isNew) {
+        created++;
+      } else {
+        updated++;
+      }
+
+      // Procesar hijos si existen
+      if (viewData.children && viewData.children.length > 0) {
+        const childResults = await this.processViews(
+          viewData.children,
+          result.view,
+        );
+        created += childResults.created;
+        updated += childResults.updated;
+      }
+    }
+
+    return { created, updated };
+  }
+
+  private async createOrUpdateView(
+    viewData: any,
+    parentView?: View,
+  ): Promise<{ view: View; isNew: boolean }> {
+    // Verificar si la vista ya existe
+    let existingView = await this.viewRepository.findOne({
+      where: { code: viewData.code.toUpperCase() },
+      relations: ['parent'],
+    });
+
+    if (existingView) {
+      // Actualizar vista existente
+      existingView.name = viewData.name.trim();
+      existingView.url = viewData.url || null;
+      existingView.icon = viewData.icon || null;
+      existingView.order = viewData.order || 0;
+      existingView.parent = parentView || null;
+
+      const savedView = await this.viewRepository.save(existingView);
+      this.logger.debug(`Vista actualizada: ${viewData.code}`);
+      return { view: savedView, isNew: false };
+    } else {
+      // Crear nueva vista
+      const newView = this.viewRepository.create({
+        code: viewData.code.toUpperCase(),
+        name: viewData.name.trim(),
+        url: viewData.url || null,
+        icon: viewData.icon || null,
+        order: viewData.order || 0,
+        parent: parentView || null,
+        isActive: true,
+      });
+
+      const savedView = await this.viewRepository.save(newView);
+      this.logger.debug(`Vista creada: ${viewData.code}`);
+      return { view: savedView, isNew: true };
+    }
+  }
+  private getAllViewCodes(views: any[]): string[] {
+    const codes: string[] = [];
+
+    for (const view of views) {
+      codes.push(view.code.toUpperCase());
+
+      if (view.children && view.children.length > 0) {
+        codes.push(...this.getAllViewCodes(view.children));
+      }
+    }
+
+    return codes;
   }
 }
