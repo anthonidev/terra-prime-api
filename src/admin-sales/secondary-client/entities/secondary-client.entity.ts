@@ -24,7 +24,7 @@ export class SecondaryClient {
 
   @Column({
     type: 'varchar',
-    length: 35,
+    length: 70,
     nullable: true
   })
   email: string;
