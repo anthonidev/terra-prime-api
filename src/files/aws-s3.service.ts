@@ -1,5 +1,7 @@
+// src/files/aws-s3.service.ts - Funciones adicionales para PDFs
+
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { envs } from '../config/envs';
 import { S3UploadResponse, S3DeleteResponse } from './interfaces/s3-response.interface';
@@ -68,6 +70,38 @@ export class AwsS3Service {
         }
     }
 
+    // NUEVA FUNCIÓN: Subir PDF desde Buffer
+    async uploadPdfFromBuffer(
+        pdfBuffer: Buffer,
+        fileName: string,
+        folder: string = 'documents'
+    ): Promise<string> {
+        try {
+            const key = `${folder}/${fileName}`;
+
+            const uploadCommand = new PutObjectCommand({
+                Bucket: this.bucketName,
+                Key: key,
+                Body: pdfBuffer,
+                ContentType: 'application/pdf',
+                Metadata: {
+                    generatedAt: new Date().toISOString(),
+                },
+            });
+
+            await this.s3Client.send(uploadCommand);
+
+            // Construir la URL pública
+            const url = `https://${this.bucketName}.s3.${envs.awsRegion}.amazonaws.com/${key}`;
+
+            this.logger.log(`PDF uploaded successfully: ${key}`);
+            return url;
+        } catch (error) {
+            this.logger.error(`Error uploading PDF buffer: ${error.message}`, error.stack);
+            throw new BadRequestException(`Error al subir el PDF: ${error.message}`);
+        }
+    }
+
     async deleteFile(key: string): Promise<S3DeleteResponse> {
         try {
             const deleteCommand = new DeleteObjectCommand({
@@ -88,6 +122,23 @@ export class AwsS3Service {
             return {
                 success: false,
                 message: `Error al eliminar el archivo: ${error.message}`,
+            };
+        }
+    }
+
+    // NUEVA FUNCIÓN: Eliminar archivo por URL completa
+    async deleteFileByUrl(fileUrl: string): Promise<S3DeleteResponse> {
+        try {
+            // Extraer la key del URL
+            const url = new URL(fileUrl);
+            const key = url.pathname.substring(1); // Remover el primer '/'
+
+            return await this.deleteFile(key);
+        } catch (error) {
+            this.logger.error(`Error deleting file by URL: ${error.message}`, error.stack);
+            return {
+                success: false,
+                message: `Error al eliminar el archivo por URL: ${error.message}`,
             };
         }
     }
@@ -155,10 +206,10 @@ export class AwsS3Service {
         };
     }
 
-    // Método para verificar si un archivo existe
+    // FUNCIÓN ACTUALIZADA: Verificar si un archivo existe (con mejor manejo de errores)
     async fileExists(key: string): Promise<boolean> {
         try {
-            const command = new GetObjectCommand({
+            const command = new HeadObjectCommand({
                 Bucket: this.bucketName,
                 Key: key,
             });
@@ -166,6 +217,23 @@ export class AwsS3Service {
             await this.s3Client.send(command);
             return true;
         } catch (error) {
+            if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
+                return false;
+            }
+            // Para otros errores, los registramos pero asumimos que el archivo no existe
+            this.logger.warn(`Error checking file existence for ${key}: ${error.message}`);
+            return false;
+        }
+    }
+
+    // NUEVA FUNCIÓN: Verificar si un archivo existe por URL completa
+    async fileExistsByUrl(fileUrl: string): Promise<boolean> {
+        try {
+            const url = new URL(fileUrl);
+            const key = url.pathname.substring(1); // Remover el primer '/'
+            return await this.fileExists(key);
+        } catch (error) {
+            this.logger.warn(`Error checking file existence by URL ${fileUrl}: ${error.message}`);
             return false;
         }
     }

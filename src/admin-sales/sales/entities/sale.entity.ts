@@ -69,7 +69,13 @@ export class Sale extends Timestamped {
     default: StatusSale.PENDING,
   })
   status: StatusSale;
-
+  
+  @Column({
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
+  radicationPdfUrl?: string;
   // @OneToMany(() => LateTee, (lateFeeTee) => lateFeeTee.sale)
   // lateFeeTee: LateTee[];
 

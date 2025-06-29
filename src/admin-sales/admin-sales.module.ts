@@ -9,6 +9,7 @@ import { UrbanDevelopmentModule } from './urban-development/urban-development.mo
 import { SecondaryClientModule } from './secondary-client/secondary-client.module';
 import { SalesWithdrawalModule } from './sales-withdrawal/sales-withdrawal.module';
 import { ParticipantsModule } from './participants/participants.module';
+import { RadicationModule } from './radication/radication.module';
 
 @Module({
   imports: [
@@ -21,7 +22,8 @@ import { ParticipantsModule } from './participants/participants.module';
     UrbanDevelopmentModule,
     SecondaryClientModule,
     SalesWithdrawalModule,
-    ParticipantsModule
+    ParticipantsModule,
+    RadicationModule
   ]
 })
 export class AdminSalesModule {}
