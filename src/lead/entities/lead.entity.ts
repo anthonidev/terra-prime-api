@@ -118,4 +118,11 @@ export class Lead {
   get fullName(): string {
     return `${this.firstName} ${this.lastName}`.trim();
   }
+
+  @Column({
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
+  reportPdfUrl?: string;
 }
