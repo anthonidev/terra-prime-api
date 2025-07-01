@@ -18,12 +18,12 @@ import { StageService } from '../services/stage.service';
 export class StageController {
   constructor(private readonly stageService: StageService) {}
   @Post()
-  @Roles('SYS', 'GVE')
+  @Roles('SYS')
   async createStage(@Body() createStageDto: CreateStageDto) {
     return this.stageService.createStage(createStageDto);
   }
   @Patch(':id')
-  @Roles('SYS', 'GVE')
+  @Roles('SYS')
   async updateStage(
     @Param('id') id: string,
     @Body() updateStageDto: UpdateStageDto,
@@ -31,7 +31,7 @@ export class StageController {
     return this.stageService.updateStage(id, updateStageDto);
   }
   @Get(':id')
-  @Roles('SYS', 'GVE', 'VEN')
+  @Roles('SYS', 'JVE', 'VEN')
   async findOne(@Param('id') id: string) {
     return this.stageService.findStageById(id);
   }

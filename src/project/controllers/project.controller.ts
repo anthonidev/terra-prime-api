@@ -35,7 +35,7 @@ export class ProjectController {
     private readonly awsS3Service: AwsS3Service,
   ) { }
   @Post('validate-excel')
-  @Roles('SYS', 'GVE')
+  @Roles('SYS', 'JVE')
   @UseInterceptors(FileInterceptor('file'))
   async validateExcel(
     @UploadedFile() file: Express.Multer.File,
@@ -43,7 +43,7 @@ export class ProjectController {
     return this.excelService.validateProjectExcel(file);
   }
   @Post('bulk-create')
-  @Roles('SYS', 'GVE')
+  @Roles('SYS', 'JVE')
   async createBulkProject(
     @Body() { projectData }: CreateBulkProjectDto,
   ): Promise<{
@@ -93,17 +93,17 @@ export class ProjectController {
     };
   }
   @Get()
-  @Roles('SYS', 'GVE', 'VEN')
+  @Roles('SYS', 'JVE', 'VEN')
   async findAll() {
     return this.projectService.findAll();
   }
   @Get(':id')
-  @Roles('SYS', 'GVE', 'VEN')
+  @Roles('SYS', 'JVE', 'VEN')
   async findOne(@Param('id') id: string) {
     return this.projectService.findOne(id);
   }
   @Patch(':id/with-image')
-  @Roles('SYS', 'GVE')
+  @Roles('SYS', 'JVE')
   @UseInterceptors(FileInterceptor('logo'))
   async updateProjectWithImage(
     @Param('id') id: string,
@@ -136,7 +136,7 @@ export class ProjectController {
     return this.projectService.updateProject(id, updateProjectDto);
   }
   @Get(':id/lots')
-  @Roles('SYS', 'GVE', 'VEN')
+  @Roles('SYS', 'JVE', 'VEN')
   async findProjectLots(
     @Param('id') projectId: string,
     @Query() findLotsDto: FindProjectLotsDto,

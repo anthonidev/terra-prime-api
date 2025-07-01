@@ -20,17 +20,17 @@ import { UpdatePriceByVendorDto } from '../dto/update-price-by-vendor.dto';
 export class LotController {
   constructor(private readonly lotService: LotService) {}
   @Post()
-  @Roles('SYS', 'GVE')
+  @Roles('SYS')
   async createLot(@Body() createLotDto: CreateLotDto) {
     return this.lotService.createLot(createLotDto);
   }
   @Patch(':id')
-  @Roles('SYS', 'GVE')
+  @Roles('SYS')
   async updateLot(@Param('id') id: string, @Body() updateLotDto: UpdateLotDto) {
     return this.lotService.updateLot(id, updateLotDto);
   }
   @Get(':id')
-  @Roles('SYS', 'GVE', 'VEN')
+  @Roles('SYS', 'JVE', 'VEN')
   async findOne(@Param('id') id: string) {
     return this.lotService.findLotById(id);
   }

@@ -135,7 +135,7 @@ export class LeadController {
   }
 
   @Get()
-  @Roles('SYS', 'REC', 'VEN', 'GVE')
+  @Roles('SYS', 'REC', 'VEN', 'JVE')
   async findAll(@Query() filters: FindLeadsDto) {
     try {
       const result = await this.leadService.findAll(filters);
@@ -156,7 +156,7 @@ export class LeadController {
     }
   }
   @Get(':id')
-  @Roles('SYS', 'REC', 'VEN', 'GVE')
+  @Roles('SYS', 'REC', 'VEN', 'JVE')
   async findOne(@Param('id') id: string) {
     try {
       const lead = await this.leadService.findOneWithDetails(id);
