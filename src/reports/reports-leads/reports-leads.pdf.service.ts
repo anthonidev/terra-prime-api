@@ -76,25 +76,22 @@ export class ReportsLeadsPdfService {
        .text('Te invitamos a responder este breve formulario para brindarte un servicio cada vez más óptimo y', 50, 130)
        .text('personalizado. Porque tu comodidad y satisfacción son nuestra prioridad.', 50, 145);
 
-    let yPosition = 170;
+    let yPosition = 160; // Reducido de 170
 
     // Sección: Datos Personales
     yPosition = this.addPersonalDataSection(doc, lead, yPosition);
     
-    // Sección: ¿En qué distrito reside? y ¿Cuántos?
-    yPosition = this.addResidenceSection(doc, yPosition);
-
     // Sección: ¿Qué medio de transporte utiliza para llegar?
-    yPosition = this.addTransportSection(doc, yPosition);
+    yPosition = this.addTransportSection(doc, yPosition - 5); // Reducir espacio
 
     // Sección: Ingresos Familiares
-    yPosition = this.addFamilyIncomeSection(doc, yPosition);
+    yPosition = this.addFamilyIncomeSection(doc, yPosition - 5); // Reducir espacio
 
     // Sección: ¿Esta es su primera visita a Huertas Inmobiliaria?
-    yPosition = this.addFirstVisitSection(doc, yPosition);
+    yPosition = this.addFirstVisitSection(doc, yPosition - 5); // Reducir espacio
 
     // Sección: Proyectos
-    yPosition = this.addProjectsSection(doc, yPosition, lightGreen);
+    yPosition = this.addProjectsSection(doc, yPosition - 5, lightGreen);
 
     // Sección: ¿Cómo se enteró de nuestro proyecto?
     yPosition = this.addHowDidYouHearSection(doc, yPosition);
@@ -118,7 +115,9 @@ export class ReportsLeadsPdfService {
     yPosition = this.addSignatureSection(doc, yPosition);
 
     // Footer real (información de contacto)
-    this.addRealFooter(doc);
+    // if (yPosition < doc.page.height - 100) {
+      this.addFooterAtFixedPosition(doc);
+    // }
   }
 
   private addCompactHeader(doc: PDFKit.PDFDocument, darkGreen: string, lightGreen: string): void {
@@ -199,7 +198,7 @@ export class ReportsLeadsPdfService {
     this.drawCheckbox(doc, 210, yPos - 2, false);
     doc.text('Conviviente', 225, yPos);
     
-    this.drawCheckbox(doc, 290, yPos - 2, true);
+    this.drawCheckbox(doc, 290, yPos - 2, false);
     doc.text('Soltero(a)', 305, yPos);
     
     this.drawCheckbox(doc, 370, yPos - 2, false);
@@ -214,7 +213,7 @@ export class ReportsLeadsPdfService {
     doc.text('¿Cuántos?', 130, yPos);
     this.drawUnderline(doc, 180, yPos + 10, 50);
     doc.text('No', 250, yPos);
-    this.drawCheckbox(doc, 270, yPos - 2, true);
+    this.drawCheckbox(doc, 270, yPos - 2, false);
     doc.text('¿En qué distrito reside?', 320, yPos);
 
     return yPos + 25;
@@ -239,7 +238,7 @@ export class ReportsLeadsPdfService {
     this.drawCheckbox(doc, 110, yPos - 2, false);
 
     doc.text('Transporte público', 150, yPos);
-    this.drawCheckbox(doc, 240, yPos - 2, true);
+    this.drawCheckbox(doc, 240, yPos - 2, false);
 
     doc.text('Taxi', 280, yPos);
     this.drawCheckbox(doc, 305, yPos - 2, false);
@@ -270,7 +269,7 @@ export class ReportsLeadsPdfService {
        .text('¿Esta es su primera visita a Huertas Inmobiliaria?', 50, yPos);
     
     doc.text('Si', 300, yPos);
-    this.drawCheckbox(doc, 315, yPos - 2, true);
+    this.drawCheckbox(doc, 315, yPos - 2, false);
     
     doc.text('No', 340, yPos);
     this.drawCheckbox(doc, 355, yPos - 2, false);
@@ -289,7 +288,7 @@ export class ReportsLeadsPdfService {
 
     // Primera fila: EL OLIVAR y OASIS
     const projects1 = [
-      { name: 'EL OLIVAR', checked: true },
+      { name: 'EL OLIVAR', checked: false },
       { name: 'OASIS', checked: false }
     ];
 
@@ -384,7 +383,7 @@ export class ReportsLeadsPdfService {
        .text('¿Le interesaría tener información de otro proyecto?', 50, yPos);
     
     doc.text('Si', 300, yPos);
-    this.drawCheckbox(doc, 315, yPos - 2, true);
+    this.drawCheckbox(doc, 315, yPos - 2, false);
     
     doc.text('No', 340, yPos);
     this.drawCheckbox(doc, 355, yPos - 2, false);
@@ -400,7 +399,7 @@ export class ReportsLeadsPdfService {
        .text('¿Es usuario de tarjetas de débito?', 50, yPos);
     
     doc.text('Si', 250, yPos);
-    this.drawCheckbox(doc, 265, yPos - 2, true);
+    this.drawCheckbox(doc, 265, yPos - 2, false);
     
     doc.text('¿Cuántas?', 290, yPos);
     this.drawUnderline(doc, 340, yPos + 10, 60);
@@ -433,7 +432,7 @@ export class ReportsLeadsPdfService {
        .fillColor('#000000')
        .text('Acepto términos y condiciones de esta invitación.', 50, yPos);
     
-    this.drawCheckbox(doc, 280, yPos - 2, true);
+    this.drawCheckbox(doc, 280, yPos - 2, false);
 
     return yPos + 25;
   }
@@ -513,13 +512,14 @@ export class ReportsLeadsPdfService {
     return yPos + 40;
   }
 
-  private addRealFooter(doc: PDFKit.PDFDocument): void {
-    const footerY = doc.page.height - 40;
+  private addFooterAtFixedPosition(doc: PDFKit.PDFDocument): void {
+  // Posición fija del footer - 60px desde abajo
+    const footerY = doc.page.height - 90;
     
     // Footer real exacto como en la imagen - centrado
     doc.fontSize(8)
       .fillColor('#4a90e2') // Color azul para el email
-      .text('ventas@inmobiliariahuertas.com', 50, footerY, { align: 'center', link: 'mailto:ventas@inmobiliariahuertas.com' });
+      .text('ventas@inmobiliariahuertas.com', 50, footerY, { align: 'center' });
 
     // Información de contacto en una sola línea centrada
     doc.fontSize(8)
