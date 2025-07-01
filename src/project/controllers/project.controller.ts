@@ -12,19 +12,16 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Roles } from 'src/auth/decorators/roles.decorator';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
-import { Roles } from 'src/auth/decorators/roles.decorator';
-import {
-  CreateBulkProjectDto,
-  ValidateExcelResponseDto,
-} from '../dto/bulk-project-upload.dto';
+import { AwsS3Service } from 'src/files/aws-s3.service';
+import { ValidateExcelResponseDto } from '../dto/bulk-project-upload.dto';
 import { FindProjectLotsDto } from '../dto/project-lots.dto';
 import { UpdateProjectDto } from '../dto/update-project.dto';
 import { ExcelService } from '../services/excel.service';
 import { LotService } from '../services/lot.service';
 import { ProjectService } from '../services/project.service';
-import { AwsS3Service } from 'src/files/aws-s3.service';
 @Controller('projects')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ProjectController {
@@ -33,7 +30,7 @@ export class ProjectController {
     private readonly projectService: ProjectService,
     private readonly lotService: LotService,
     private readonly awsS3Service: AwsS3Service,
-  ) { }
+  ) {}
   @Post('validate-excel')
   @Roles('SYS', 'JVE')
   @UseInterceptors(FileInterceptor('file'))
@@ -44,9 +41,7 @@ export class ProjectController {
   }
   @Post('bulk-create')
   @Roles('SYS', 'JVE')
-  async createBulkProject(
-    @Body() { projectData }: CreateBulkProjectDto,
-  ): Promise<{
+  async createBulkProject(@UploadedFile() file: Express.Multer.File): Promise<{
     message: string;
     project: {
       id: string;
@@ -64,7 +59,8 @@ export class ProjectController {
       totalLots: number;
     };
   }> {
-    const project = await this.projectService.createBulkProject(projectData);
+    const validate = await this.excelService.validateProjectExcel(file);
+    const project = await this.projectService.createBulkProject(validate.data);
     return {
       message: 'Proyecto creado exitosamente',
       project: {
