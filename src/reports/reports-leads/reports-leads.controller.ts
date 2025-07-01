@@ -6,7 +6,7 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 export class ReportsLeadsController {
   constructor(private readonly reportsLeadsService: ReportsLeadsService) {}
   @Post('generate/:id')
-  @Roles('SYS', 'ADM', 'JVE', 'VEN')
+  @Roles('FAC', 'REC')
   async generateLeadReportPdf(@Param('id', ParseUUIDPipe) leadId: string) {
     try {
       const result = await this.reportsLeadsService.generateLeadReportPdf(leadId);
@@ -31,7 +31,7 @@ export class ReportsLeadsController {
   }
 
   @Get('document/:id')
-  @Roles('SYS', 'ADM', 'JVE', 'VEN')
+  @Roles('FAC', 'REC')
   async getLeadReportDocument(@Param('id', ParseUUIDPipe) leadId: string) {
     try {
       const result = await this.reportsLeadsService.getLeadReportDocument(leadId);
@@ -55,7 +55,7 @@ export class ReportsLeadsController {
   }
 
   @Post('regenerate/:leadId')
-  @Roles('SYS', 'ADM', 'JVE')
+  @Roles('FAC', 'REC')
   async regenerateLeadReportPdf(@Param('leadId', ParseUUIDPipe) leadId: string) {
     try {
       const result = await this.reportsLeadsService.regenerateLeadReportPdf(leadId);
