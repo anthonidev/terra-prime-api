@@ -41,6 +41,7 @@ export class ProjectController {
   }
   @Post('bulk-create')
   @Roles('SYS', 'JVE')
+  @UseInterceptors(FileInterceptor('file'))
   async createBulkProject(@UploadedFile() file: Express.Multer.File): Promise<{
     message: string;
     project: {
