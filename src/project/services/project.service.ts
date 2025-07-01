@@ -34,7 +34,7 @@ export class ProjectService {
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
     private readonly dataSource: DataSource,
-  ) { }
+  ) {}
   async createBulkProject(projectData: ProjectExcelDto): Promise<Project> {
     const existingProject = await this.projectRepository.findOne({
       where: { name: projectData.name },
@@ -44,33 +44,58 @@ export class ProjectService {
         `Ya existe un proyecto con el nombre ${projectData.name}`,
       );
     }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
+
     try {
+      // Crear el proyecto
       const project = queryRunner.manager.create(Project, {
         name: projectData.name,
         currency: projectData.currency,
         isActive: true,
       });
       await queryRunner.manager.save(project);
+
+      // Agrupar lotes por etapa y bloque
       const lotesByStageAndBlock = this.groupLotsByStageAndBlock(
         projectData.lots,
       );
+
+      // Crear mapas para evitar duplicados
+      const stageMap = new Map<string, Stage>();
+      const blockMap = new Map<string, Block>();
+
+      // Procesar etapas, bloques y lotes
       for (const stageName in lotesByStageAndBlock) {
-        const stage = queryRunner.manager.create(Stage, {
-          name: stageName,
-          isActive: true,
-          project: project,
-        });
-        await queryRunner.manager.save(stage);
-        for (const blockName in lotesByStageAndBlock[stageName]) {
-          const block = queryRunner.manager.create(Block, {
-            name: blockName,
+        // Crear etapa solo si no existe
+        let stage = stageMap.get(stageName);
+        if (!stage) {
+          stage = queryRunner.manager.create(Stage, {
+            name: stageName,
             isActive: true,
-            stage: stage,
+            project: project,
           });
-          await queryRunner.manager.save(block);
+          await queryRunner.manager.save(stage);
+          stageMap.set(stageName, stage);
+        }
+
+        for (const blockName in lotesByStageAndBlock[stageName]) {
+          // Crear bloque solo si no existe para esta etapa
+          const blockKey = `${stageName}-${blockName}`;
+          let block = blockMap.get(blockKey);
+          if (!block) {
+            block = queryRunner.manager.create(Block, {
+              name: blockName,
+              isActive: true,
+              stage: stage,
+            });
+            await queryRunner.manager.save(block);
+            blockMap.set(blockKey, block);
+          }
+
+          // Crear lotes
           for (const lotData of lotesByStageAndBlock[stageName][blockName]) {
             const lot = queryRunner.manager.create(Lot, {
               name: lotData.lot.toString(),
@@ -84,6 +109,7 @@ export class ProjectService {
           }
         }
       }
+
       await queryRunner.commitTransaction();
       return this.findProjectByName(projectData.name);
     } catch (error) {
@@ -92,6 +118,17 @@ export class ProjectService {
         `Error al crear proyecto: ${error.message}`,
         error.stack,
       );
+
+      // Manejar errores específicos de duplicados
+      if (error.code === '23505') {
+        // Código de error PostgreSQL para violación de constraint único
+        if (error.constraint && error.constraint.includes('UQ_')) {
+          throw new ConflictException(
+            'Error de duplicación: Ya existe una entidad con los mismos valores únicos',
+          );
+        }
+      }
+
       if (error instanceof ConflictException) {
         throw error;
       }
