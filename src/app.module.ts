@@ -16,6 +16,7 @@ import { AdminCollectionsModule } from './admin-collections/admin-collections.mo
 import { ScheduleModule } from '@nestjs/schedule';
 import { CutsModule } from './cuts/cuts.module';
 import { ReportsModule } from './reports/reports.module';
+import { ChatbotModule } from './chatbot/chatbot.module';
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({
@@ -36,7 +37,7 @@ import { ReportsModule } from './reports/reports.module';
     SeedModule,
     ProjectModule,
     DashboardModule,
-    LeadModule, AdminSalesModule, AdminPaymentsModule, EmailModule, FilesModule, SystemsModule, AdminCollectionsModule, CutsModule, ReportsModule,
+    LeadModule, AdminSalesModule, AdminPaymentsModule, EmailModule, FilesModule, SystemsModule, AdminCollectionsModule, CutsModule, ReportsModule, ChatbotModule,
   ],
 })
 export class AppModule {}

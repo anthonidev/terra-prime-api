@@ -9,7 +9,7 @@ interface Envvars {
   DB_PASSWORD: string;
   JWT_SECRET: string;
   JWT_REFRESH_SECRET: string;
-  PORT: number
+  PORT: number;
 
   AWS_REGION: string;
   AWS_ACCESS_KEY_ID: string;
@@ -21,6 +21,7 @@ interface Envvars {
   EMAIL_FROM: string;
 
   FRONTEND_URL: string;
+  CLAUDE_API_KEY: string;
 }
 const envVarsSchema = joi
   .object({
@@ -43,6 +44,7 @@ const envVarsSchema = joi
     EMAIL_FROM: joi.string().email().required(),
 
     FRONTEND_URL: joi.string().uri().required(),
+    CLAUDE_API_KEY: joi.string().required(),
   })
   .unknown(true);
 const { error, value } = envVarsSchema.validate({
@@ -73,4 +75,5 @@ export const envs = {
   emailFrom: envVars.EMAIL_FROM,
 
   frontendUrl: envVars.FRONTEND_URL,
+  claudeApiKey: envVars.CLAUDE_API_KEY,
 };
