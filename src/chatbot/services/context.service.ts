@@ -1,49 +1,13 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import { User } from 'src/user/entities/user.entity';
-
-interface BaseContext {
-  system: {
-    name: string;
-    description: string;
-    version: string;
-  };
-  assistant: {
-    name: string;
-    personality: string;
-    tone: string;
-    language: string;
-  };
-  baseInstructions: string[];
-  limitations: string[];
-}
-
-interface RoleContext {
-  name: string;
-  description: string;
-  capabilities: string[];
-  commonQueries: string[];
-  workflows: string[];
-}
-
-interface SystemHelp {
-  quickHelp: Record<string, string[]>;
-  stepByStepGuides: Record<
-    string,
-    {
-      title: string;
-      applicableRoles: string[];
-      steps: string[];
-    }
-  >;
-  troubleshooting: {
-    commonIssues: Array<{
-      issue: string;
-      solutions: string[];
-    }>;
-  };
-}
+import { baseContextData } from '../context/base-context';
+import { rolesContextData } from '../context/roles-context';
+import { systemHelpData } from '../context/system-help';
+import {
+  BaseContext,
+  RoleContext,
+  SystemHelp,
+} from '../interfaces/context.interface';
 
 @Injectable()
 export class ContextService implements OnModuleInit {
@@ -58,19 +22,9 @@ export class ContextService implements OnModuleInit {
 
   private loadContextFiles(): void {
     try {
-      const contextPath = join(__dirname, '..', 'context');
-
-      // Cargar contexto base
-      const baseContextPath = join(contextPath, 'base-context.json');
-      this.baseContext = JSON.parse(readFileSync(baseContextPath, 'utf8'));
-
-      // Cargar contexto de roles
-      const rolesContextPath = join(contextPath, 'roles-context.json');
-      this.rolesContext = JSON.parse(readFileSync(rolesContextPath, 'utf8'));
-
-      // Cargar ayuda del sistema
-      const systemHelpPath = join(contextPath, 'system-help.json');
-      this.systemHelp = JSON.parse(readFileSync(systemHelpPath, 'utf8'));
+      this.baseContext = baseContextData;
+      this.rolesContext = rolesContextData;
+      this.systemHelp = systemHelpData;
 
       this.logger.log('Context files loaded successfully');
     } catch (error) {
