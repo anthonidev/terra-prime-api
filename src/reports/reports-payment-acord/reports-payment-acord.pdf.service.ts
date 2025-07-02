@@ -304,7 +304,7 @@ export class ReportsPaymentAcordPdfService {
     // }
 
     yPosition += 20;
-    this.addFinancingHuTable(doc, sale.urbanDevelopment, 50, yPosition, lightGreen);
+    this.addFinancingHuTable(doc, sale, 50, yPosition, lightGreen);
 
     return yPosition;
   }
@@ -323,7 +323,7 @@ export class ReportsPaymentAcordPdfService {
          .stroke();
       
       doc.fillColor('#000000')
-         .fontSize(9)
+         .fontSize(8)
          .font('Helvetica-Bold')
          .text(header, currentX + 5, y + 8, { 
            width: colWidths[index] - 10,
@@ -345,11 +345,11 @@ export class ReportsPaymentAcordPdfService {
 
     const rowData = [
       sale.type === SaleType.FINANCED ? 'FINANCIADO' : 'CONTADO',
-      `S/ ${totalAmount.toFixed(2)}`,
-      `S/ ${initialPayment.toFixed(2)}`,
-      `S/ ${reservationPayment.toFixed(2)}`,
+      `${totalAmount.toFixed(2)} ${sale.lot.block.stage.project.currency}`,
+      `${initialPayment.toFixed(2)} ${sale.lot.block.stage.project.currency}`,
+      `${reservationPayment.toFixed(2)} ${sale.lot.block.stage.project.currency}`,
       paymentDate,
-      `S/ ${initialPayment.toFixed(2)}`
+      `${initialPayment.toFixed(2)} ${sale.lot.block.stage.project.currency}`
     ];
 
     rowData.forEach((data, index) => {
@@ -357,7 +357,7 @@ export class ReportsPaymentAcordPdfService {
          .stroke();
       
       doc.fillColor('#000000')
-         .fontSize(9)
+         .fontSize(8)
          .font('Helvetica')
          .text(data, currentX + 5, dataY + 8, { 
            width: colWidths[index] - 10,
@@ -370,7 +370,7 @@ export class ReportsPaymentAcordPdfService {
     return dataY + rowHeight;
   }
 
-  private addFinancingTable(doc: PDFKit.PDFDocument, financing: Financing, x: number, y: number, lightGreen: string): number {
+  private addFinancingTable(doc: PDFKit.PDFDocument, sale: Sale, x: number, y: number, lightGreen: string): number {
     // Título para la tabla de financiamiento
     // doc.fontSize(10)
     //    .font('Helvetica-Bold')
@@ -392,7 +392,7 @@ export class ReportsPaymentAcordPdfService {
          .stroke();
       
       doc.fillColor('#000000')
-         .fontSize(9)
+         .fontSize(8)
          .font('Helvetica-Bold')
          .text(header, currentX + 5, y + 8, { 
            width: colWidths[index] - 10,
@@ -406,18 +406,18 @@ export class ReportsPaymentAcordPdfService {
     const dataY = y + rowHeight;
     currentX = x;
 
-    const firstInstallment = financing?.financingInstallments?.[0];
+    const firstInstallment = sale.financing?.financingInstallments?.[0];
     const firstInstallmentDate = firstInstallment?.expectedPaymentDate ? 
       new Date(firstInstallment.expectedPaymentDate).toLocaleDateString('es-PE') : '';
     const installmentAmount = Number(firstInstallment?.couteAmount || 0);
-    const initialAmount = Number(financing?.initialAmount || 0);
-    const quantityCoutes = Number(financing?.quantityCoutes || 0);
+    const initialAmount = Number(sale.financing?.initialAmount || 0);
+    const quantityCoutes = Number(sale.financing?.quantityCoutes || 0);
 
     const financingData = [
-      `S/ ${initialAmount.toFixed(2)}`,
+      `${initialAmount.toFixed(2)} ${sale.lot.block.stage.project.currency}`,
       quantityCoutes.toString(),
       firstInstallmentDate,
-      `S/ ${installmentAmount.toFixed(2)}`
+      `${installmentAmount.toFixed(2)} ${sale.lot.block.stage.project.currency}`
     ];
 
     financingData.forEach((data, index) => {
@@ -425,7 +425,7 @@ export class ReportsPaymentAcordPdfService {
          .stroke();
       
       doc.fillColor('#000000')
-         .fontSize(9)
+         .fontSize(8)
          .font('Helvetica')
          .text(data, currentX + 5, dataY + 8, { 
            width: colWidths[index] - 10,
@@ -438,7 +438,7 @@ export class ReportsPaymentAcordPdfService {
     return dataY + rowHeight;
   }
 
-  private addFinancingHuTable(doc: PDFKit.PDFDocument, urbanDevelopment: UrbanDevelopment, x: number, y: number, lightGreen: string): number {
+  private addFinancingHuTable(doc: PDFKit.PDFDocument, sale: Sale, x: number, y: number, lightGreen: string): number {
     // Título para la tabla de financiamiento
     doc.fontSize(10)
        .font('Helvetica-Bold')
@@ -460,7 +460,7 @@ export class ReportsPaymentAcordPdfService {
          .stroke();
       
       doc.fillColor('#000000')
-         .fontSize(9)
+         .fontSize(8)
          .font('Helvetica-Bold')
          .text(header, currentX + 5, y + 8, { 
            width: colWidths[index] - 10,
@@ -474,18 +474,18 @@ export class ReportsPaymentAcordPdfService {
     const dataY = y + rowHeight;
     currentX = x;
 
-    const firstInstallment = urbanDevelopment?.financing?.financingInstallments?.[0];
+    const firstInstallment = sale.urbanDevelopment?.financing?.financingInstallments?.[0];
     const firstInstallmentDate = firstInstallment?.expectedPaymentDate ? 
       new Date(firstInstallment.expectedPaymentDate).toLocaleDateString('es-PE') : '';
     const installmentAmount = Number(firstInstallment?.couteAmount || 0);
-    const initialAmount = Number(urbanDevelopment?.financing?.initialAmount || 0);
-    const quantityCoutes = Number(urbanDevelopment?.financing?.quantityCoutes || 0);
+    const initialAmount = Number(sale.urbanDevelopment.amount || 0);
+    const quantityCoutes = Number(sale.urbanDevelopment?.financing?.quantityCoutes || 0);
 
     const financingData = [
-      `S/ ${initialAmount.toFixed(2)}`,
+      `${initialAmount.toFixed(2)} ${sale.lot.block.stage.project.currency}`,
       quantityCoutes.toString(),
       firstInstallmentDate,
-      `S/ ${installmentAmount.toFixed(2)}`
+      `${installmentAmount.toFixed(2)} ${sale.lot.block.stage.project.currency}`
     ];
 
     financingData.forEach((data, index) => {
@@ -493,7 +493,7 @@ export class ReportsPaymentAcordPdfService {
          .stroke();
       
       doc.fillColor('#000000')
-         .fontSize(9)
+         .fontSize(8)
          .font('Helvetica')
          .text(data, currentX + 5, dataY + 8, { 
            width: colWidths[index] - 10,
