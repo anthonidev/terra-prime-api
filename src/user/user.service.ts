@@ -1,24 +1,24 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
-  NotFoundException,
   Logger,
-  ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
+import {
+  PaginatedResult,
+  PaginationHelper,
+} from 'src/common/helpers/pagination.helper';
 import { FindOptionsWhere, Repository } from 'typeorm';
+import { AssignRoleViewsDto } from './dto/assign-role-view.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { FindUsersDto } from './dto/find-users.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { Role } from './entities/role.entity';
 import { User } from './entities/user.entity';
-import {
-  PaginatedResult,
-  PaginationHelper,
-} from 'src/common/helpers/pagination.helper';
-import { AssignRoleViewsDto } from './dto/assign-role-view.dto';
 import { View } from './entities/view.entity';
 @Injectable()
 export class UsersService {
@@ -60,6 +60,7 @@ export class UsersService {
   private async validateRoleAndEmail(
     email?: string,
     roleId?: number,
+    document?: string,
   ): Promise<void> {
     if (email) {
       const existingUser = await this.userRepository.findOne({
@@ -79,6 +80,14 @@ export class UsersService {
         );
       }
     }
+    if (document) {
+      const existingUser = await this.userRepository.findOne({
+        where: { document },
+      });
+      if (existingUser) {
+        throw new ConflictException('El documento ya está en uso');
+      }
+    }
   }
   private async hashPassword(password: string): Promise<string> {
     try {
@@ -90,7 +99,7 @@ export class UsersService {
   }
   async create(dto: CreateUserDto): Promise<Omit<User, 'password'>> {
     try {
-      await this.validateRoleAndEmail(dto.email, dto.roleId);
+      await this.validateRoleAndEmail(dto.email, dto.roleId, dto.document);
       const hashedPassword = await this.hashPassword(dto.password);
       const user = this.userRepository.create({
         ...dto,
@@ -196,12 +205,23 @@ export class UsersService {
       throw error;
     }
   }
+  async findByDocument(document: string): Promise<User> {
+    try {
+      return await this.findOneOrFail({ document }, ['role']);
+    } catch (error) {
+      this.logger.error(
+        `Error fetching user by document ${document}: ${error.message}`,
+      );
+      throw error;
+    }
+  }
   async update(id: string, dto: UpdateUserDto): Promise<User> {
     try {
       const user = await this.findOne(id);
       await this.validateRoleAndEmail(
         dto.email !== user.email ? dto.email : null,
         dto.roleId,
+        dto.document !== user.document ? dto.document : null,
       );
       const updatedUser = await this.userRepository.save({
         ...user,

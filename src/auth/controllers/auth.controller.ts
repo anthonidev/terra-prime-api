@@ -10,7 +10,7 @@ export class AuthController {
   constructor(
     private authService: AuthService,
     private usersService: UsersService,
-  ) { }
+  ) {}
   @Public()
   @Post('register')
   async register(@Body() createUserDto: CreateUserDto) {
@@ -20,7 +20,7 @@ export class AuthController {
   @Post('login')
   async login(@Body() loginDto: LoginDto) {
     const user = await this.authService.validateUser(
-      loginDto.email,
+      loginDto.document,
       loginDto.password,
     );
     if (!user) {

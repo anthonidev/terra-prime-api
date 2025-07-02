@@ -23,7 +23,7 @@ export class AuthService {
     private jwtService: JwtService,
     @InjectRepository(View)
     private viewRepository: Repository<View>,
-  ) { }
+  ) {}
   private cleanView(view: View): CleanView {
     const {
       id,
@@ -57,8 +57,8 @@ export class AuthService {
       .sort((a, b) => (a.order || 0) - (b.order || 0));
     return parentViews.map((view) => this.cleanView(view));
   }
-  async validateUser(email: string, password: string): Promise<any> {
-    const user = await this.usersService.findByEmail(email);
+  async validateUser(document: string, password: string): Promise<any> {
+    const user = await this.usersService.findByDocument(document);
     if (user && (await compare(password, user.password))) {
       if (!user.role.isActive) {
         throw new UnauthorizedException('El rol asociado está inactivo');
@@ -73,7 +73,7 @@ export class AuthService {
     if (!userWithRole.role.isActive) {
       throw new UnauthorizedException('El rol asociado está inactivo');
     }
-    
+
     // Obtener solo las vistas que pertenecen al rol del usuario
     const roleViews = await this.viewRepository
       .createQueryBuilder('view')
@@ -82,31 +82,36 @@ export class AuthService {
       .getMany();
 
     // Obtener los IDs de las vistas permitidas
-    const allowedViewIds = roleViews.map(view => view.id);
+    const allowedViewIds = roleViews.map((view) => view.id);
 
-    // Ahora hacer una segunda consulta para obtener la estructura completa 
+    // Ahora hacer una segunda consulta para obtener la estructura completa
     // pero solo de las vistas permitidas
     const viewsWithRelations = await this.viewRepository
       .createQueryBuilder('view')
       .leftJoinAndSelect('view.parent', 'parent')
-      .leftJoinAndSelect('view.children', 'children', 'children.id IN (:...allowedIds)', { allowedIds: allowedViewIds })
+      .leftJoinAndSelect(
+        'view.children',
+        'children',
+        'children.id IN (:...allowedIds)',
+        { allowedIds: allowedViewIds },
+      )
       .where('view.id IN (:...allowedIds)', { allowedIds: allowedViewIds })
       .getMany();
 
     const viewTree = await this.buildViewTree(viewsWithRelations);
-    
+
     const cleanRole = {
       id: userWithRole.role.id,
       code: userWithRole.role.code,
       name: userWithRole.role.name,
     };
-    
+
     const payload = {
       email: user.email,
       sub: user.id,
       role: cleanRole,
     };
-    
+
     return {
       user: {
         id: user.id,
