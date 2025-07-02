@@ -478,7 +478,7 @@ export class ReportsPaymentAcordPdfService {
     const firstInstallmentDate = firstInstallment?.expectedPaymentDate ? 
       new Date(firstInstallment.expectedPaymentDate).toLocaleDateString('es-PE') : '';
     const installmentAmount = Number(firstInstallment?.couteAmount || 0);
-    const initialAmount = Number(sale.urbanDevelopment.amount || 0);
+    const initialAmount = Number(sale.urbanDevelopment?.amount || 0);
     const quantityCoutes = Number(sale.urbanDevelopment?.financing?.quantityCoutes || 0);
 
     const financingData = [
