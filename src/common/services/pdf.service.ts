@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as PDFDocument from 'pdfkit';
 import { AwsS3Service } from '../../files/aws-s3.service'; 
 import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
+import { SaleType } from 'src/admin-sales/sales/enums/sale-type.enum';
 
 export interface RadicationPdfData {
   sale: Sale;
@@ -73,7 +74,7 @@ export class PdfService {
     const secondaryColor = '#666666';
 
     // Header con logo y título
-    this.addHeader(doc, primaryColor);
+    this.addHeader(doc, primaryColor, sale);
     
     // Título principal
     doc.fontSize(18)
@@ -97,7 +98,7 @@ export class PdfService {
     this.addFooter(doc);
   }
 
-  private addHeader(doc: PDFKit.PDFDocument, primaryColor: string): void {
+  private addHeader(doc: PDFKit.PDFDocument, primaryColor: string, sale: Sale): void {
     // Rectángulo header
     doc.rect(0, 0, doc.page.width, 120)
        .fillColor('#f8f9fa')
@@ -105,12 +106,12 @@ export class PdfService {
 
     // Logo placeholder (puedes agregar imagen real aquí)
     doc.rect(50, 20, 80, 80)
-       .fillColor(primaryColor)
+      //  .fillColor('')
        .fill();
     
-    doc.fontSize(12)
+    doc.fontSize(18)
        .fillColor(primaryColor)
-       .text('EL OLIVAR', 55, 55);
+       .text(sale.lot.block.stage.project.name, 55, 55);
 
     // Información de contabilidad
     doc.fontSize(10)
@@ -145,7 +146,7 @@ export class PdfService {
     doc.fontSize(10)
        .fillColor('#000000')
        .text('FECHA:', leftCol, yPos)
-       .text(sale.contractDate ? this.formatDate(sale.contractDate) : '_____________', leftCol + 60, yPos);
+       .text(sale.createdAt ? sale.createdAt.toLocaleDateString() : '_____________', leftCol + 60, yPos);
 
     yPos += lineHeight;
 
@@ -160,19 +161,22 @@ export class PdfService {
     doc.text('MANZANA:', leftCol, yPos)
        .text(sale.lot.block.name, leftCol + 80, yPos)
        .text('LOTE:', rightCol, yPos)
-       .text(sale.lot.name, rightCol + 40, yPos);
+       .text(sale.lot.name + ' ' + sale.lot.block.stage.project.currency, rightCol + 40, yPos);
 
     yPos += lineHeight;
 
     // Separación (Reserva)
     doc.text('SEPARACIÓN:', leftCol, yPos);
-    const reservationAmount = sale.reservation ? sale.reservation.amount.toString() : '';
+    const reservationAmount = sale.reservation 
+      ? sale.reservation.amount.toString()
+      : '0.00 ' + sale.lot.block.stage.project.currency;
     doc.text(reservationAmount, leftCol + 80, yPos);
 
     // Cuota inicial
     doc.text('CUOTA INICIAL:', rightCol, yPos);
+    const currency = sale.lot.block.stage.project.currency;
     const initialAmount = sale.financing?.initialAmount?.toString() || '';
-    doc.text(initialAmount, rightCol + 90, yPos);
+    doc.text(initialAmount + ' ' + currency, rightCol + 90, yPos);
 
     yPos += lineHeight;
 
@@ -182,21 +186,42 @@ export class PdfService {
 
     // Tipo de venta
     doc.text('CASH:', rightCol, yPos);
-    const isCash = sale.type === 'DIRECT_PAYMENT';
-    doc.rect(rightCol + 35, yPos - 2, 12, 12)
-       .stroke();
-    if (isCash) {
-      doc.text('✓', rightCol + 38, yPos);
-    }
+    const isCash = sale.type === SaleType.DIRECT_PAYMENT;
+    this.drawCheckbox(doc, rightCol + 35, yPos - 2, isCash);
 
     doc.text('FINANCIAMIENTO:', rightCol + 60, yPos);
-    doc.rect(rightCol + 150, yPos - 2, 12, 12)
-       .stroke();
-    if (!isCash) {
-      doc.text('✓', rightCol + 153, yPos);
-    }
+    const isFinanced = sale.type === SaleType.FINANCED;
+    this.drawCheckbox(doc, rightCol + 150, yPos - 2, isFinanced);
 
     return yPos + 40;
+  }
+
+  private drawCheckbox(doc: PDFKit.PDFDocument, x: number, y: number, checked: boolean): void {
+    const size = 12;
+    
+    doc.rect(x, y, size, size)
+       .stroke('#000000');
+    
+    if (checked) {
+      doc.save()
+         .strokeColor('#000000')
+         .lineWidth(1.5)
+         .moveTo(x + 2, y + 6)
+         .lineTo(x + 5, y + 9)
+         .lineTo(x + 10, y + 3)
+         .stroke()
+         .restore();
+    }
+  }
+
+  private drawUnderline(doc: PDFKit.PDFDocument, x: number, y: number, width: number): void {
+    doc.save()
+       .strokeColor('#000000')
+       .lineWidth(0.5)
+       .moveTo(x, y)
+       .lineTo(x + width, y)
+       .stroke()
+       .restore();
   }
 
   private addUrbanDevelopmentInfo(
@@ -301,8 +326,8 @@ export class PdfService {
     
     doc.fontSize(8)
        .fillColor('#666666')
-       .text('📍 Calle Luis Espejo 1097 - La Victoria', 50, footerY, { align: 'center' })
-       .text('📞 Teléfono: ___________', 50, footerY + 15, { align: 'center' });
+       .text('Calle Luis Espejo 1097 - La Victoria    Teléfono: 680 5314    Calle Luis Espejo 1097 - La Victoria', 50, footerY, { align: 'center' })
+      //  .text('Teléfono: 680 5314', 50, footerY + 15, { align: 'center' });
   }
 
   private formatDate(date: Date): string {
