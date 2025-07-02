@@ -153,6 +153,12 @@ export class ChatbotService {
     conversationHistory: string,
   ): Promise<string> {
     try {
+      // Validar la clave API
+      if (!envs.claudeApiKey || envs.claudeApiKey.trim() === '') {
+        this.logger.error('Claude API key not configured');
+        return this.generateFallbackResponse();
+      }
+
       // 1. Obtener contexto completo del usuario
       const baseContext = this.contextService.buildUserContext(user);
 
@@ -162,12 +168,13 @@ export class ChatbotService {
         user.role.code,
       );
 
-      // 3. Construir prompt enriquecido
+      // 3. Construir prompt enriquecido pero más conciso
       let enrichedContext = baseContext;
 
       if (contextSearch.relevantCapabilities.length > 0) {
         enrichedContext += `\n\n=== CAPACIDADES ESPECÍFICAMENTE RELEVANTES ===\n`;
         enrichedContext += contextSearch.relevantCapabilities
+          .slice(0, 5) // Limitar a 5 para no hacer el prompt muy largo
           .map((cap) => `• ${cap}`)
           .join('\n');
       }
@@ -175,6 +182,7 @@ export class ChatbotService {
       if (contextSearch.relevantQueries.length > 0) {
         enrichedContext += `\n\n=== CONSULTAS SIMILARES ===\n`;
         enrichedContext += contextSearch.relevantQueries
+          .slice(0, 3) // Limitar a 3
           .map((query) => `• ${query}`)
           .join('\n');
       }
@@ -182,26 +190,31 @@ export class ChatbotService {
       if (contextSearch.suggestedGuides.length > 0) {
         enrichedContext += `\n\n=== GUÍAS DISPONIBLES ===\n`;
         enrichedContext += contextSearch.suggestedGuides
+          .slice(0, 3) // Limitar a 3
           .map((guide) => `• ${guide.title}`)
           .join('\n');
       }
 
+      // Limitar el historial de conversación
+      const limitedHistory = conversationHistory
+        ? conversationHistory.split('\n\n').slice(-5).join('\n\n') // Últimos 5 intercambios
+        : '';
+
       const prompt = `${enrichedContext}
 
-${conversationHistory ? `\n=== HISTORIAL DE CONVERSACIÓN ===\n${conversationHistory}\n` : ''}
+${limitedHistory ? `\n=== HISTORIAL RECIENTE ===\n${limitedHistory}\n` : ''}
 
 === CONSULTA ACTUAL ===
 Usuario: ${userMessage}
 
 === INSTRUCCIONES PARA RESPONDER ===
 1. Analiza si la consulta está dentro del alcance de las capacidades del rol del usuario
-2. Si es relevante, proporciona una respuesta clara y específica
-3. Si hay guías paso a paso disponibles, menciónalas
-4. Si la consulta está fuera del alcance, explícalo amablemente y sugiere el rol apropiado
+2. Proporciona una respuesta clara, específica y práctica
+3. Si hay guías disponibles, menciónalas brevemente
+4. Si la consulta está fuera del alcance, explícalo amablemente
 5. Mantén un tono profesional pero amigable
 6. Usa ejemplos prácticos cuando sea posible
-7. Si necesitas más información, haz preguntas específicas
-8. Si mencionas una guía, indica cómo el usuario puede acceder a ella
+7. Sé conciso pero completo
 
 Asistente:`;
 
@@ -219,37 +232,101 @@ Asistente:`;
    * Llamar a la API de Claude
    */
   private async callClaudeAPI(prompt: string): Promise<string> {
-    const response = await firstValueFrom(
-      this.httpService.post(
-        'https://api.anthropic.com/v1/messages',
-        {
-          model: 'claude-3-haiku-20240307',
-          max_tokens: 1000,
-          messages: [
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': envs.claudeApiKey,
-            'anthropic-version': '2023-06-01',
-          },
-        },
-      ),
-    );
+    try {
+      // Validar que el prompt no esté vacío y no sea demasiado largo
+      if (!prompt || prompt.trim().length === 0) {
+        throw new Error('Prompt vacío');
+      }
 
-    return response.data.content[0].text;
+      // Limitar el tamaño del prompt (Claude tiene límites)
+      const maxPromptLength = 50000; // Aproximadamente 50k caracteres
+      const trimmedPrompt =
+        prompt.length > maxPromptLength
+          ? prompt.substring(0, maxPromptLength) +
+            '\n[Prompt truncado por longitud]'
+          : prompt;
+
+      this.logger.debug(
+        `Sending request to Claude API with prompt length: ${trimmedPrompt.length}`,
+      );
+
+      const response = await firstValueFrom(
+        this.httpService.post(
+          'https://api.anthropic.com/v1/messages',
+          {
+            model: 'claude-3-haiku-20240307',
+            max_tokens: 1000,
+            messages: [
+              {
+                role: 'user',
+                content: trimmedPrompt,
+              },
+            ],
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': envs.claudeApiKey,
+              'anthropic-version': '2023-06-01',
+            },
+            timeout: 30000, // 30 segundos de timeout
+          },
+        ),
+      );
+
+      // Validar la respuesta
+      if (!response?.data?.content?.[0]?.text) {
+        throw new Error('Respuesta inválida de Claude API');
+      }
+
+      return response.data.content[0].text;
+    } catch (error) {
+      this.logger.error(`Error calling Claude API: ${error.message}`);
+
+      // Log más detalles del error si está disponible
+      if (error.response) {
+        this.logger.error(
+          `Claude API Response Status: ${error.response.status}`,
+        );
+        this.logger.error(
+          `Claude API Response Data: ${JSON.stringify(error.response.data)}`,
+        );
+      }
+
+      // Si es un error de autenticación o configuración, lanzar error específico
+      if (error.response?.status === 401) {
+        throw new Error(
+          'Error de autenticación con Claude API. Verificar API key.',
+        );
+      }
+
+      if (error.response?.status === 400) {
+        throw new Error(
+          'Solicitud inválida a Claude API. Verificar formato del prompt.',
+        );
+      }
+
+      if (error.response?.status === 429) {
+        throw new Error('Límite de rate limit alcanzado en Claude API.');
+      }
+
+      // Para otros errores, usar fallback
+      throw error;
+    }
   }
 
   /**
    * Generar respuesta de fallback en caso de error
    */
   private generateFallbackResponse(): string {
-    return 'Lo siento, estoy experimentando dificultades técnicas en este momento. Por favor, intenta nuevamente en unos minutos o contacta al soporte técnico para obtener ayuda inmediata.';
+    return `Lo siento, estoy experimentando dificultades técnicas para conectarme con el servicio de inteligencia artificial en este momento. 
+
+Mientras tanto, puedes:
+• Usar la ayuda rápida disponible en el sistema
+• Consultar las guías paso a paso
+• Contactar al soporte técnico para obtener ayuda inmediata
+
+Por favor, intenta nuevamente en unos minutos.`;
   }
 
   /**

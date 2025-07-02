@@ -20,16 +20,29 @@ export class ChatRateLimit {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @Column({ type: 'timestamp' })
+  @Column({
+    type: 'timestamp',
+    name: 'window_start',
+  })
   windowStart: Date;
 
-  @Column({ default: 0 })
+  @Column({
+    default: 0,
+    name: 'request_count',
+  })
   requestCount: number;
 
-  @Column({ default: false })
+  @Column({
+    default: false,
+    name: 'is_blocked',
+  })
   isBlocked: boolean;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({
+    type: 'timestamp',
+    nullable: true,
+    name: 'blocked_until',
+  })
   blockedUntil: Date;
 
   @CreateDateColumn()

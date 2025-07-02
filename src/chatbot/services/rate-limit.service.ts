@@ -45,6 +45,8 @@ export class RateLimitService {
         requestCount: 0,
         isBlocked: false,
       });
+      // Guardar el nuevo registro
+      await this.rateLimitRepository.save(rateLimitRecord);
     }
 
     // Verificar si está bloqueado
@@ -109,16 +111,27 @@ export class RateLimitService {
   async incrementCounter(user: User): Promise<void> {
     const windowStart = this.getWindowStart(new Date());
 
-    await this.rateLimitRepository
-      .createQueryBuilder()
-      .update(ChatRateLimit)
-      .set({
-        requestCount: () => 'request_count + 1',
-        updatedAt: new Date(),
-      })
-      .where('user_id = :userId', { userId: user.id })
-      .andWhere('window_start = :windowStart', { windowStart })
-      .execute();
+    // Usar el método save en lugar de update para evitar problemas con nombres de columnas
+    let rateLimitRecord = await this.rateLimitRepository.findOne({
+      where: {
+        user: { id: user.id },
+        windowStart,
+      },
+    });
+
+    if (rateLimitRecord) {
+      rateLimitRecord.requestCount += 1;
+      await this.rateLimitRepository.save(rateLimitRecord);
+    } else {
+      // Crear nuevo registro si no existe
+      rateLimitRecord = this.rateLimitRepository.create({
+        user,
+        windowStart,
+        requestCount: 1,
+        isBlocked: false,
+      });
+      await this.rateLimitRepository.save(rateLimitRecord);
+    }
   }
 
   async getRateLimitStatus(user: User): Promise<{
@@ -192,7 +205,7 @@ export class RateLimitService {
       .createQueryBuilder('rl')
       .leftJoinAndSelect('rl.user', 'user')
       .leftJoinAndSelect('user.role', 'role')
-      .where('rl.window_start = :windowStart', { windowStart });
+      .where('rl.windowStart = :windowStart', { windowStart });
 
     if (roleCode) {
       queryBuilder.andWhere('role.code = :roleCode', { roleCode });
