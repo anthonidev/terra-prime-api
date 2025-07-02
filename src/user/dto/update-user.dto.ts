@@ -12,4 +12,8 @@ export class UpdateUserDto extends PartialType(
       'La contraseña debe contener al menos una mayúscula, una minúscula y un número',
   })
   password?: string;
+
+  @IsOptional()
+  @IsString()
+  document?: string;
 }
