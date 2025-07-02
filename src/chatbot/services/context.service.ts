@@ -58,7 +58,7 @@ export class ContextService implements OnModuleInit {
 
   private loadContextFiles(): void {
     try {
-      const contextPath = join(process.cwd(), 'src', 'chatbot', 'context');
+      const contextPath = join(__dirname, '..', 'context');
 
       // Cargar contexto base
       const baseContextPath = join(contextPath, 'base-context.json');
