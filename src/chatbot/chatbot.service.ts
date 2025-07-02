@@ -24,9 +24,6 @@ export class ChatbotService {
     private readonly contextService: ContextService,
   ) {}
 
-  /**
-   * Procesar mensaje del usuario y generar respuesta
-   */
   async sendMessage(
     user: User,
     message: string,
@@ -37,7 +34,6 @@ export class ChatbotService {
     isNewSession: boolean;
   }> {
     try {
-      // 1. Obtener o crear sesión
       let session: ChatSession;
       let isNewSession = false;
 
@@ -48,7 +44,6 @@ export class ChatbotService {
         isNewSession = true;
       }
 
-      // 2. Guardar mensaje del usuario
       await this.saveMessage(session, MessageRole.USER, message);
 
       // 3. Obtener contexto basado en el rol del usuario
