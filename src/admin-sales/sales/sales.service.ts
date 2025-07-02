@@ -249,7 +249,6 @@ export class SalesService {
       .leftJoinAndSelect('sale.fieldManager', 'fieldManager')
       .leftJoinAndSelect('sale.fieldSupervisor', 'fieldSupervisor')
       .leftJoinAndSelect('sale.fieldSeller', 'fieldSeller');
-
     // Aplicar filtros condicionales
     if (userId) {
       queryBuilder.where('vendor.id = :userId', { userId });

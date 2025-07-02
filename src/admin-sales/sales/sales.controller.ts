@@ -43,7 +43,7 @@ export class SalesController {
   }
 
   @Get('all/list')
-  @Roles('JVE')
+  @Roles('JVE', 'FAC')
   findAllActives(
     @GetUser() user: User,
     @Query() paginationDto: PaginationDto,

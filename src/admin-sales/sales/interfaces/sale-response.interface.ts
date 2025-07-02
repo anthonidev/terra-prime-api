@@ -13,6 +13,7 @@ export interface SaleResponse {
     firstName: string;
     lastName: string;
     phone: string;
+    reportPdfUrl: string | null;
   };
   secondaryClients: {
     address: string;
@@ -28,6 +29,8 @@ export interface SaleResponse {
     stage: string;
     project: string;
   };
+  radicationPdfUrl: string | null;
+  paymentAcordPdfUrl: string | null;
   financing: {
     id: string;
     initialAmount: number;

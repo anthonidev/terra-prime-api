@@ -14,6 +14,7 @@ export function formatSaleCollectionResponse(sale: Sale) {
       firstName: sale.client?.lead?.firstName,
       lastName: sale.client?.lead?.lastName,
       phone: sale.client?.lead?.phone,
+      reportPdfUrl: sale.client?.lead?.reportPdfUrl,
     },
     secondaryClients: secondaryClientSales.length > 0 ?
       sale.secondaryClientSales.map((secondaryClientSale) => {
@@ -32,6 +33,8 @@ export function formatSaleCollectionResponse(sale: Sale) {
       stage : sale.lot?.block?.stage?.name,
       project : sale.lot?.block?.stage?.project?.name,
     },
+    radicationPdfUrl: sale.radicationPdfUrl,
+    paymentAcordPdfUrl: sale.paymentAcordPdfUrl,
     financing: sale.financing ? {
       id: sale.financing.id,
       initialAmount: sale.financing.initialAmount,
