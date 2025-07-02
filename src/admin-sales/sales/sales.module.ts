@@ -36,6 +36,6 @@ import { Financing } from '../financing/entities/financing.entity';
   ],
   controllers: [SalesController],
   providers: [SalesService],
-  exports: [SalesService],
+  exports: [SalesService, TypeOrmModule],
 })
 export class SalesModule {}

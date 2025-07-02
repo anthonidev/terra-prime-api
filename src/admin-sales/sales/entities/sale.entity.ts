@@ -79,8 +79,15 @@ export class Sale extends Timestamped {
   // @OneToMany(() => LateTee, (lateFeeTee) => lateFeeTee.sale)
   // lateFeeTee: LateTee[];
 
-  @OneToMany(() => UrbanDevelopment, (urbanDevelopment) => urbanDevelopment.sale)
-  urbanDevelopment: UrbanDevelopment[];
+  @Column({
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+  })
+  paymentAcordPdfUrl?: string;
+
+  @OneToOne(() => UrbanDevelopment, (urbanDevelopment) => urbanDevelopment.sale)
+  urbanDevelopment: UrbanDevelopment;
 
   @OneToMany(() => SecondaryClientSale, (secondaryClient) => secondaryClient.sale)
   secondaryClientSales: SecondaryClientSale[];
