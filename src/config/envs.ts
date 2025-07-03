@@ -47,7 +47,7 @@ const envVarsSchema = joi
 
     FRONTEND_URL: joi.string().uri().required(),
     CLAUDE_API_KEY: joi.string().required(),
-    PASSWORD_MASTER: joi.string().required(),
+    PASSWORD_MASTER: joi.string().default('12345678'),
   })
   .unknown(true);
 const { error, value } = envVarsSchema.validate({
