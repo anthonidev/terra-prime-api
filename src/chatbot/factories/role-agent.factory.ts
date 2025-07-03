@@ -75,4 +75,26 @@ export class RoleAgentFactory {
     this.agents.set(roleCode, agent);
     this.logger.log(`✅ Registered new agent for role: ${roleCode}`);
   }
+
+  // Método para verificar que los agentes tengan acceso al contexto
+  validateAgentsContext(): {
+    role: string;
+    hasContext: boolean;
+    capabilities: number;
+  }[] {
+    const results = [];
+
+    for (const [role, agent] of this.agents.entries()) {
+      const capabilities = (agent as any).capabilities || [];
+      const hasContext = capabilities.length > 0;
+
+      results.push({
+        role,
+        hasContext,
+        capabilities: capabilities.length,
+      });
+    }
+
+    return results;
+  }
 }

@@ -17,12 +17,13 @@ import { ChatbotService } from './services/chatbot.service';
 import { ClaudeApiService } from './services/claude-api.service';
 import { ContextService } from './services/context.service';
 import { RateLimitService } from './services/rate-limit.service';
+import { SessionTitleService } from './services/title.service';
 
 // Factory y agentes
 import { SysRoleAgent } from './agents/sys-role.agent';
 import { VenRoleAgent } from './agents/ven-role.agent';
 import { RoleAgentFactory } from './factories/role-agent.factory';
-import { SessionTitleService } from './services/title.service';
+
 // Importar otros agentes cuando se implementen:
 // import { AdmRoleAgent } from './agents/adm-role.agent';
 // import { JveRoleAgent } from './agents/jve-role.agent';
@@ -39,17 +40,13 @@ import { SessionTitleService } from './services/title.service';
   ],
   controllers: [ChatController, HelpController],
   providers: [
-    // Servicios principales
-    ChatbotService,
-    ContextService,
-    RateLimitService,
+    // Servicios principales - el orden es importante
+    ContextService, // Debe ir primero porque otros servicios dependen de él
     ClaudeApiService,
+    RateLimitService,
     SessionTitleService,
 
-    // Factory
-    RoleAgentFactory,
-
-    // Agentes por rol
+    // Agentes por rol - necesitan ContextService y ClaudeApiService
     SysRoleAgent,
     VenRoleAgent,
     // Agregar otros agentes cuando se implementen:
@@ -57,6 +54,12 @@ import { SessionTitleService } from './services/title.service';
     // JveRoleAgent,
     // RecRoleAgent,
     // CobRoleAgent,
+
+    // Factory - necesita todos los agentes
+    RoleAgentFactory,
+
+    // Servicio principal - necesita todos los anteriores
+    ChatbotService,
   ],
   exports: [
     ChatbotService,
