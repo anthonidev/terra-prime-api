@@ -31,9 +31,6 @@ export class ContextService implements OnModuleInit {
     }
   }
 
-  /**
-   * 🎯 Genera prompt optimizado para Claude con contexto específico
-   */
   buildOptimizedPrompt(
     user: User,
     userMessage: string,
@@ -43,19 +40,16 @@ export class ContextService implements OnModuleInit {
     const roleEmoji = contextEmojis.roles[roleCode] || '⚙️';
     const capabilities = roleCapabilities[roleCode] || roleCapabilities.DEFAULT;
 
-    // 🔍 Detectar si la consulta corresponde a una guía específica
     const specificGuide = this.findRelevantGuide(userMessage, roleCode);
     const relatedCapabilities = this.findRelatedCapabilities(
       userMessage,
       roleCode,
     );
 
-    // Historial limitado solo si existe
     const limitedHistory = conversationHistory
       ? `\nÚltimos mensajes:\n${conversationHistory.split('\n\n').slice(-2).join('\n')}\n`
       : '';
 
-    // 📋 Construir información específica si hay guía relacionada
     let specificInfo = '';
     if (specificGuide) {
       specificInfo = `\n📚 GUÍA ESPECÍFICA DISPONIBLE:
@@ -65,7 +59,6 @@ ${specificGuide.steps.map((step, index) => `${index + 1}. ${step}`).join('\n')}
 `;
     }
 
-    // 💡 Agregar capacidades relacionadas específicas
     let relatedInfo = '';
     if (relatedCapabilities.length > 0) {
       relatedInfo = `\n💪 CAPACIDADES RELACIONADAS:
@@ -95,16 +88,12 @@ INSTRUCCIONES IMPORTANTES:
 Respuesta:`;
   }
 
-  /**
-   * 🔍 Busca guía específica relacionada con la consulta
-   */
   private findRelevantGuide(
     query: string,
     roleCode: string,
   ): { title: string; steps: string[] } | null {
     const queryLower = query.toLowerCase();
 
-    // Mapeo de palabras clave a guías específicas
     const guideKeywords = {
       createUser: [
         'crear usuario',
@@ -154,7 +143,6 @@ Respuesta:`;
       processPayment: ['procesar pago', 'registrar pago', 'pago cliente'],
     };
 
-    // Buscar la guía más relevante
     for (const [guideKey, keywords] of Object.entries(guideKeywords)) {
       if (keywords.some((keyword) => queryLower.includes(keyword))) {
         const guide = this.getStepByStepGuide(guideKey, roleCode);
@@ -167,9 +155,6 @@ Respuesta:`;
     return null;
   }
 
-  /**
-   * 💪 Busca capacidades relacionadas con la consulta
-   */
   private findRelatedCapabilities(query: string, roleCode: string): string[] {
     const roleContext =
       this.rolesContext[roleCode] || this.rolesContext.DEFAULT;
@@ -181,12 +166,9 @@ Respuesta:`;
           (word) => word.length > 3 && capability.toLowerCase().includes(word),
         ),
       )
-      .slice(0, 3); // Máximo 3 capacidades relacionadas
+      .slice(0, 3);
   }
 
-  /**
-   * 🔍 Busca información relevante para enriquecer el contexto
-   */
   getRelevantContext(query: string, roleCode: string): string {
     const specificGuide = this.findRelevantGuide(query, roleCode);
 
@@ -198,7 +180,6 @@ Respuesta:`;
       this.rolesContext[roleCode] || this.rolesContext.DEFAULT;
     const queryLower = query.toLowerCase();
 
-    // Buscar capacidades relevantes (máximo 2)
     const relevantCaps = roleContext.capabilities
       .filter((cap) =>
         queryLower
@@ -212,9 +193,6 @@ Respuesta:`;
       : '';
   }
 
-  /**
-   * 🎯 Detecta si una consulta necesita información específica de formularios
-   */
   detectFormFieldsQuery(query: string): boolean {
     const fieldsKeywords = [
       'campos',
@@ -234,9 +212,6 @@ Respuesta:`;
     );
   }
 
-  /**
-   * 📝 Obtiene campos específicos de formularios según el contexto
-   */
   getFormFields(context: string, roleCode: string): string[] {
     const formFields = {
       usuario: [
@@ -278,22 +253,14 @@ Respuesta:`;
     return [];
   }
 
-  /**
-   * 😊 Obtiene emoji por rol
-   */
   getRoleEmoji(roleCode: string): string {
     return contextEmojis.roles[roleCode] || contextEmojis.roles.DEFAULT || '⚙️';
   }
 
-  /**
-   * 📋 Construye resumen básico del usuario
-   */
   buildUserSummary(user: User): string {
     const roleEmoji = this.getRoleEmoji(user.role.code);
     return `${roleEmoji} ${user.firstName} ${user.lastName} - ${user.role.name}`;
   }
-
-  // ========== MÉTODOS EXISTENTES SIMPLIFICADOS ==========
 
   getQuickHelp(roleCode: string): string[] {
     return (
@@ -364,42 +331,7 @@ Respuesta:`;
     this.loadContextFiles();
   }
 
-  getSystemInfo(): any {
-    return this.baseContext.system;
-  }
-
   getAllGuides(): any {
     return this.systemHelp.stepByStepGuides;
-  }
-
-  getContextStats(): any {
-    return {
-      totalRoles: Object.keys(this.rolesContext).length,
-      totalGuides: Object.keys(this.systemHelp.stepByStepGuides).length,
-      totalTroubleshootingIssues:
-        this.systemHelp.troubleshooting.commonIssues.length,
-      lastLoaded: new Date(),
-    };
-  }
-
-  validateContexts(): {
-    isValid: boolean;
-    errors: string[];
-    warnings: string[];
-  } {
-    const errors: string[] = [];
-    const warnings: string[] = [];
-
-    if (!this.baseContext?.assistant?.name) {
-      errors.push('❌ SmartBot config missing');
-    }
-    if (!this.rolesContext) {
-      errors.push('❌ Roles context missing');
-    }
-    if (!this.systemHelp) {
-      errors.push('❌ System help missing');
-    }
-
-    return { isValid: errors.length === 0, errors, warnings };
   }
 }

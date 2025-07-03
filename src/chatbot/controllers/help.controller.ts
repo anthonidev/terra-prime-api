@@ -13,11 +13,15 @@ import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { ChatbotService } from '../services/chatbot.service';
 import { JwtUser } from 'src/auth/interface/jwt-payload.interface';
+import { ContextService } from '../services/context.service';
 
 @Controller('chatbot/help')
 @UseGuards(JwtAuthGuard)
 export class HelpController {
-  constructor(private readonly chatbotService: ChatbotService) {}
+  constructor(
+    private readonly chatbotService: ChatbotService,
+    private readonly contextService: ContextService,
+  ) {}
 
   /**
    * Obtener ayuda rápida personalizada por rol
@@ -25,7 +29,9 @@ export class HelpController {
   @Get('quick-help')
   async getQuickHelp(@GetUser() user: JwtUser) {
     try {
-      const helpQuestions = await this.chatbotService.getQuickHelpForUser(user);
+      const helpQuestions = await this.contextService.getQuickHelp(
+        user.role.code,
+      );
 
       return {
         success: true,
@@ -56,9 +62,9 @@ export class HelpController {
     @Param('guideKey') guideKey: string,
   ) {
     try {
-      const guide = await this.chatbotService.getStepByStepGuide(
+      const guide = await this.contextService.getStepByStepGuide(
         guideKey,
-        user,
+        user.role.code,
       );
 
       if (!guide) {
@@ -93,9 +99,9 @@ export class HelpController {
     @Body() { query }: { query: string },
   ) {
     try {
-      const results = await this.chatbotService.searchContextContent(
+      const results = await this.contextService.searchContextContent(
         query,
-        user,
+        user.role.code,
       );
 
       return {
@@ -128,7 +134,7 @@ export class HelpController {
     @Query('issue') issue?: string,
   ) {
     try {
-      const troubleshooting = this.chatbotService.getTroubleshootingHelp(issue);
+      const troubleshooting = this.contextService.getTroubleshootingHelp(issue);
 
       return {
         success: true,
@@ -140,37 +146,6 @@ export class HelpController {
         {
           success: false,
           message: 'Error al obtener ayuda de troubleshooting',
-          error: error.message,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  /**
-   * Obtener información del sistema (versión, configuración, etc.)
-   */
-  @Get('system-info')
-  async getSystemInfo(@GetUser() user: JwtUser) {
-    try {
-      const systemInfo = this.chatbotService.getSystemInfo();
-
-      return {
-        success: true,
-        systemInfo,
-        userInfo: {
-          email: user.email,
-          role: {
-            code: user.role.code,
-            name: user.role.name,
-          },
-        },
-      };
-    } catch (error) {
-      throw new HttpException(
-        {
-          success: false,
-          message: 'Error al obtener información del sistema',
           error: error.message,
         },
         HttpStatus.INTERNAL_SERVER_ERROR,

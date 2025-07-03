@@ -2,6 +2,7 @@ import { HttpService } from '@nestjs/axios';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { firstValueFrom } from 'rxjs';
+import { JwtUser } from 'src/auth/interface/jwt-payload.interface';
 import { envs } from 'src/config/envs';
 import { User } from 'src/user/entities/user.entity';
 import { Repository } from 'typeorm';
@@ -9,7 +10,6 @@ import { ChatMessage, MessageRole } from '../entities/chat-message.entity';
 import { ChatSession } from '../entities/chat-session.entity';
 import { ContextService } from './context.service';
 import { RateLimitService } from './rate-limit.service';
-import { JwtUser } from 'src/auth/interface/jwt-payload.interface';
 
 @Injectable()
 export class ChatbotService {
@@ -37,7 +37,6 @@ export class ChatbotService {
     isNewSession: boolean;
   }> {
     try {
-      // 1. Obtener información completa del usuario
       const fullUser = await this.getFullUserInfo(jwtUser.id);
 
       let session: ChatSession;
@@ -50,23 +49,18 @@ export class ChatbotService {
         isNewSession = true;
       }
 
-      // 2. Guardar mensaje del usuario
       await this.saveMessage(session, MessageRole.USER, message);
 
-      // 3. Obtener historial limitado
       const conversationHistory = await this.getConversationHistory(session);
 
-      // 4. 🚀 UNA SOLA LLAMADA OPTIMIZADA A CLAUDE
       const smartBotResponse = await this.generateOptimizedResponse(
         message,
         fullUser,
         conversationHistory,
       );
 
-      // 5. Guardar respuesta del asistente
       await this.saveMessage(session, MessageRole.ASSISTANT, smartBotResponse);
 
-      // 6. Incrementar contador de rate limit
       await this.rateLimitService.incrementCounter(fullUser);
 
       return {
@@ -83,34 +77,26 @@ export class ChatbotService {
     }
   }
 
-  /**
-   * 🚀 Genera respuesta optimizada con UNA SOLA llamada a Claude
-   */
   private async generateOptimizedResponse(
     userMessage: string,
     user: User,
     conversationHistory: string,
   ): Promise<string> {
     try {
-      // Validar API key
       if (!envs.claudeApiKey || envs.claudeApiKey.trim() === '') {
-        this.logger.error('❌ Claude API key not configured');
         return this.generateFallbackResponse(user.firstName);
       }
 
-      // 🎯 Construir prompt ultra optimizado
       const optimizedPrompt = this.contextService.buildOptimizedPrompt(
         user,
         userMessage,
         conversationHistory,
       );
 
-      // 📊 Log del tamaño del prompt para monitoreo
       this.logger.debug(
         `📏 Optimized prompt size: ${optimizedPrompt.length} chars`,
       );
 
-      // 🔥 Una sola llamada eficiente a Claude
       return await this.callClaudeAPI(optimizedPrompt);
     } catch (error) {
       this.logger.error(
@@ -121,12 +107,8 @@ export class ChatbotService {
     }
   }
 
-  /**
-   * 📞 Llamada optimizada a Claude API
-   */
   private async callClaudeAPI(prompt: string): Promise<string> {
     try {
-      // Limitar tamaño del prompt si es necesario
       const maxPromptLength = 4000;
       const trimmedPrompt =
         prompt.length > maxPromptLength
@@ -137,8 +119,8 @@ export class ChatbotService {
         this.httpService.post(
           'https://api.anthropic.com/v1/messages',
           {
-            model: 'claude-3-haiku-20240307', // Modelo más económico
-            max_tokens: 500, // Límite razonable para respuestas
+            model: 'claude-3-haiku-20240307',
+            max_tokens: 500,
             messages: [
               {
                 role: 'user',
@@ -152,7 +134,7 @@ export class ChatbotService {
               'x-api-key': envs.claudeApiKey,
               'anthropic-version': '2023-06-01',
             },
-            timeout: 25000, // Timeout optimizado
+            timeout: 25000,
           },
         ),
       );
@@ -165,7 +147,6 @@ export class ChatbotService {
     } catch (error) {
       this.logger.error(`❌ Claude API Error: ${error.message}`);
 
-      // Log específico para debugging
       if (error.response?.status) {
         this.logger.error(`🔥 API Status: ${error.response.status}`);
       }
@@ -174,9 +155,6 @@ export class ChatbotService {
     }
   }
 
-  /**
-   * 🆘 Respuesta de fallback optimizada
-   */
   private generateFallbackResponse(firstName: string): string {
     return `🤖 Lo siento ${firstName}, estoy experimentando dificultades técnicas. 
 
@@ -252,25 +230,20 @@ export class ChatbotService {
     return await this.chatMessageRepository.save(message);
   }
 
-  /**
-   * 📝 Historial optimizado - solo últimos 3 mensajes
-   */
   private async getConversationHistory(session: ChatSession): Promise<string> {
     const messages = await this.chatMessageRepository.find({
       where: { session: { id: session.id } },
       order: { createdAt: 'DESC' },
-      take: 3, // Solo últimos 3 mensajes para optimizar
+      take: 10,
     });
 
     if (messages.length === 0) return '';
 
     return messages
-      .reverse() // Orden cronológico
+      .reverse()
       .map((msg) => `${msg.role}: ${msg.content}`)
       .join('\n');
   }
-
-  // ========== MÉTODOS EXISTENTES DELEGADOS ==========
 
   async getChatHistory(
     sessionId: string,
@@ -302,36 +275,8 @@ export class ChatbotService {
     return await this.rateLimitService.getRateLimitStatus(user);
   }
 
-  async resetUserRateLimit(userId: string): Promise<void> {
-    await this.rateLimitService.resetUserRateLimit(userId);
-  }
-
-  async getChatbotUsageStats(roleCode?: string): Promise<any> {
-    return await this.rateLimitService.getUsageStats(roleCode);
-  }
-
-  async getQuickHelpForUser(jwtUser: JwtUser): Promise<string[]> {
-    return this.contextService.getQuickHelp(jwtUser.role.code);
-  }
-
-  async getStepByStepGuide(guideKey: string, jwtUser: JwtUser): Promise<any> {
-    return this.contextService.getStepByStepGuide(guideKey, jwtUser.role.code);
-  }
-
-  async searchContextContent(query: string, jwtUser: JwtUser): Promise<any> {
-    return this.contextService.searchContextContent(query, jwtUser.role.code);
-  }
-
-  getTroubleshootingHelp(issue?: string): any {
-    return this.contextService.getTroubleshootingHelp(issue);
-  }
-
   reloadContexts(): void {
     this.contextService.reloadContexts();
-  }
-
-  getSystemInfo(): any {
-    return this.contextService.getSystemInfo();
   }
 
   async getAvailableGuides(
@@ -350,108 +295,5 @@ export class ChatbotService {
         description:
           guide.description || `Guía para ${guide.title.toLowerCase()}`,
       }));
-  }
-
-  async getUserConversationStats(userId: string): Promise<{
-    totalSessions: number;
-    totalMessages: number;
-    averageMessagesPerSession: number;
-    lastActivity: Date;
-  }> {
-    const sessions = await this.chatSessionRepository.find({
-      where: { user: { id: userId } },
-      relations: ['messages'],
-    });
-
-    const totalSessions = sessions.length;
-    const totalMessages = sessions.reduce(
-      (sum, session) => sum + session.messages.length,
-      0,
-    );
-    const averageMessagesPerSession =
-      totalSessions > 0 ? totalMessages / totalSessions : 0;
-    const lastActivity =
-      sessions.length > 0
-        ? new Date(Math.max(...sessions.map((s) => s.updatedAt.getTime())))
-        : null;
-
-    return {
-      totalSessions,
-      totalMessages,
-      averageMessagesPerSession:
-        Math.round(averageMessagesPerSession * 100) / 100,
-      lastActivity,
-    };
-  }
-
-  async getPopularTopicsByRole(
-    roleCode?: string,
-  ): Promise<Array<{ topic: string; count: number; percentage: number }>> {
-    // Implementación simplificada para optimización
-    const queryBuilder = this.chatMessageRepository
-      .createQueryBuilder('message')
-      .leftJoin('message.session', 'session')
-      .leftJoin('session.user', 'user')
-      .leftJoin('user.role', 'role')
-      .where('message.role = :role', { role: MessageRole.USER });
-
-    if (roleCode) {
-      queryBuilder.andWhere('role.code = :roleCode', { roleCode });
-    }
-
-    const messages = await queryBuilder.select('message.content').getMany();
-
-    // Análisis básico de temas
-    const topics = {
-      usuarios: 0,
-      leads: 0,
-      ventas: 0,
-      pagos: 0,
-      reportes: 0,
-      sistema: 0,
-    };
-
-    messages.forEach((msg) => {
-      const content = msg.content.toLowerCase();
-      if (content.includes('usuario')) topics.usuarios++;
-      if (content.includes('lead') || content.includes('cliente'))
-        topics.leads++;
-      if (content.includes('venta')) topics.ventas++;
-      if (content.includes('pago')) topics.pagos++;
-      if (content.includes('reporte')) topics.reportes++;
-      if (content.includes('sistema')) topics.sistema++;
-    });
-
-    const total = messages.length;
-    return Object.entries(topics)
-      .map(([topic, count]) => ({
-        topic,
-        count,
-        percentage: total > 0 ? Math.round((count / total) * 100) : 0,
-      }))
-      .sort((a, b) => b.count - a.count);
-  }
-
-  async cleanupOldSessions(daysOld: number = 30): Promise<number> {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
-
-    const result = await this.chatSessionRepository
-      .createQueryBuilder()
-      .delete()
-      .where('updatedAt < :cutoffDate', { cutoffDate })
-      .andWhere('isActive = false')
-      .execute();
-
-    this.logger.log(`🧹 Cleaned up ${result.affected} old sessions`);
-    return result.affected || 0;
-  }
-
-  getContextStats(): any {
-    return this.contextService.getContextStats();
-  }
-
-  validateContexts(): any {
-    return this.contextService.validateContexts();
   }
 }

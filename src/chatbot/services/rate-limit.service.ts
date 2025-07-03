@@ -27,10 +27,8 @@ export class RateLimitService {
     const now = new Date();
     const windowStart = this.getWindowStart(now);
 
-    // Limpiar registros antiguos (más de 24 horas)
     await this.cleanupOldRecords();
 
-    // Buscar o crear registro para esta ventana de tiempo
     let rateLimitRecord = await this.rateLimitRepository.findOne({
       where: {
         user: { id: user.id },
@@ -45,11 +43,9 @@ export class RateLimitService {
         requestCount: 0,
         isBlocked: false,
       });
-      // Guardar el nuevo registro
       await this.rateLimitRepository.save(rateLimitRecord);
     }
 
-    // Verificar si está bloqueado
     if (rateLimitRecord.isBlocked && rateLimitRecord.blockedUntil) {
       if (now < rateLimitRecord.blockedUntil) {
         return {
@@ -60,16 +56,13 @@ export class RateLimitService {
           blockReason: `Bloqueado hasta ${rateLimitRecord.blockedUntil.toLocaleTimeString()}`,
         };
       } else {
-        // El bloqueo ha expirado, resetear
         rateLimitRecord.isBlocked = false;
         rateLimitRecord.blockedUntil = null;
         rateLimitRecord.requestCount = 0;
       }
     }
 
-    // Verificar límite
     if (rateLimitRecord.requestCount >= config.maxRequestsPerHour) {
-      // Bloquear usuario
       const blockUntil = new Date(
         now.getTime() + config.blockDurationMinutes * 60 * 1000,
       );
@@ -77,10 +70,6 @@ export class RateLimitService {
       rateLimitRecord.blockedUntil = blockUntil;
 
       await this.rateLimitRepository.save(rateLimitRecord);
-
-      this.logger.warn(
-        `User ${user.email} (${user.role.code}) exceeded rate limit: ${rateLimitRecord.requestCount}/${config.maxRequestsPerHour}`,
-      );
 
       return {
         allowed: false,
@@ -91,13 +80,11 @@ export class RateLimitService {
       };
     }
 
-    // Calcular remaining y warning
     const remaining = config.maxRequestsPerHour - rateLimitRecord.requestCount;
     const usagePercentage =
       (rateLimitRecord.requestCount / config.maxRequestsPerHour) * 100;
     const isWarning = usagePercentage >= config.warningThreshold;
 
-    // Calcular tiempo de reset (próxima hora)
     const resetTime = new Date(windowStart.getTime() + 60 * 60 * 1000);
 
     return {
@@ -111,7 +98,6 @@ export class RateLimitService {
   async incrementCounter(user: User): Promise<void> {
     const windowStart = this.getWindowStart(new Date());
 
-    // Usar el método save en lugar de update para evitar problemas con nombres de columnas
     let rateLimitRecord = await this.rateLimitRepository.findOne({
       where: {
         user: { id: user.id },
@@ -123,7 +109,6 @@ export class RateLimitService {
       rateLimitRecord.requestCount += 1;
       await this.rateLimitRepository.save(rateLimitRecord);
     } else {
-      // Crear nuevo registro si no existe
       rateLimitRecord = this.rateLimitRepository.create({
         user,
         windowStart,
@@ -182,50 +167,5 @@ export class RateLimitService {
         `Error cleaning up old rate limit records: ${error.message}`,
       );
     }
-  }
-
-  // Método para resetear límites de un usuario (solo para admins)
-  async resetUserRateLimit(userId: string): Promise<void> {
-    await this.rateLimitRepository.delete({
-      user: { id: userId },
-    });
-  }
-
-  // Método para obtener estadísticas de uso
-  async getUsageStats(roleCode?: string): Promise<{
-    totalUsers: number;
-    activeUsers: number;
-    blockedUsers: number;
-    averageUsage: number;
-  }> {
-    const now = new Date();
-    const windowStart = this.getWindowStart(now);
-
-    const queryBuilder = this.rateLimitRepository
-      .createQueryBuilder('rl')
-      .leftJoinAndSelect('rl.user', 'user')
-      .leftJoinAndSelect('user.role', 'role')
-      .where('rl.windowStart = :windowStart', { windowStart });
-
-    if (roleCode) {
-      queryBuilder.andWhere('role.code = :roleCode', { roleCode });
-    }
-
-    const records = await queryBuilder.getMany();
-
-    const totalUsers = records.length;
-    const activeUsers = records.filter((r) => r.requestCount > 0).length;
-    const blockedUsers = records.filter((r) => r.isBlocked).length;
-    const averageUsage =
-      totalUsers > 0
-        ? records.reduce((sum, r) => sum + r.requestCount, 0) / totalUsers
-        : 0;
-
-    return {
-      totalUsers,
-      activeUsers,
-      blockedUsers,
-      averageUsage: Math.round(averageUsage * 100) / 100,
-    };
   }
 }
