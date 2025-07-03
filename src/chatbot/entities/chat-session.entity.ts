@@ -20,6 +20,9 @@ export class ChatSession {
   @JoinColumn({ name: 'user_id' })
   user: User;
 
+  @Column({ length: 200, nullable: true })
+  title: string;
+
   @Column({ default: true })
   isActive: boolean;
 

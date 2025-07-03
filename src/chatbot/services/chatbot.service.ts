@@ -1,15 +1,13 @@
-import { HttpService } from '@nestjs/axios';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { firstValueFrom } from 'rxjs';
 import { JwtUser } from 'src/auth/interface/jwt-payload.interface';
-import { envs } from 'src/config/envs';
 import { User } from 'src/user/entities/user.entity';
 import { Repository } from 'typeorm';
 import { ChatMessage, MessageRole } from '../entities/chat-message.entity';
 import { ChatSession } from '../entities/chat-session.entity';
-import { ContextService } from './context.service';
+import { RoleAgentFactory } from '../factories/role-agent.factory';
 import { RateLimitService } from './rate-limit.service';
+import { SessionTitleService } from './title.service';
 
 @Injectable()
 export class ChatbotService {
@@ -22,9 +20,9 @@ export class ChatbotService {
     private readonly chatMessageRepository: Repository<ChatMessage>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-    private readonly httpService: HttpService,
     private readonly rateLimitService: RateLimitService,
-    private readonly contextService: ContextService,
+    private readonly roleAgentFactory: RoleAgentFactory,
+    private readonly sessionTitleService: SessionTitleService,
   ) {}
 
   async sendMessage(
@@ -35,6 +33,7 @@ export class ChatbotService {
     sessionId: string;
     response: string;
     isNewSession: boolean;
+    metadata?: any;
   }> {
     try {
       const fullUser = await this.getFullUserInfo(jwtUser.id);
@@ -45,28 +44,52 @@ export class ChatbotService {
       if (sessionId) {
         session = await this.getSession(sessionId, jwtUser.id);
       } else {
-        session = await this.createSession(fullUser);
+        // Crear nueva sesión con título automático
+        const title = await this.sessionTitleService.generateTitle(
+          message,
+          fullUser.role.code,
+        );
+        session = await this.createSession(fullUser, title);
         isNewSession = true;
       }
 
+      // Guardar mensaje del usuario
       await this.saveMessage(session, MessageRole.USER, message);
 
+      // Obtener historial de conversación
       const conversationHistory = await this.getConversationHistory(session);
 
-      const smartBotResponse = await this.generateOptimizedResponse(
-        message,
-        fullUser,
-        conversationHistory,
+      // Procesar mensaje con agente específico del rol
+      const roleAgent = this.roleAgentFactory.getAgentForRole(
+        fullUser.role.code,
       );
 
-      await this.saveMessage(session, MessageRole.ASSISTANT, smartBotResponse);
+      const agentResponse = await roleAgent.processMessage({
+        user: fullUser,
+        message,
+        conversationHistory,
+        sessionId: session.id,
+      });
 
+      // Guardar respuesta del asistente
+      await this.saveMessage(
+        session,
+        MessageRole.ASSISTANT,
+        agentResponse.content,
+      );
+
+      // Incrementar contador de rate limit
       await this.rateLimitService.incrementCounter(fullUser);
+
+      this.logger.log(
+        `✅ Message processed for user ${fullUser.firstName} (${fullUser.role.code}) in session ${session.id}`,
+      );
 
       return {
         sessionId: session.id,
-        response: smartBotResponse,
+        response: agentResponse.content,
         isNewSession,
+        metadata: agentResponse.metadata,
       };
     } catch (error) {
       this.logger.error(
@@ -77,96 +100,97 @@ export class ChatbotService {
     }
   }
 
-  private async generateOptimizedResponse(
-    userMessage: string,
-    user: User,
-    conversationHistory: string,
-  ): Promise<string> {
-    try {
-      if (!envs.claudeApiKey || envs.claudeApiKey.trim() === '') {
-        return this.generateFallbackResponse(user.firstName);
-      }
+  // ========== MÉTODOS PARA GESTIÓN DE SESIONES ==========
 
-      const optimizedPrompt = this.contextService.buildOptimizedPrompt(
-        user,
-        userMessage,
-        conversationHistory,
-      );
+  private async createSession(user: User, title: string): Promise<ChatSession> {
+    const session = this.chatSessionRepository.create({
+      user,
+      title,
+      isActive: true,
+    });
 
-      this.logger.debug(
-        `📏 Optimized prompt size: ${optimizedPrompt.length} chars`,
-      );
+    const savedSession = await this.chatSessionRepository.save(session);
+    this.logger.debug(
+      `📝 Created new session: "${title}" for user ${user.firstName}`,
+    );
 
-      return await this.callClaudeAPI(optimizedPrompt);
-    } catch (error) {
-      this.logger.error(
-        `❌ Error generating response: ${error.message}`,
-        error.stack,
-      );
-      return this.generateFallbackResponse(user.firstName);
+    return savedSession;
+  }
+
+  private async getSession(
+    sessionId: string,
+    userId: string,
+  ): Promise<ChatSession> {
+    const session = await this.chatSessionRepository.findOne({
+      where: { id: sessionId, user: { id: userId }, isActive: true },
+      relations: ['user'],
+    });
+
+    if (!session) {
+      throw new BadRequestException('Sesión no encontrada o no válida');
     }
+
+    return session;
   }
 
-  private async callClaudeAPI(prompt: string): Promise<string> {
-    try {
-      const maxPromptLength = 4000;
-      const trimmedPrompt =
-        prompt.length > maxPromptLength
-          ? prompt.substring(0, maxPromptLength) + '\n[Prompt optimizado]'
-          : prompt;
+  async updateSessionTitle(
+    sessionId: string,
+    userId: string,
+    newTitle: string,
+  ): Promise<ChatSession> {
+    const session = await this.getSession(sessionId, userId);
+    session.title = newTitle.slice(0, 200); // Limitar a 200 caracteres
 
-      const response = await firstValueFrom(
-        this.httpService.post(
-          'https://api.anthropic.com/v1/messages',
-          {
-            model: 'claude-3-haiku-20240307',
-            max_tokens: 500,
-            messages: [
-              {
-                role: 'user',
-                content: trimmedPrompt,
-              },
-            ],
-          },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': envs.claudeApiKey,
-              'anthropic-version': '2023-06-01',
-            },
-            timeout: 25000,
-          },
-        ),
-      );
+    const updatedSession = await this.chatSessionRepository.save(session);
+    this.logger.log(
+      `📝 Updated session title: "${newTitle}" for session ${sessionId}`,
+    );
 
-      if (!response?.data?.content?.[0]?.text) {
-        throw new Error('Respuesta inválida de Claude API');
-      }
-
-      return response.data.content[0].text;
-    } catch (error) {
-      this.logger.error(`❌ Claude API Error: ${error.message}`);
-
-      if (error.response?.status) {
-        this.logger.error(`🔥 API Status: ${error.response.status}`);
-      }
-
-      throw error;
-    }
+    return updatedSession;
   }
 
-  private generateFallbackResponse(firstName: string): string {
-    return `🤖 Lo siento ${firstName}, estoy experimentando dificultades técnicas. 
+  // ========== MÉTODOS PARA GESTIÓN DE MENSAJES ==========
 
-⚡ Mientras tanto puedes:
-• 📚 Consultar las guías del sistema
-• 🆘 Contactar al soporte técnico
-• 🔄 Intentar en unos minutos
-
-¡Gracias por tu paciencia! 😊`;
+  private async saveMessage(
+    session: ChatSession,
+    role: MessageRole,
+    content: string,
+  ): Promise<ChatMessage> {
+    const message = this.chatMessageRepository.create({
+      session,
+      role,
+      content,
+    });
+    return await this.chatMessageRepository.save(message);
   }
 
-  // ========== MÉTODOS AUXILIARES SIN CAMBIOS ==========
+  private async getConversationHistory(session: ChatSession): Promise<string> {
+    const messages = await this.chatMessageRepository.find({
+      where: { session: { id: session.id } },
+      order: { createdAt: 'DESC' },
+      take: 10, // Últimos 10 mensajes
+    });
+
+    if (messages.length === 0) return '';
+
+    return messages
+      .reverse()
+      .map((msg) => `${msg.role}: ${msg.content}`)
+      .join('\n');
+  }
+
+  async getChatHistory(
+    sessionId: string,
+    userId: string,
+  ): Promise<ChatMessage[]> {
+    const session = await this.getSession(sessionId, userId);
+    return await this.chatMessageRepository.find({
+      where: { session: { id: session.id } },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  // ========== MÉTODOS PARA GESTIÓN DE USUARIOS ==========
 
   private async getFullUserInfo(userId: string): Promise<User> {
     const user = await this.userRepository.findOne({
@@ -193,107 +217,91 @@ export class ChatbotService {
     return user;
   }
 
-  private async createSession(user: User): Promise<ChatSession> {
-    const session = this.chatSessionRepository.create({
-      user,
-      isActive: true,
-    });
-    return await this.chatSessionRepository.save(session);
-  }
+  // ========== MÉTODOS PÚBLICOS PARA FRONTEND ==========
 
-  private async getSession(
-    sessionId: string,
-    userId: string,
-  ): Promise<ChatSession> {
-    const session = await this.chatSessionRepository.findOne({
-      where: { id: sessionId, user: { id: userId }, isActive: true },
-      relations: ['user'],
-    });
+  async getUserSessions(userId: string): Promise<
+    Array<{
+      id: string;
+      title: string;
+      isActive: boolean;
+      createdAt: Date;
+      updatedAt: Date;
+      messageCount: number;
+    }>
+  > {
+    const sessions = await this.chatSessionRepository
+      .createQueryBuilder('session')
+      .leftJoinAndSelect('session.messages', 'message')
+      .where('session.user.id = :userId', { userId })
+      .andWhere('session.isActive = :isActive', { isActive: true })
+      .orderBy('session.updatedAt', 'DESC')
+      .take(20) // Últimas 20 sesiones
+      .getMany();
 
-    if (!session) {
-      throw new BadRequestException('Sesión no encontrada o no válida');
-    }
-
-    return session;
-  }
-
-  private async saveMessage(
-    session: ChatSession,
-    role: MessageRole,
-    content: string,
-  ): Promise<ChatMessage> {
-    const message = this.chatMessageRepository.create({
-      session,
-      role,
-      content,
-    });
-    return await this.chatMessageRepository.save(message);
-  }
-
-  private async getConversationHistory(session: ChatSession): Promise<string> {
-    const messages = await this.chatMessageRepository.find({
-      where: { session: { id: session.id } },
-      order: { createdAt: 'DESC' },
-      take: 10,
-    });
-
-    if (messages.length === 0) return '';
-
-    return messages
-      .reverse()
-      .map((msg) => `${msg.role}: ${msg.content}`)
-      .join('\n');
-  }
-
-  async getChatHistory(
-    sessionId: string,
-    userId: string,
-  ): Promise<ChatMessage[]> {
-    const session = await this.getSession(sessionId, userId);
-    return await this.chatMessageRepository.find({
-      where: { session: { id: session.id } },
-      order: { createdAt: 'ASC' },
-    });
-  }
-
-  async getUserSessions(userId: string): Promise<ChatSession[]> {
-    return await this.chatSessionRepository.find({
-      where: { user: { id: userId }, isActive: true },
-      order: { updatedAt: 'DESC' },
-      take: 10,
-    });
+    return sessions.map((session) => ({
+      id: session.id,
+      title: session.title,
+      isActive: session.isActive,
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
+      messageCount: session.messages?.length || 0,
+    }));
   }
 
   async closeSession(sessionId: string, userId: string): Promise<void> {
     const session = await this.getSession(sessionId, userId);
     session.isActive = false;
     await this.chatSessionRepository.save(session);
+
+    this.logger.log(`🔒 Closed session ${sessionId} for user ${userId}`);
   }
+
+  async deleteSession(sessionId: string, userId: string): Promise<void> {
+    const session = await this.getSession(sessionId, userId);
+
+    // Eliminar todos los mensajes de la sesión
+    await this.chatMessageRepository.delete({ session: { id: session.id } });
+
+    // Eliminar la sesión
+    await this.chatSessionRepository.delete({ id: session.id });
+
+    this.logger.log(`🗑️ Deleted session ${sessionId} for user ${userId}`);
+  }
+
+  // ========== MÉTODOS PARA RATE LIMITING ==========
 
   async getUserRateLimitStatus(userId: string): Promise<any> {
     const user = await this.getFullUserInfo(userId);
     return await this.rateLimitService.getRateLimitStatus(user);
   }
 
-  reloadContexts(): void {
-    this.contextService.reloadContexts();
-  }
+  // ========== MÉTODOS PARA INFORMACIÓN DEL SISTEMA ==========
 
   async getAvailableGuides(
     jwtUser: JwtUser,
   ): Promise<Array<{ key: string; title: string; description?: string }>> {
-    const allGuides = this.contextService.getAllGuides();
-    return Object.entries(allGuides)
-      .filter(
-        ([key, guide]: [string, any]) =>
-          guide.applicableRoles.includes(jwtUser.role.code) ||
-          guide.applicableRoles.includes('ALL'),
-      )
-      .map(([key, guide]: [string, any]) => ({
-        key,
-        title: guide.title,
-        description:
-          guide.description || `Guía para ${guide.title.toLowerCase()}`,
-      }));
+    // Este método puede ser movido a un servicio específico de ayuda
+    const roleAgent = this.roleAgentFactory.getAgentForRole(jwtUser.role.code);
+    const capabilities = this.roleAgentFactory.getAgentCapabilities(
+      jwtUser.role.code,
+    );
+
+    return capabilities.map((capability, index) => ({
+      key: `guide_${index}`,
+      title: capability,
+      description: `Guía para ${capability.toLowerCase()}`,
+    }));
+  }
+
+  getSystemStats(): {
+    availableRoles: string[];
+    hasClaudeApi: boolean;
+    activeAgents: number;
+  } {
+    return {
+      availableRoles: this.roleAgentFactory.getAvailableRoles(),
+      hasClaudeApi: true, // Se puede verificar desde ClaudeApiService
+      activeAgents: this.roleAgentFactory.getAvailableRoles().length,
+    };
   }
 }

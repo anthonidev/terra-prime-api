@@ -6,20 +6,23 @@ import {
   HttpException,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
+import { JwtUser } from 'src/auth/interface/jwt-payload.interface';
 import {
   ChatHistoryResponseDto,
   ChatResponseDto,
   SendMessageDto,
+  SessionListResponseDto,
+  UpdateSessionTitleDto,
 } from '../dto/chat.dto';
 import { ChatbotRateLimitGuard } from '../guards/rate-limit.guard';
 import { ChatbotService } from '../services/chatbot.service';
-import { JwtUser } from 'src/auth/interface/jwt-payload.interface';
 
 @Controller('chatbot/chat')
 @UseGuards(JwtAuthGuard)
@@ -32,12 +35,11 @@ export class ChatController {
   @Post('message')
   @UseGuards(ChatbotRateLimitGuard)
   async sendMessage(
-    @GetUser() user: JwtUser, // Usuario básico del JWT
+    @GetUser() user: JwtUser,
     @Body() sendMessageDto: SendMessageDto,
     @Req() request: any,
   ): Promise<ChatResponseDto> {
     try {
-      // El servicio se encargará de obtener la información completa cuando sea necesario
       const result = await this.chatbotService.sendMessage(
         user,
         sendMessageDto.message,
@@ -53,6 +55,7 @@ export class ChatController {
         response: result.response,
         timestamp: new Date(),
         rateLimitInfo: request.rateLimitInfo,
+        metadata: result.metadata,
       };
     } catch (error) {
       if (error instanceof HttpException) {
@@ -83,9 +86,14 @@ export class ChatController {
         user.id,
       );
 
+      // Obtener información de la sesión para incluir el título
+      const sessions = await this.chatbotService.getUserSessions(user.id);
+      const currentSession = sessions.find((s) => s.id === sessionId);
+
       return {
         success: true,
         sessionId,
+        title: currentSession?.title || 'Conversación',
         messages: messages.map((msg) => ({
           id: msg.id,
           role: msg.role,
@@ -112,18 +120,15 @@ export class ChatController {
    * Obtener todas las sesiones del usuario
    */
   @Get('sessions')
-  async getUserSessions(@GetUser() user: JwtUser) {
+  async getUserSessions(
+    @GetUser() user: JwtUser,
+  ): Promise<SessionListResponseDto> {
     try {
       const sessions = await this.chatbotService.getUserSessions(user.id);
 
       return {
         success: true,
-        sessions: sessions.map((session) => ({
-          id: session.id,
-          isActive: session.isActive,
-          createdAt: session.createdAt,
-          updatedAt: session.updatedAt,
-        })),
+        sessions,
       };
     } catch (error) {
       throw new HttpException(
@@ -138,9 +143,44 @@ export class ChatController {
   }
 
   /**
+   * Actualizar título de una sesión
+   */
+  @Patch('session/:sessionId/title')
+  async updateSessionTitle(
+    @GetUser() user: JwtUser,
+    @Param('sessionId') sessionId: string,
+    @Body() updateTitleDto: UpdateSessionTitleDto,
+  ) {
+    try {
+      await this.chatbotService.updateSessionTitle(
+        sessionId,
+        user.id,
+        updateTitleDto.title,
+      );
+
+      return {
+        success: true,
+        message: 'Título actualizado exitosamente',
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Error al actualizar el título',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
    * Cerrar una sesión de chat
    */
-  @Delete('session/:sessionId')
+  @Patch('session/:sessionId/close')
   async closeSession(
     @GetUser() user: JwtUser,
     @Param('sessionId') sessionId: string,
@@ -160,6 +200,36 @@ export class ChatController {
         {
           success: false,
           message: 'Error al cerrar la sesión',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * Eliminar una sesión de chat
+   */
+  @Delete('session/:sessionId')
+  async deleteSession(
+    @GetUser() user: JwtUser,
+    @Param('sessionId') sessionId: string,
+  ) {
+    try {
+      await this.chatbotService.deleteSession(sessionId, user.id);
+
+      return {
+        success: true,
+        message: 'Sesión eliminada exitosamente',
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Error al eliminar la sesión',
           error: error.message,
         },
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -188,6 +258,31 @@ export class ChatController {
         {
           success: false,
           message: 'Error al obtener estado de rate limit',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * Obtener estadísticas del sistema de chatbot
+   */
+  @Get('system/stats')
+  async getSystemStats(@GetUser() user: JwtUser) {
+    try {
+      const stats = this.chatbotService.getSystemStats();
+
+      return {
+        success: true,
+        stats,
+        userRole: user.role.code,
+      };
+    } catch (error) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Error al obtener estadísticas',
           error: error.message,
         },
         HttpStatus.INTERNAL_SERVER_ERROR,
