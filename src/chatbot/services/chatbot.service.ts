@@ -28,7 +28,7 @@ export class ChatbotService {
   ) {}
 
   async sendMessage(
-    jwtUser: JwtUser, // Recibe usuario básico del JWT
+    jwtUser: JwtUser,
     message: string,
     sessionId?: string,
   ): Promise<{
@@ -37,7 +37,7 @@ export class ChatbotService {
     isNewSession: boolean;
   }> {
     try {
-      // 1. Obtener información completa del usuario SOLO cuando sea necesario
+      // 1. Obtener información completa del usuario
       const fullUser = await this.getFullUserInfo(jwtUser.id);
 
       let session: ChatSession;
@@ -50,40 +50,146 @@ export class ChatbotService {
         isNewSession = true;
       }
 
-      // Guardar mensaje del usuario
+      // 2. Guardar mensaje del usuario
       await this.saveMessage(session, MessageRole.USER, message);
 
-      // Obtener historial de la conversación
+      // 3. Obtener historial limitado
       const conversationHistory = await this.getConversationHistory(session);
 
-      // Generar respuesta con Claude usando información completa del usuario
-      const claudeResponse = await this.generateClaudeResponseWithUserContext(
+      // 4. 🚀 UNA SOLA LLAMADA OPTIMIZADA A CLAUDE
+      const smartBotResponse = await this.generateOptimizedResponse(
         message,
-        fullUser, // Ahora pasamos el usuario completo
+        fullUser,
         conversationHistory,
       );
 
-      // Guardar respuesta del asistente
-      await this.saveMessage(session, MessageRole.ASSISTANT, claudeResponse);
+      // 5. Guardar respuesta del asistente
+      await this.saveMessage(session, MessageRole.ASSISTANT, smartBotResponse);
 
-      // Incrementar contador de rate limit
+      // 6. Incrementar contador de rate limit
       await this.rateLimitService.incrementCounter(fullUser);
 
       return {
         sessionId: session.id,
-        response: claudeResponse,
+        response: smartBotResponse,
         isNewSession,
       };
     } catch (error) {
-      this.logger.error(`Error sending message: ${error.message}`, error.stack);
+      this.logger.error(
+        `❌ Error sending message: ${error.message}`,
+        error.stack,
+      );
       throw new BadRequestException('Error al procesar el mensaje');
     }
   }
 
   /**
-   * Obtener información completa del usuario desde la base de datos
-   * SOLO se llama cuando realmente necesitamos toda la información
+   * 🚀 Genera respuesta optimizada con UNA SOLA llamada a Claude
    */
+  private async generateOptimizedResponse(
+    userMessage: string,
+    user: User,
+    conversationHistory: string,
+  ): Promise<string> {
+    try {
+      // Validar API key
+      if (!envs.claudeApiKey || envs.claudeApiKey.trim() === '') {
+        this.logger.error('❌ Claude API key not configured');
+        return this.generateFallbackResponse(user.firstName);
+      }
+
+      // 🎯 Construir prompt ultra optimizado
+      const optimizedPrompt = this.contextService.buildOptimizedPrompt(
+        user,
+        userMessage,
+        conversationHistory,
+      );
+
+      // 📊 Log del tamaño del prompt para monitoreo
+      this.logger.debug(
+        `📏 Optimized prompt size: ${optimizedPrompt.length} chars`,
+      );
+
+      // 🔥 Una sola llamada eficiente a Claude
+      return await this.callClaudeAPI(optimizedPrompt);
+    } catch (error) {
+      this.logger.error(
+        `❌ Error generating response: ${error.message}`,
+        error.stack,
+      );
+      return this.generateFallbackResponse(user.firstName);
+    }
+  }
+
+  /**
+   * 📞 Llamada optimizada a Claude API
+   */
+  private async callClaudeAPI(prompt: string): Promise<string> {
+    try {
+      // Limitar tamaño del prompt si es necesario
+      const maxPromptLength = 4000;
+      const trimmedPrompt =
+        prompt.length > maxPromptLength
+          ? prompt.substring(0, maxPromptLength) + '\n[Prompt optimizado]'
+          : prompt;
+
+      const response = await firstValueFrom(
+        this.httpService.post(
+          'https://api.anthropic.com/v1/messages',
+          {
+            model: 'claude-3-haiku-20240307', // Modelo más económico
+            max_tokens: 500, // Límite razonable para respuestas
+            messages: [
+              {
+                role: 'user',
+                content: trimmedPrompt,
+              },
+            ],
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': envs.claudeApiKey,
+              'anthropic-version': '2023-06-01',
+            },
+            timeout: 25000, // Timeout optimizado
+          },
+        ),
+      );
+
+      if (!response?.data?.content?.[0]?.text) {
+        throw new Error('Respuesta inválida de Claude API');
+      }
+
+      return response.data.content[0].text;
+    } catch (error) {
+      this.logger.error(`❌ Claude API Error: ${error.message}`);
+
+      // Log específico para debugging
+      if (error.response?.status) {
+        this.logger.error(`🔥 API Status: ${error.response.status}`);
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * 🆘 Respuesta de fallback optimizada
+   */
+  private generateFallbackResponse(firstName: string): string {
+    return `🤖 Lo siento ${firstName}, estoy experimentando dificultades técnicas. 
+
+⚡ Mientras tanto puedes:
+• 📚 Consultar las guías del sistema
+• 🆘 Contactar al soporte técnico
+• 🔄 Intentar en unos minutos
+
+¡Gracias por tu paciencia! 😊`;
+  }
+
+  // ========== MÉTODOS AUXILIARES SIN CAMBIOS ==========
+
   private async getFullUserInfo(userId: string): Promise<User> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
@@ -109,9 +215,6 @@ export class ChatbotService {
     return user;
   }
 
-  /**
-   * Crear nueva sesión de chat
-   */
   private async createSession(user: User): Promise<ChatSession> {
     const session = this.chatSessionRepository.create({
       user,
@@ -120,9 +223,6 @@ export class ChatbotService {
     return await this.chatSessionRepository.save(session);
   }
 
-  /**
-   * Obtener sesión existente y validar acceso
-   */
   private async getSession(
     sessionId: string,
     userId: string,
@@ -139,9 +239,6 @@ export class ChatbotService {
     return session;
   }
 
-  /**
-   * Guardar mensaje en la base de datos
-   */
   private async saveMessage(
     session: ChatSession,
     role: MessageRole,
@@ -156,348 +253,105 @@ export class ChatbotService {
   }
 
   /**
-   * Obtener historial de conversación de una sesión
+   * 📝 Historial optimizado - solo últimos 3 mensajes
    */
   private async getConversationHistory(session: ChatSession): Promise<string> {
     const messages = await this.chatMessageRepository.find({
       where: { session: { id: session.id } },
-      order: { createdAt: 'ASC' },
-      take: 10, // Últimos 10 mensajes para no sobrecargar
+      order: { createdAt: 'DESC' },
+      take: 3, // Solo últimos 3 mensajes para optimizar
     });
 
     if (messages.length === 0) return '';
 
     return messages
-      .map((msg) => `${msg.role.toUpperCase()}: ${msg.content}`)
-      .join('\n\n');
+      .reverse() // Orden cronológico
+      .map((msg) => `${msg.role}: ${msg.content}`)
+      .join('\n');
   }
 
-  /**
-   * Generar respuesta usando Claude API con contexto completo del usuario
-   * Ahora usa la entidad User completa con toda la información
-   */
-  private async generateClaudeResponseWithUserContext(
-    userMessage: string,
-    user: User, // Recibe entidad User completa
-    conversationHistory: string,
-  ): Promise<string> {
-    try {
-      // Validar la clave API
-      if (!envs.claudeApiKey || envs.claudeApiKey.trim() === '') {
-        this.logger.error('Claude API key not configured');
-        return this.generateFallbackResponse();
-      }
+  // ========== MÉTODOS EXISTENTES DELEGADOS ==========
 
-      // 1. Obtener contexto completo del usuario CON INFORMACIÓN PERSONAL
-      const baseContext = this.contextService.buildUserContext(user);
-
-      // 2. Buscar contenido relevante en el contexto
-      const contextSearch = this.contextService.searchContextContent(
-        userMessage,
-        user.role.code,
-      );
-
-      // 3. Construir prompt enriquecido con información personal del usuario
-      let enrichedContext = baseContext;
-
-      if (contextSearch.relevantCapabilities.length > 0) {
-        enrichedContext += `\n\n=== CAPACIDADES ESPECÍFICAMENTE RELEVANTES ===\n`;
-        enrichedContext += contextSearch.relevantCapabilities
-          .slice(0, 5)
-          .map((cap) => `• ${cap}`)
-          .join('\n');
-      }
-
-      if (contextSearch.relevantQueries.length > 0) {
-        enrichedContext += `\n\n=== CONSULTAS SIMILARES ===\n`;
-        enrichedContext += contextSearch.relevantQueries
-          .slice(0, 3)
-          .map((query) => `• ${query}`)
-          .join('\n');
-      }
-
-      if (contextSearch.suggestedGuides.length > 0) {
-        enrichedContext += `\n\n=== GUÍAS DISPONIBLES ===\n`;
-        enrichedContext += contextSearch.suggestedGuides
-          .slice(0, 3)
-          .map((guide) => `• ${guide.title}`)
-          .join('\n');
-      }
-
-      // 4. Limitar el historial de conversación
-      const limitedHistory = conversationHistory
-        ? conversationHistory.split('\n\n').slice(-5).join('\n\n')
-        : '';
-
-      // 5. Construir el prompt final con toda la información
-      const prompt = `${enrichedContext}
-
-${limitedHistory ? `\n=== HISTORIAL RECIENTE DE ESTA CONVERSACIÓN ===\n${limitedHistory}\n` : ''}
-
-=== CONSULTA ACTUAL ===
-${user.firstName} ${user.lastName}: ${userMessage}
-
-=== INSTRUCCIONES ESPECÍFICAS PARA RESPONDER ===
-1. RECUERDA: Estás hablando con ${user.firstName} ${user.lastName} (${user.email}), quien tiene el rol de ${user.role.name} en el sistema
-2. Analiza si la consulta está dentro del alcance de las capacidades de su rol específico
-3. Dirígete al usuario por su nombre cuando sea apropiado y natural
-4. Proporciona una respuesta clara, específica y práctica para su rol
-5. Si hay guías disponibles, menciónalas brevemente
-6. Si la consulta está fuera del alcance de su rol, explícalo amablemente
-7. Mantén un tono profesional pero amigable y personal
-8. Usa ejemplos prácticos relacionados con su trabajo cuando sea posible
-9. Si el usuario pregunta quién es o información personal, usa los datos proporcionados
-10. Sé conciso pero completo, y siempre contextualizado a su rol y responsabilidades
-
-IMPORTANTE: 
-- Puedes referirte al usuario como "${user.firstName}" o "${user.lastName}" según el contexto
-- Su rol es ${user.role.name} (${user.role.code})
-- Personaliza las respuestas según sus capacidades específicas del rol
-
-Asistente Virtual Huertas:`;
-
-      return await this.callClaudeAPI(prompt);
-    } catch (error) {
-      this.logger.error(
-        `Error generating enhanced response: ${error.message}`,
-        error.stack,
-      );
-      return this.generateFallbackResponse();
-    }
-  }
-
-  /**
-   * Llamar a la API de Claude
-   */
-  private async callClaudeAPI(prompt: string): Promise<string> {
-    try {
-      // Validar que el prompt no esté vacío y no sea demasiado largo
-      if (!prompt || prompt.trim().length === 0) {
-        throw new Error('Prompt vacío');
-      }
-
-      // Limitar el tamaño del prompt (Claude tiene límites)
-      const maxPromptLength = 50000; // Aproximadamente 50k caracteres
-      const trimmedPrompt =
-        prompt.length > maxPromptLength
-          ? prompt.substring(0, maxPromptLength) +
-            '\n[Prompt truncado por longitud]'
-          : prompt;
-
-      this.logger.debug(
-        `Sending request to Claude API with prompt length: ${trimmedPrompt.length}`,
-      );
-
-      const response = await firstValueFrom(
-        this.httpService.post(
-          'https://api.anthropic.com/v1/messages',
-          {
-            model: 'claude-3-haiku-20240307',
-            max_tokens: 1000,
-            messages: [
-              {
-                role: 'user',
-                content: trimmedPrompt,
-              },
-            ],
-          },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': envs.claudeApiKey,
-              'anthropic-version': '2023-06-01',
-            },
-            timeout: 30000, // 30 segundos de timeout
-          },
-        ),
-      );
-
-      // Validar la respuesta
-      if (!response?.data?.content?.[0]?.text) {
-        throw new Error('Respuesta inválida de Claude API');
-      }
-
-      return response.data.content[0].text;
-    } catch (error) {
-      this.logger.error(`Error calling Claude API: ${error.message}`);
-
-      // Log más detalles del error si está disponible
-      if (error.response) {
-        this.logger.error(
-          `Claude API Response Status: ${error.response.status}`,
-        );
-        this.logger.error(
-          `Claude API Response Data: ${JSON.stringify(error.response.data)}`,
-        );
-      }
-
-      // Si es un error de autenticación o configuración, lanzar error específico
-      if (error.response?.status === 401) {
-        throw new Error(
-          'Error de autenticación con Claude API. Verificar API key.',
-        );
-      }
-
-      if (error.response?.status === 400) {
-        throw new Error(
-          'Solicitud inválida a Claude API. Verificar formato del prompt.',
-        );
-      }
-
-      if (error.response?.status === 429) {
-        throw new Error('Límite de rate limit alcanzado en Claude API.');
-      }
-
-      // Para otros errores, usar fallback
-      throw error;
-    }
-  }
-
-  /**
-   * Generar respuesta de fallback en caso de error
-   */
-  private generateFallbackResponse(): string {
-    return `Lo siento, estoy experimentando dificultades técnicas para conectarme con el servicio de inteligencia artificial en este momento. 
-
-Mientras tanto, puedes:
-• Usar la ayuda rápida disponible en el sistema
-• Consultar las guías paso a paso
-• Contactar al soporte técnico para obtener ayuda inmediata
-
-Por favor, intenta nuevamente en unos minutos.`;
-  }
-
-  /**
-   * Obtener historial de mensajes de una sesión
-   */
   async getChatHistory(
     sessionId: string,
     userId: string,
   ): Promise<ChatMessage[]> {
     const session = await this.getSession(sessionId, userId);
-
     return await this.chatMessageRepository.find({
       where: { session: { id: session.id } },
       order: { createdAt: 'ASC' },
     });
   }
 
-  /**
-   * Obtener todas las sesiones de un usuario
-   */
   async getUserSessions(userId: string): Promise<ChatSession[]> {
     return await this.chatSessionRepository.find({
       where: { user: { id: userId }, isActive: true },
       order: { updatedAt: 'DESC' },
-      take: 10, // Últimas 10 sesiones
+      take: 10,
     });
   }
 
-  /**
-   * Cerrar sesión de chat
-   */
   async closeSession(sessionId: string, userId: string): Promise<void> {
     const session = await this.getSession(sessionId, userId);
     session.isActive = false;
     await this.chatSessionRepository.save(session);
   }
 
-  /**
-   * Obtener estado de rate limit del usuario
-   */
   async getUserRateLimitStatus(userId: string): Promise<any> {
     const user = await this.getFullUserInfo(userId);
     return await this.rateLimitService.getRateLimitStatus(user);
   }
 
-  /**
-   * Resetear rate limit de un usuario
-   */
   async resetUserRateLimit(userId: string): Promise<void> {
     await this.rateLimitService.resetUserRateLimit(userId);
   }
 
-  /**
-   * Obtener estadísticas de uso del chatbot
-   */
   async getChatbotUsageStats(roleCode?: string): Promise<any> {
     return await this.rateLimitService.getUsageStats(roleCode);
   }
 
-  // ========== RESTO DE MÉTODOS (sin cambios significativos) ==========
-
-  /**
-   * Obtener ayuda rápida para el rol del usuario
-   */
   async getQuickHelpForUser(jwtUser: JwtUser): Promise<string[]> {
     return this.contextService.getQuickHelp(jwtUser.role.code);
   }
 
-  /**
-   * Obtener guía paso a paso específica
-   */
   async getStepByStepGuide(guideKey: string, jwtUser: JwtUser): Promise<any> {
     return this.contextService.getStepByStepGuide(guideKey, jwtUser.role.code);
   }
 
-  /**
-   * Buscar contenido relevante en el contexto
-   */
   async searchContextContent(query: string, jwtUser: JwtUser): Promise<any> {
     return this.contextService.searchContextContent(query, jwtUser.role.code);
   }
 
-  /**
-   * Obtener ayuda para solución de problemas
-   */
   getTroubleshootingHelp(issue?: string): any {
     return this.contextService.getTroubleshootingHelp(issue);
   }
 
-  /**
-   * Recargar contextos desde archivos (solo para desarrollo)
-   */
   reloadContexts(): void {
     this.contextService.reloadContexts();
   }
 
-  /**
-   * Obtener información del sistema
-   */
   getSystemInfo(): any {
     return this.contextService.getSystemInfo();
   }
 
-  /**
-   * Obtener guías disponibles para el rol del usuario
-   */
   async getAvailableGuides(
     jwtUser: JwtUser,
   ): Promise<Array<{ key: string; title: string; description?: string }>> {
-    // Obtener todas las guías del sistema
     const allGuides = this.contextService.getAllGuides();
-
-    // Filtrar las guías disponibles para el rol del usuario
     return Object.entries(allGuides)
       .filter(
-        ([key, guide]) =>
+        ([key, guide]: [string, any]) =>
           guide.applicableRoles.includes(jwtUser.role.code) ||
           guide.applicableRoles.includes('ALL'),
       )
-      .map(([key, guide]) => ({
+      .map(([key, guide]: [string, any]) => ({
         key,
         title: guide.title,
         description:
-          guide.description ||
-          `Guía paso a paso para ${guide.title.toLowerCase()}`,
+          guide.description || `Guía para ${guide.title.toLowerCase()}`,
       }));
   }
 
-  // ========== MÉTODOS ADICIONALES PARA ANÁLISIS ==========
-
-  /**
-   * Obtener estadísticas de conversaciones por usuario
-   */
   async getUserConversationStats(userId: string): Promise<{
     totalSessions: number;
     totalMessages: number;
@@ -530,18 +384,10 @@ Por favor, intenta nuevamente en unos minutos.`;
     };
   }
 
-  /**
-   * Obtener temas más consultados por rol
-   */
-  async getPopularTopicsByRole(roleCode?: string): Promise<
-    Array<{
-      topic: string;
-      count: number;
-      percentage: number;
-    }>
-  > {
-    // Esta es una implementación simplificada
-    // En una implementación real, podrías usar análisis de texto más sofisticado
+  async getPopularTopicsByRole(
+    roleCode?: string,
+  ): Promise<Array<{ topic: string; count: number; percentage: number }>> {
+    // Implementación simplificada para optimización
     const queryBuilder = this.chatMessageRepository
       .createQueryBuilder('message')
       .leftJoin('message.session', 'session')
@@ -553,44 +399,39 @@ Por favor, intenta nuevamente en unos minutos.`;
       queryBuilder.andWhere('role.code = :roleCode', { roleCode });
     }
 
-    const messages = await queryBuilder.getMany();
+    const messages = await queryBuilder.select('message.content').getMany();
 
-    // Análisis básico de palabras clave comunes
-    const topicKeywords = {
-      usuarios: ['usuario', 'crear usuario', 'nuevo usuario'],
-      leads: ['lead', 'prospecto', 'cliente'],
-      ventas: ['venta', 'vender', 'cotización'],
-      pagos: ['pago', 'cobranza', 'factura'],
-      reportes: ['reporte', 'estadística', 'análisis'],
-      sistema: ['sistema', 'configuración', 'ayuda'],
+    // Análisis básico de temas
+    const topics = {
+      usuarios: 0,
+      leads: 0,
+      ventas: 0,
+      pagos: 0,
+      reportes: 0,
+      sistema: 0,
     };
 
-    const topicCounts = {};
-    let totalMessages = messages.length;
-
-    Object.entries(topicKeywords).forEach(([topic, keywords]) => {
-      topicCounts[topic] = messages.filter((message) =>
-        keywords.some((keyword) =>
-          message.content.toLowerCase().includes(keyword.toLowerCase()),
-        ),
-      ).length;
+    messages.forEach((msg) => {
+      const content = msg.content.toLowerCase();
+      if (content.includes('usuario')) topics.usuarios++;
+      if (content.includes('lead') || content.includes('cliente'))
+        topics.leads++;
+      if (content.includes('venta')) topics.ventas++;
+      if (content.includes('pago')) topics.pagos++;
+      if (content.includes('reporte')) topics.reportes++;
+      if (content.includes('sistema')) topics.sistema++;
     });
 
-    return Object.entries(topicCounts)
+    const total = messages.length;
+    return Object.entries(topics)
       .map(([topic, count]) => ({
         topic,
-        count: count as number,
-        percentage:
-          totalMessages > 0
-            ? Math.round(((count as number) / totalMessages) * 100)
-            : 0,
+        count,
+        percentage: total > 0 ? Math.round((count / total) * 100) : 0,
       }))
       .sort((a, b) => b.count - a.count);
   }
 
-  /**
-   * Limpiar sesiones inactivas antiguas
-   */
   async cleanupOldSessions(daysOld: number = 30): Promise<number> {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysOld);
@@ -602,20 +443,14 @@ Por favor, intenta nuevamente en unos minutos.`;
       .andWhere('isActive = false')
       .execute();
 
-    this.logger.log(`Cleaned up ${result.affected} old chat sessions`);
+    this.logger.log(`🧹 Cleaned up ${result.affected} old sessions`);
     return result.affected || 0;
   }
 
-  /**
-   * Obtener estadísticas del contexto cargado
-   */
   getContextStats(): any {
     return this.contextService.getContextStats();
   }
 
-  /**
-   * Validar la estructura de los contextos
-   */
   validateContexts(): any {
     return this.contextService.validateContexts();
   }
