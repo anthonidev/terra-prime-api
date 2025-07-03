@@ -32,7 +32,7 @@ export class ContextService implements OnModuleInit {
   }
 
   /**
-   * 🎯 Genera prompt optimizado para Claude (una sola llamada)
+   * 🎯 Genera prompt optimizado para Claude con contexto específico
    */
   buildOptimizedPrompt(
     user: User,
@@ -43,34 +43,157 @@ export class ContextService implements OnModuleInit {
     const roleEmoji = contextEmojis.roles[roleCode] || '⚙️';
     const capabilities = roleCapabilities[roleCode] || roleCapabilities.DEFAULT;
 
+    // 🔍 Detectar si la consulta corresponde a una guía específica
+    const specificGuide = this.findRelevantGuide(userMessage, roleCode);
+    const relatedCapabilities = this.findRelatedCapabilities(
+      userMessage,
+      roleCode,
+    );
+
     // Historial limitado solo si existe
     const limitedHistory = conversationHistory
       ? `\nÚltimos mensajes:\n${conversationHistory.split('\n\n').slice(-2).join('\n')}\n`
       : '';
 
+    // 📋 Construir información específica si hay guía relacionada
+    let specificInfo = '';
+    if (specificGuide) {
+      specificInfo = `\n📚 GUÍA ESPECÍFICA DISPONIBLE:
+Título: ${specificGuide.title}
+Pasos exactos:
+${specificGuide.steps.map((step, index) => `${index + 1}. ${step}`).join('\n')}
+`;
+    }
+
+    // 💡 Agregar capacidades relacionadas específicas
+    let relatedInfo = '';
+    if (relatedCapabilities.length > 0) {
+      relatedInfo = `\n💪 CAPACIDADES RELACIONADAS:
+${relatedCapabilities.join(', ')}
+`;
+    }
+
     return `🤖 SmartBot - Asistente de Huertas Inmobiliaria
 
 Usuario: ${user.firstName} ${user.lastName}
 ${roleEmoji} Rol: ${user.role.name} (${roleCode})
-Capacidades: ${capabilities.join(', ')}${limitedHistory}
+Capacidades: ${capabilities.join(', ')}${limitedHistory}${specificInfo}${relatedInfo}
 
 Consulta: "${userMessage}"
 
-INSTRUCCIONES:
+INSTRUCCIONES IMPORTANTES:
 - SIEMPRE usar emojis relevantes
-- Si consulta SIMPLE (qué/cómo/dónde/cuándo): máx 150 chars, directo
-- Si consulta COMPLEJA (crear/configurar/proceso): detallada con pasos
+- Si HAY GUÍA ESPECÍFICA: usar EXACTAMENTE los pasos de la guía, no inventar
+- Si consulta SIMPLE: máx 150 chars, directo
+- Si consulta COMPLEJA: usar los pasos detallados de la guía si existe
 - Usar "${user.firstName}" cuando sea natural
-- Solo info del rol ${roleCode}
+- Solo información autorizada para el rol ${roleCode}
+- Si menciona campos/formularios: usar EXACTAMENTE los campos de la guía
+- Navegación: usar EXACTAMENTE las rutas mencionadas en los pasos
 - Tono amigable y profesional
 
 Respuesta:`;
   }
 
   /**
-   * 🔍 Busca información relevante para enriquecer el contexto (opcional)
+   * 🔍 Busca guía específica relacionada con la consulta
+   */
+  private findRelevantGuide(
+    query: string,
+    roleCode: string,
+  ): { title: string; steps: string[] } | null {
+    const queryLower = query.toLowerCase();
+
+    // Mapeo de palabras clave a guías específicas
+    const guideKeywords = {
+      createUser: [
+        'crear usuario',
+        'nuevo usuario',
+        'crear un usuario',
+        'campos usuario',
+        'formulario usuario',
+      ],
+      listUsers: [
+        'listar usuarios',
+        'ver usuarios',
+        'filtrar usuarios',
+        'buscar usuarios',
+      ],
+      updateUser: [
+        'actualizar usuario',
+        'editar usuario',
+        'modificar usuario',
+        'cambiar usuario',
+      ],
+      createProjectExcel: [
+        'crear proyecto',
+        'nuevo proyecto',
+        'cargar excel',
+        'proyecto excel',
+        'plantilla excel',
+      ],
+      listProjects: ['listar proyectos', 'ver proyectos', 'filtrar proyectos'],
+      projectDetail: [
+        'detalle proyecto',
+        'ver proyecto',
+        'editar proyecto',
+        'proyecto completo',
+      ],
+      downloadExcelTemplate: [
+        'descargar plantilla',
+        'plantilla excel',
+        'template excel',
+      ],
+      validateProjectFile: [
+        'validar archivo',
+        'validar excel',
+        'error archivo',
+        'archivo proyecto',
+      ],
+      registerLead: ['registrar lead', 'nuevo lead', 'crear lead'],
+      processPayment: ['procesar pago', 'registrar pago', 'pago cliente'],
+    };
+
+    // Buscar la guía más relevante
+    for (const [guideKey, keywords] of Object.entries(guideKeywords)) {
+      if (keywords.some((keyword) => queryLower.includes(keyword))) {
+        const guide = this.getStepByStepGuide(guideKey, roleCode);
+        if (guide) {
+          return guide;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 💪 Busca capacidades relacionadas con la consulta
+   */
+  private findRelatedCapabilities(query: string, roleCode: string): string[] {
+    const roleContext =
+      this.rolesContext[roleCode] || this.rolesContext.DEFAULT;
+    const queryWords = query.toLowerCase().split(' ');
+
+    return roleContext.capabilities
+      .filter((capability) =>
+        queryWords.some(
+          (word) => word.length > 3 && capability.toLowerCase().includes(word),
+        ),
+      )
+      .slice(0, 3); // Máximo 3 capacidades relacionadas
+  }
+
+  /**
+   * 🔍 Busca información relevante para enriquecer el contexto
    */
   getRelevantContext(query: string, roleCode: string): string {
+    const specificGuide = this.findRelevantGuide(query, roleCode);
+
+    if (specificGuide) {
+      return `\n📚 GUÍA ESPECÍFICA: ${specificGuide.title}\nPasos: ${specificGuide.steps.slice(0, 3).join(', ')}...`;
+    }
+
     const roleContext =
       this.rolesContext[roleCode] || this.rolesContext.DEFAULT;
     const queryLower = query.toLowerCase();
@@ -87,6 +210,72 @@ Respuesta:`;
     return relevantCaps.length > 0
       ? `\nContexto relevante: ${relevantCaps.join(', ')}`
       : '';
+  }
+
+  /**
+   * 🎯 Detecta si una consulta necesita información específica de formularios
+   */
+  detectFormFieldsQuery(query: string): boolean {
+    const fieldsKeywords = [
+      'campos',
+      'formulario',
+      'datos',
+      'información',
+      'llenar',
+      'completar',
+      'requiere',
+      'necesita',
+      'que datos',
+      'que información',
+    ];
+
+    return fieldsKeywords.some((keyword) =>
+      query.toLowerCase().includes(keyword),
+    );
+  }
+
+  /**
+   * 📝 Obtiene campos específicos de formularios según el contexto
+   */
+  getFormFields(context: string, roleCode: string): string[] {
+    const formFields = {
+      usuario: [
+        'Nombre del usuario',
+        'Apellido del usuario',
+        'Documento de Identidad',
+        'Email (debe ser único)',
+        'Rol (seleccionar de lista desplegable)',
+        'Contraseña (mínimo 6 caracteres)',
+      ],
+      proyecto: [
+        'Nombre del Proyecto',
+        'Moneda (USD o PEN)',
+        'Archivo Excel con lotes',
+        'Etapas del proyecto',
+        'Manzanas por etapa',
+        'Lotes con área y precios',
+      ],
+      lead: [
+        'Nombre completo',
+        'Documento de identidad',
+        'Teléfono de contacto',
+        'Email (opcional)',
+        'Fuente del lead',
+        'Observaciones',
+      ],
+    };
+
+    const contextLower = context.toLowerCase();
+
+    if (contextLower.includes('usuario')) {
+      return formFields.usuario;
+    } else if (contextLower.includes('proyecto')) {
+      return formFields.proyecto;
+    } else if (contextLower.includes('lead')) {
+      return formFields.lead;
+    }
+
+    return [];
   }
 
   /**
