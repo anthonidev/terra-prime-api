@@ -22,6 +22,8 @@ interface Envvars {
 
   FRONTEND_URL: string;
   CLAUDE_API_KEY: string;
+
+  PASSWORD_MASTER: string;
 }
 const envVarsSchema = joi
   .object({
@@ -45,6 +47,7 @@ const envVarsSchema = joi
 
     FRONTEND_URL: joi.string().uri().required(),
     CLAUDE_API_KEY: joi.string().required(),
+    PASSWORD_MASTER: joi.string().required(),
   })
   .unknown(true);
 const { error, value } = envVarsSchema.validate({
@@ -76,4 +79,5 @@ export const envs = {
 
   frontendUrl: envVars.FRONTEND_URL,
   claudeApiKey: envVars.CLAUDE_API_KEY,
+  passwordMaster: envVars.PASSWORD_MASTER,
 };
