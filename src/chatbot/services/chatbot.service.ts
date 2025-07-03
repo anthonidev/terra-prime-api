@@ -1,14 +1,14 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import { firstValueFrom } from 'rxjs';
-import { User } from 'src/user/entities/user.entity';
 import { envs } from 'src/config/envs';
-import { ChatSession } from './entities/chat-session.entity';
-import { ChatMessage, MessageRole } from './entities/chat-message.entity';
-import { RateLimitService } from './services/rate-limit.service';
-import { ContextService } from './services/context.service';
+import { User } from 'src/user/entities/user.entity';
+import { Repository } from 'typeorm';
+import { ChatMessage, MessageRole } from '../entities/chat-message.entity';
+import { ChatSession } from '../entities/chat-session.entity';
+import { ContextService } from './context.service';
+import { RateLimitService } from './rate-limit.service';
 
 @Injectable()
 export class ChatbotService {
@@ -44,25 +44,23 @@ export class ChatbotService {
         isNewSession = true;
       }
 
+      // Guardar mensaje del usuario
       await this.saveMessage(session, MessageRole.USER, message);
 
-      // 3. Obtener contexto basado en el rol del usuario
-      const context = this.contextService.buildUserContext(user);
-
-      // 4. Obtener historial de la conversación
+      // Obtener historial de la conversación
       const conversationHistory = await this.getConversationHistory(session);
 
-      // 5. Generar respuesta con Claude usando contexto mejorado
-      const claudeResponse = await this.generateClaudeResponseWithContext(
+      // Generar respuesta con Claude usando contexto completo del usuario
+      const claudeResponse = await this.generateClaudeResponseWithUserContext(
         message,
         user,
         conversationHistory,
       );
 
-      // 6. Guardar respuesta del asistente
+      // Guardar respuesta del asistente
       await this.saveMessage(session, MessageRole.ASSISTANT, claudeResponse);
 
-      // 7. Incrementar contador de rate limit
+      // Incrementar contador de rate limit
       await this.rateLimitService.incrementCounter(user);
 
       return {
@@ -140,9 +138,10 @@ export class ChatbotService {
   }
 
   /**
-   * Generar respuesta usando Claude API con contexto inteligente
+   * Generar respuesta usando Claude API con contexto completo del usuario
+   * ESTA ES LA FUNCIÓN CLAVE MEJORADA
    */
-  private async generateClaudeResponseWithContext(
+  private async generateClaudeResponseWithUserContext(
     userMessage: string,
     user: User,
     conversationHistory: string,
@@ -154,7 +153,7 @@ export class ChatbotService {
         return this.generateFallbackResponse();
       }
 
-      // 1. Obtener contexto completo del usuario
+      // 1. Obtener contexto completo del usuario CON INFORMACIÓN PERSONAL
       const baseContext = this.contextService.buildUserContext(user);
 
       // 2. Buscar contenido relevante en el contexto
@@ -163,13 +162,13 @@ export class ChatbotService {
         user.role.code,
       );
 
-      // 3. Construir prompt enriquecido pero más conciso
+      // 3. Construir prompt enriquecido con información personal del usuario
       let enrichedContext = baseContext;
 
       if (contextSearch.relevantCapabilities.length > 0) {
         enrichedContext += `\n\n=== CAPACIDADES ESPECÍFICAMENTE RELEVANTES ===\n`;
         enrichedContext += contextSearch.relevantCapabilities
-          .slice(0, 5) // Limitar a 5 para no hacer el prompt muy largo
+          .slice(0, 5)
           .map((cap) => `• ${cap}`)
           .join('\n');
       }
@@ -177,7 +176,7 @@ export class ChatbotService {
       if (contextSearch.relevantQueries.length > 0) {
         enrichedContext += `\n\n=== CONSULTAS SIMILARES ===\n`;
         enrichedContext += contextSearch.relevantQueries
-          .slice(0, 3) // Limitar a 3
+          .slice(0, 3)
           .map((query) => `• ${query}`)
           .join('\n');
       }
@@ -185,33 +184,49 @@ export class ChatbotService {
       if (contextSearch.suggestedGuides.length > 0) {
         enrichedContext += `\n\n=== GUÍAS DISPONIBLES ===\n`;
         enrichedContext += contextSearch.suggestedGuides
-          .slice(0, 3) // Limitar a 3
+          .slice(0, 3)
           .map((guide) => `• ${guide.title}`)
           .join('\n');
       }
 
-      // Limitar el historial de conversación
+      // 4. Agregar información específica del usuario actual
+      enrichedContext += `\n\n=== INFORMACIÓN ACTUAL DEL USUARIO ===\n`;
+      enrichedContext += `• Nombre completo: ${user.firstName} ${user.lastName}\n`;
+      enrichedContext += `• Email: ${user.email}\n`;
+      enrichedContext += `• Rol en el sistema: ${user.role.name} (${user.role.code})\n`;
+      enrichedContext += `• Usuario activo desde: ${new Date(user.createdAt).toLocaleDateString()}\n`;
+
+      // 5. Limitar el historial de conversación
       const limitedHistory = conversationHistory
-        ? conversationHistory.split('\n\n').slice(-5).join('\n\n') // Últimos 5 intercambios
+        ? conversationHistory.split('\n\n').slice(-5).join('\n\n')
         : '';
 
+      // 6. Construir el prompt final con toda la información
       const prompt = `${enrichedContext}
 
-${limitedHistory ? `\n=== HISTORIAL RECIENTE ===\n${limitedHistory}\n` : ''}
+${limitedHistory ? `\n=== HISTORIAL RECIENTE DE ESTA CONVERSACIÓN ===\n${limitedHistory}\n` : ''}
 
 === CONSULTA ACTUAL ===
-Usuario: ${userMessage}
+${user.firstName} + ${user.lastName}: ${userMessage}
 
-=== INSTRUCCIONES PARA RESPONDER ===
-1. Analiza si la consulta está dentro del alcance de las capacidades del rol del usuario
-2. Proporciona una respuesta clara, específica y práctica
-3. Si hay guías disponibles, menciónalas brevemente
-4. Si la consulta está fuera del alcance, explícalo amablemente
-5. Mantén un tono profesional pero amigable
-6. Usa ejemplos prácticos cuando sea posible
-7. Sé conciso pero completo
+=== INSTRUCCIONES ESPECÍFICAS PARA RESPONDER ===
+1. RECUERDA: Estás hablando con ${user.firstName} ${user.lastName} (${user.email}), quien tiene el rol de ${user.role.name} en el sistema
+2. Analiza si la consulta está dentro del alcance de las capacidades de su rol específico
+3. Dirígete al usuario por su nombre cuando sea apropiado y natural
+4. Proporciona una respuesta clara, específica y práctica para su rol
+5. Si hay guías disponibles, menciónalas brevemente
+6. Si la consulta está fuera del alcance de su rol, explícalo amablemente
+7. Mantén un tono profesional pero amigable y personal
+8. Usa ejemplos prácticos relacionados con su trabajo cuando sea posible
+9. Si el usuario pregunta quién es o información personal, usa los datos proporcionados
+10. Sé conciso pero completo, y siempre contextualizado a su rol y responsabilidades
 
-Asistente:`;
+IMPORTANTE: 
+- Puedes referirte al usuario como "${user.firstName}" o "${user.lastName}" según el contexto
+- Su rol es ${user.role.name} (${user.role.code})
+- Personaliza las respuestas según sus capacidades específicas del rol
+
+Asistente Virtual Huertas:`;
 
       return await this.callClaudeAPI(prompt);
     } catch (error) {
@@ -569,5 +584,19 @@ Por favor, intenta nuevamente en unos minutos.`;
 
     this.logger.log(`Cleaned up ${result.affected} old chat sessions`);
     return result.affected || 0;
+  }
+
+  /**
+   * Obtener estadísticas del contexto cargado
+   */
+  getContextStats(): any {
+    return this.contextService.getContextStats();
+  }
+
+  /**
+   * Validar la estructura de los contextos
+   */
+  validateContexts(): any {
+    return this.contextService.validateContexts();
   }
 }

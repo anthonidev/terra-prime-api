@@ -35,47 +35,136 @@ export class ContextService implements OnModuleInit {
 
   /**
    * Genera el contexto completo para un usuario específico
+   * VERSIÓN MEJORADA con información personal del usuario
    */
   buildUserContext(user: User): string {
     const roleCode = user.role.code;
     const roleContext =
       this.rolesContext[roleCode] || this.rolesContext.DEFAULT;
 
-    const context = `
-${this.baseContext.assistant.name} - Sistema ${this.baseContext.system.name}
+    // Calcular tiempo en el sistema
+    const joinedDate = new Date(user.createdAt);
+    const now = new Date();
+    const daysSinceJoined = Math.floor(
+      (now.getTime() - joinedDate.getTime()) / (1000 * 60 * 60 * 24),
+    );
 
-=== INFORMACIÓN DEL USUARIO ===
-- Nombre: ${user.fullName}
+    const context = `${this.baseContext.assistant.name} - Sistema ${this.baseContext.system.name}
+
+=== INFORMACIÓN COMPLETA DEL USUARIO ACTUAL ===
+- Nombre completo: ${user.firstName + ' ' + user.lastName}
+- Nombre de pila: ${user.firstName}
 - Email: ${user.email}
-- Rol: ${roleContext.name} (${roleCode})
+- Documento: ${user.document}
+- Rol actual: ${roleContext.name} (${roleCode})
+- Usuario activo: ${user.isActive ? 'Sí' : 'No'}
+- Fecha de registro: ${joinedDate.toLocaleDateString('es-ES')}
+- Días en el sistema: ${daysSinceJoined} días
+- Última actividad: ${user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleDateString('es-ES') : 'No disponible'}
+- Foto de perfil: ${user.photo ? 'Configurada' : 'No configurada'}
 
-=== INSTRUCCIONES BASE ===
+=== INSTRUCCIONES BASE DEL ASISTENTE ===
 ${this.baseContext.baseInstructions.map((instruction) => `• ${instruction}`).join('\n')}
 
-=== LIMITACIONES ===
+=== LIMITACIONES IMPORTANTES ===
 ${this.baseContext.limitations.map((limitation) => `• ${limitation}`).join('\n')}
 
-=== CAPACIDADES DE TU ROL (${roleContext.name}) ===
+=== CONTEXTO DEL ROL: ${roleContext.name} (${roleCode}) ===
 ${roleContext.description}
 
-Puedes ayudar con:
+CAPACIDADES ESPECÍFICAS DE ${user.firstName} EN SU ROL:
 ${roleContext.capabilities.map((capability) => `• ${capability}`).join('\n')}
 
-=== CONSULTAS FRECUENTES PARA TU ROL ===
+=== CONSULTAS FRECUENTES PARA ${roleContext.name} ===
 ${roleContext.commonQueries.map((query) => `• ${query}`).join('\n')}
 
-=== FLUJOS DE TRABAJO TÍPICOS ===
+=== FLUJOS DE TRABAJO TÍPICOS PARA ${user.firstName} ===
 ${roleContext.workflows.map((workflow) => `• ${workflow}`).join('\n')}
 
-=== PERSONALIDAD DEL ASISTENTE ===
+=== PERSONALIDAD Y ESTILO DEL ASISTENTE ===
 - Personalidad: ${this.baseContext.assistant.personality}
-- Tono: ${this.baseContext.assistant.tone}
+- Tono de comunicación: ${this.baseContext.assistant.tone}
 - Idioma: ${this.baseContext.assistant.language}
 
-IMPORTANTE: Responde siempre en español, mantén un tono ${this.baseContext.assistant.tone}, y enfócate únicamente en las capacidades de su rol.
-`;
+=== INSTRUCCIONES ESPECÍFICAS PARA INTERACTUAR CON ${user.firstName} + ${user.lastName} ===
+1. PERSONALIZACIÓN: Puedes dirigirte al usuario como "${user.firstName}" o "${user.lastName}" según el contexto
+2. EXPERIENCIA: Considera que lleva ${daysSinceJoined} días usando el sistema
+3. ROL ESPECÍFICO: Todas las respuestas deben estar contextualizadas para el rol de ${roleContext.name}
+4. CAPACIDADES: Solo proporciona información y ayuda dentro del alcance de las capacidades de su rol
+5. TONO PERSONAL: Mantén un tono ${this.baseContext.assistant.tone} pero personalizado
+6. INFORMACIÓN PERSONAL: Si pregunta quién es, usa la información proporcionada arriba
+
+REGLAS IMPORTANTES:
+- SIEMPRE responde en español
+- NUNCA proporciones información fuera del alcance del rol ${roleCode}
+- SIEMPRE considera el contexto personal del usuario en tus respuestas
+- PERSONALIZA las respuestas usando su nombre cuando sea apropiado
+- ENFÓCATE únicamente en las capacidades y responsabilidades de su rol específico
+- Si pregunta sobre información personal, usa los datos proporcionados en este contexto
+
+INFORMACIÓN ADICIONAL DEL SISTEMA:
+- Versión del sistema: ${this.baseContext.system.version}
+- Descripción: ${this.baseContext.system.description}`;
 
     return context;
+  }
+
+  /**
+   * Construye un resumen personalizado del usuario para usar en prompts
+   */
+  buildUserSummary(user: User): string {
+    const roleContext =
+      this.rolesContext[user.role.code] || this.rolesContext.DEFAULT;
+
+    return `Usuario: ${user.firstName} ${user.lastName} (${user.email})
+Rol: ${roleContext.name} (${user.role.code})
+Experiencia en el sistema: ${Math.floor(
+      (new Date().getTime() - new Date(user.createdAt).getTime()) /
+        (1000 * 60 * 60 * 24),
+    )} días
+Estado: ${user.isActive ? 'Activo' : 'Inactivo'}`;
+  }
+
+  /**
+   * Obtiene ayuda rápida personalizada para un usuario específico
+   */
+  getPersonalizedQuickHelp(user: User): Array<{
+    question: string;
+    category: string;
+    relevance: 'high' | 'medium' | 'low';
+  }> {
+    const roleHelp = this.getQuickHelp(user.role.code);
+
+    return roleHelp.map((question, index) => ({
+      question,
+      category: this.categorizeQuestion(question),
+      relevance: index < 3 ? 'high' : index < 6 ? 'medium' : 'low',
+    }));
+  }
+
+  /**
+   * Categoriza una pregunta para mejor organización
+   */
+  private categorizeQuestion(question: string): string {
+    const categories = {
+      gestión: ['crear', 'gestionar', 'administrar', 'configurar'],
+      consultas: ['consultar', 'ver', 'revisar', 'buscar'],
+      procesos: ['proceso', 'realizar', 'ejecutar', 'completar'],
+      reportes: ['reporte', 'estadística', 'análisis', 'generar'],
+      ayuda: ['ayuda', 'soporte', 'contactar', 'problema'],
+    };
+
+    for (const [category, keywords] of Object.entries(categories)) {
+      if (
+        keywords.some((keyword) =>
+          question.toLowerCase().includes(keyword.toLowerCase()),
+        )
+      ) {
+        return category;
+      }
+    }
+
+    return 'general';
   }
 
   /**
