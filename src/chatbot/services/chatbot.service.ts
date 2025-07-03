@@ -9,6 +9,7 @@ import { ChatMessage, MessageRole } from '../entities/chat-message.entity';
 import { ChatSession } from '../entities/chat-session.entity';
 import { ContextService } from './context.service';
 import { RateLimitService } from './rate-limit.service';
+import { JwtUser } from 'src/auth/interface/jwt-payload.interface';
 
 @Injectable()
 export class ChatbotService {
@@ -19,13 +20,15 @@ export class ChatbotService {
     private readonly chatSessionRepository: Repository<ChatSession>,
     @InjectRepository(ChatMessage)
     private readonly chatMessageRepository: Repository<ChatMessage>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
     private readonly httpService: HttpService,
     private readonly rateLimitService: RateLimitService,
     private readonly contextService: ContextService,
   ) {}
 
   async sendMessage(
-    user: User,
+    jwtUser: JwtUser, // Recibe usuario básico del JWT
     message: string,
     sessionId?: string,
   ): Promise<{
@@ -34,13 +37,16 @@ export class ChatbotService {
     isNewSession: boolean;
   }> {
     try {
+      // 1. Obtener información completa del usuario SOLO cuando sea necesario
+      const fullUser = await this.getFullUserInfo(jwtUser.id);
+
       let session: ChatSession;
       let isNewSession = false;
 
       if (sessionId) {
-        session = await this.getSession(sessionId, user.id);
+        session = await this.getSession(sessionId, jwtUser.id);
       } else {
-        session = await this.createSession(user);
+        session = await this.createSession(fullUser);
         isNewSession = true;
       }
 
@@ -50,10 +56,10 @@ export class ChatbotService {
       // Obtener historial de la conversación
       const conversationHistory = await this.getConversationHistory(session);
 
-      // Generar respuesta con Claude usando contexto completo del usuario
+      // Generar respuesta con Claude usando información completa del usuario
       const claudeResponse = await this.generateClaudeResponseWithUserContext(
         message,
-        user,
+        fullUser, // Ahora pasamos el usuario completo
         conversationHistory,
       );
 
@@ -61,7 +67,7 @@ export class ChatbotService {
       await this.saveMessage(session, MessageRole.ASSISTANT, claudeResponse);
 
       // Incrementar contador de rate limit
-      await this.rateLimitService.incrementCounter(user);
+      await this.rateLimitService.incrementCounter(fullUser);
 
       return {
         sessionId: session.id,
@@ -72,6 +78,35 @@ export class ChatbotService {
       this.logger.error(`Error sending message: ${error.message}`, error.stack);
       throw new BadRequestException('Error al procesar el mensaje');
     }
+  }
+
+  /**
+   * Obtener información completa del usuario desde la base de datos
+   * SOLO se llama cuando realmente necesitamos toda la información
+   */
+  private async getFullUserInfo(userId: string): Promise<User> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['role'],
+      select: [
+        'id',
+        'email',
+        'firstName',
+        'lastName',
+        'document',
+        'photo',
+        'isActive',
+        'createdAt',
+        'updatedAt',
+        'lastLoginAt',
+      ],
+    });
+
+    if (!user) {
+      throw new BadRequestException('Usuario no encontrado');
+    }
+
+    return user;
   }
 
   /**
@@ -139,11 +174,11 @@ export class ChatbotService {
 
   /**
    * Generar respuesta usando Claude API con contexto completo del usuario
-   * ESTA ES LA FUNCIÓN CLAVE MEJORADA
+   * Ahora usa la entidad User completa con toda la información
    */
   private async generateClaudeResponseWithUserContext(
     userMessage: string,
-    user: User,
+    user: User, // Recibe entidad User completa
     conversationHistory: string,
   ): Promise<string> {
     try {
@@ -189,25 +224,18 @@ export class ChatbotService {
           .join('\n');
       }
 
-      // 4. Agregar información específica del usuario actual
-      enrichedContext += `\n\n=== INFORMACIÓN ACTUAL DEL USUARIO ===\n`;
-      enrichedContext += `• Nombre completo: ${user.firstName} ${user.lastName}\n`;
-      enrichedContext += `• Email: ${user.email}\n`;
-      enrichedContext += `• Rol en el sistema: ${user.role.name} (${user.role.code})\n`;
-      enrichedContext += `• Usuario activo desde: ${new Date(user.createdAt).toLocaleDateString()}\n`;
-
-      // 5. Limitar el historial de conversación
+      // 4. Limitar el historial de conversación
       const limitedHistory = conversationHistory
         ? conversationHistory.split('\n\n').slice(-5).join('\n\n')
         : '';
 
-      // 6. Construir el prompt final con toda la información
+      // 5. Construir el prompt final con toda la información
       const prompt = `${enrichedContext}
 
 ${limitedHistory ? `\n=== HISTORIAL RECIENTE DE ESTA CONVERSACIÓN ===\n${limitedHistory}\n` : ''}
 
 === CONSULTA ACTUAL ===
-${user.firstName} + ${user.lastName}: ${userMessage}
+${user.firstName} ${user.lastName}: ${userMessage}
 
 === INSTRUCCIONES ESPECÍFICAS PARA RESPONDER ===
 1. RECUERDA: Estás hablando con ${user.firstName} ${user.lastName} (${user.email}), quien tiene el rol de ${user.role.name} en el sistema
@@ -378,15 +406,7 @@ Por favor, intenta nuevamente en unos minutos.`;
    * Obtener estado de rate limit del usuario
    */
   async getUserRateLimitStatus(userId: string): Promise<any> {
-    const user = await this.chatSessionRepository.manager.findOne(User, {
-      where: { id: userId },
-      relations: ['role'],
-    });
-
-    if (!user) {
-      throw new BadRequestException('Usuario no encontrado');
-    }
-
+    const user = await this.getFullUserInfo(userId);
     return await this.rateLimitService.getRateLimitStatus(user);
   }
 
@@ -404,27 +424,27 @@ Por favor, intenta nuevamente en unos minutos.`;
     return await this.rateLimitService.getUsageStats(roleCode);
   }
 
-  // ========== MÉTODOS PARA TRABAJAR CON CONTEXTO ==========
+  // ========== RESTO DE MÉTODOS (sin cambios significativos) ==========
 
   /**
    * Obtener ayuda rápida para el rol del usuario
    */
-  getQuickHelpForUser(user: User): string[] {
-    return this.contextService.getQuickHelp(user.role.code);
+  async getQuickHelpForUser(jwtUser: JwtUser): Promise<string[]> {
+    return this.contextService.getQuickHelp(jwtUser.role.code);
   }
 
   /**
    * Obtener guía paso a paso específica
    */
-  getStepByStepGuide(guideKey: string, user: User): any {
-    return this.contextService.getStepByStepGuide(guideKey, user.role.code);
+  async getStepByStepGuide(guideKey: string, jwtUser: JwtUser): Promise<any> {
+    return this.contextService.getStepByStepGuide(guideKey, jwtUser.role.code);
   }
 
   /**
    * Buscar contenido relevante en el contexto
    */
-  searchContextContent(query: string, user: User): any {
-    return this.contextService.searchContextContent(query, user.role.code);
+  async searchContextContent(query: string, jwtUser: JwtUser): Promise<any> {
+    return this.contextService.searchContextContent(query, jwtUser.role.code);
   }
 
   /**
@@ -451,9 +471,9 @@ Por favor, intenta nuevamente en unos minutos.`;
   /**
    * Obtener guías disponibles para el rol del usuario
    */
-  getAvailableGuides(
-    user: User,
-  ): Array<{ key: string; title: string; description?: string }> {
+  async getAvailableGuides(
+    jwtUser: JwtUser,
+  ): Promise<Array<{ key: string; title: string; description?: string }>> {
     // Obtener todas las guías del sistema
     const allGuides = this.contextService.getAllGuides();
 
@@ -461,7 +481,7 @@ Por favor, intenta nuevamente en unos minutos.`;
     return Object.entries(allGuides)
       .filter(
         ([key, guide]) =>
-          guide.applicableRoles.includes(user.role.code) ||
+          guide.applicableRoles.includes(jwtUser.role.code) ||
           guide.applicableRoles.includes('ALL'),
       )
       .map(([key, guide]) => ({

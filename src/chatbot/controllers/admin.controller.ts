@@ -11,8 +11,8 @@ import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
-import { User } from 'src/user/entities/user.entity';
 import { ChatbotService } from '../services/chatbot.service';
+import { JwtUser } from 'src/auth/interface/jwt-payload.interface';
 
 @Controller('chatbot/admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -49,7 +49,7 @@ export class AdminController {
    */
   @Get('stats/usage')
   @Roles('SYS', 'ADM')
-  async getUsageStats(@GetUser() user: User) {
+  async getUsageStats(@GetUser() user: JwtUser) {
     try {
       // Solo SYS puede ver stats de todos los roles
       const roleCode = user.role.code === 'SYS' ? undefined : user.role.code;
@@ -103,7 +103,7 @@ export class AdminController {
    */
   @Get('stats/popular-topics')
   @Roles('SYS', 'ADM')
-  async getPopularTopics(@GetUser() user: User) {
+  async getPopularTopics(@GetUser() user: JwtUser) {
     try {
       // Solo SYS puede ver topics de todos los roles
       const roleCode = user.role.code === 'SYS' ? undefined : user.role.code;

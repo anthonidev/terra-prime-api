@@ -12,7 +12,6 @@ import {
 } from '@nestjs/common';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { User } from 'src/user/entities/user.entity';
 import {
   ChatHistoryResponseDto,
   ChatResponseDto,
@@ -20,6 +19,7 @@ import {
 } from '../dto/chat.dto';
 import { ChatbotRateLimitGuard } from '../guards/rate-limit.guard';
 import { ChatbotService } from '../services/chatbot.service';
+import { JwtUser } from 'src/auth/interface/jwt-payload.interface';
 
 @Controller('chatbot/chat')
 @UseGuards(JwtAuthGuard)
@@ -32,11 +32,12 @@ export class ChatController {
   @Post('message')
   @UseGuards(ChatbotRateLimitGuard)
   async sendMessage(
-    @GetUser() user: User,
+    @GetUser() user: JwtUser, // Usuario básico del JWT
     @Body() sendMessageDto: SendMessageDto,
     @Req() request: any,
   ): Promise<ChatResponseDto> {
     try {
+      // El servicio se encargará de obtener la información completa cuando sea necesario
       const result = await this.chatbotService.sendMessage(
         user,
         sendMessageDto.message,
@@ -73,7 +74,7 @@ export class ChatController {
    */
   @Get('history/:sessionId')
   async getChatHistory(
-    @GetUser() user: User,
+    @GetUser() user: JwtUser,
     @Param('sessionId') sessionId: string,
   ): Promise<ChatHistoryResponseDto> {
     try {
@@ -111,7 +112,7 @@ export class ChatController {
    * Obtener todas las sesiones del usuario
    */
   @Get('sessions')
-  async getUserSessions(@GetUser() user: User) {
+  async getUserSessions(@GetUser() user: JwtUser) {
     try {
       const sessions = await this.chatbotService.getUserSessions(user.id);
 
@@ -141,7 +142,7 @@ export class ChatController {
    */
   @Delete('session/:sessionId')
   async closeSession(
-    @GetUser() user: User,
+    @GetUser() user: JwtUser,
     @Param('sessionId') sessionId: string,
   ) {
     try {
@@ -170,7 +171,7 @@ export class ChatController {
    * Obtener estado actual del rate limit del usuario
    */
   @Get('rate-limit/status')
-  async getRateLimitStatus(@GetUser() user: User) {
+  async getRateLimitStatus(@GetUser() user: JwtUser) {
     try {
       const status = await this.chatbotService.getUserRateLimitStatus(user.id);
 

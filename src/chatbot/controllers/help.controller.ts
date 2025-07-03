@@ -11,8 +11,8 @@ import {
 } from '@nestjs/common';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { User } from 'src/user/entities/user.entity';
 import { ChatbotService } from '../services/chatbot.service';
+import { JwtUser } from 'src/auth/interface/jwt-payload.interface';
 
 @Controller('chatbot/help')
 @UseGuards(JwtAuthGuard)
@@ -23,9 +23,9 @@ export class HelpController {
    * Obtener ayuda rápida personalizada por rol
    */
   @Get('quick-help')
-  async getQuickHelp(@GetUser() user: User) {
+  async getQuickHelp(@GetUser() user: JwtUser) {
     try {
-      const helpQuestions = this.chatbotService.getQuickHelpForUser(user);
+      const helpQuestions = await this.chatbotService.getQuickHelpForUser(user);
 
       return {
         success: true,
@@ -52,11 +52,14 @@ export class HelpController {
    */
   @Get('guide/:guideKey')
   async getStepByStepGuide(
-    @GetUser() user: User,
+    @GetUser() user: JwtUser,
     @Param('guideKey') guideKey: string,
   ) {
     try {
-      const guide = this.chatbotService.getStepByStepGuide(guideKey, user);
+      const guide = await this.chatbotService.getStepByStepGuide(
+        guideKey,
+        user,
+      );
 
       if (!guide) {
         return {
@@ -86,11 +89,14 @@ export class HelpController {
    */
   @Post('search-context')
   async searchContext(
-    @GetUser() user: User,
+    @GetUser() user: JwtUser,
     @Body() { query }: { query: string },
   ) {
     try {
-      const results = this.chatbotService.searchContextContent(query, user);
+      const results = await this.chatbotService.searchContextContent(
+        query,
+        user,
+      );
 
       return {
         success: true,
@@ -118,7 +124,7 @@ export class HelpController {
    */
   @Get('troubleshooting')
   async getTroubleshooting(
-    @GetUser() user: User,
+    @GetUser() user: JwtUser,
     @Query('issue') issue?: string,
   ) {
     try {
@@ -145,7 +151,7 @@ export class HelpController {
    * Obtener información del sistema (versión, configuración, etc.)
    */
   @Get('system-info')
-  async getSystemInfo(@GetUser() user: User) {
+  async getSystemInfo(@GetUser() user: JwtUser) {
     try {
       const systemInfo = this.chatbotService.getSystemInfo();
 
@@ -153,7 +159,6 @@ export class HelpController {
         success: true,
         systemInfo,
         userInfo: {
-          name: user.fullName,
           email: user.email,
           role: {
             code: user.role.code,
@@ -177,9 +182,9 @@ export class HelpController {
    * Obtener lista de guías disponibles para el rol del usuario
    */
   @Get('available-guides')
-  async getAvailableGuides(@GetUser() user: User) {
+  async getAvailableGuides(@GetUser() user: JwtUser) {
     try {
-      const guides = this.chatbotService.getAvailableGuides(user);
+      const guides = await this.chatbotService.getAvailableGuides(user);
 
       return {
         success: true,
