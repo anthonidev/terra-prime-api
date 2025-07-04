@@ -5,16 +5,18 @@ import { CreateContextBaseDto } from '../dto/create-base-context.dto';
 import { CreateQuickHelpDto } from '../dto/create-quick-help.dto';
 import { CreateRoleContextDto } from '../dto/create-role-context.dto';
 import { CreateSystemGuideDto } from '../dto/create-system-guide.dto';
+import { Observable } from 'rxjs';
 
 @Controller('chatbot/context')
 export class ContextController {
   constructor(
-    @Inject(CHATBOT_SERVICE)
-    private readonly chatbotClient: ClientProxy,
+    @Inject(CHATBOT_SERVICE) private readonly chatbotClient: ClientProxy,
   ) {}
 
   @Post('base-create')
-  createContextBase(@Body() registerDto: CreateContextBaseDto) {
+  createContextBase(
+    @Body() registerDto: CreateContextBaseDto,
+  ): Observable<any> {
     return this.chatbotClient.send({ cmd: 'context.base.create' }, registerDto);
   }
 
