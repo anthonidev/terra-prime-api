@@ -24,6 +24,8 @@ interface Envvars {
   CLAUDE_API_KEY: string;
 
   PASSWORD_MASTER: string;
+
+  NATS_SERVERS: string;
 }
 const envVarsSchema = joi
   .object({
@@ -48,6 +50,10 @@ const envVarsSchema = joi
     FRONTEND_URL: joi.string().uri().required(),
     CLAUDE_API_KEY: joi.string().required(),
     PASSWORD_MASTER: joi.string().default('12345678'),
+    NATS_SERVERS: joi
+      .string()
+      .default('nats://localhost:4222')
+      .description('NATS server URI'),
   })
   .unknown(true);
 const { error, value } = envVarsSchema.validate({
@@ -80,4 +86,5 @@ export const envs = {
   frontendUrl: envVars.FRONTEND_URL,
   claudeApiKey: envVars.CLAUDE_API_KEY,
   passwordMaster: envVars.PASSWORD_MASTER,
+  natsServers: envVars.NATS_SERVERS,
 };

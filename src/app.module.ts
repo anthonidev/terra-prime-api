@@ -17,8 +17,19 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { CutsModule } from './cuts/cuts.module';
 import { ReportsModule } from './reports/reports.module';
 import { ChatbotModule } from './chatbot/chatbot.module';
+import { ClientsModule, Transport } from '@nestjs/microservices';
+import { CHATBOT_SERVICE } from './config/services';
 @Module({
   imports: [
+    ClientsModule.register([
+      {
+        name: CHATBOT_SERVICE,
+        transport: Transport.NATS,
+        options: {
+          servers: [envs.natsServers],
+        },
+      },
+    ]),
     TypeOrmModule.forRootAsync({
       useFactory: () => ({
         type: 'postgres',
@@ -37,7 +48,16 @@ import { ChatbotModule } from './chatbot/chatbot.module';
     SeedModule,
     ProjectModule,
     DashboardModule,
-    LeadModule, AdminSalesModule, AdminPaymentsModule, EmailModule, FilesModule, SystemsModule, AdminCollectionsModule, CutsModule, ReportsModule, ChatbotModule,
+    LeadModule,
+    AdminSalesModule,
+    AdminPaymentsModule,
+    EmailModule,
+    FilesModule,
+    SystemsModule,
+    AdminCollectionsModule,
+    CutsModule,
+    ReportsModule,
+    ChatbotModule,
   ],
 })
 export class AppModule {}
