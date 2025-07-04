@@ -167,9 +167,7 @@ export class PdfService {
 
     // Separación (Reserva)
     doc.text('SEPARACIÓN:', leftCol, yPos);
-    const reservationAmount = sale.reservation 
-      ? sale.reservation.amount.toString()
-      : '0.00 ' + sale.lot.block.stage.project.currency;
+    const reservationAmount = (sale.reservationAmount? sale.reservationAmount.toString(): '0.00') + ' ' + sale.lot.block.stage.project.currency;
     doc.text(reservationAmount, leftCol + 80, yPos);
 
     // Cuota inicial
@@ -182,7 +180,7 @@ export class PdfService {
 
     // Total
     doc.text('TOTAL:', leftCol, yPos)
-       .text(sale.totalAmount.toString(), leftCol + 60, yPos);
+       .text(sale.totalAmount.toString() + ' ' + sale.lot.block.stage.project.currency, leftCol + 60, yPos);
 
     // Tipo de venta
     doc.text('CASH:', rightCol, yPos);

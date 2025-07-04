@@ -149,11 +149,11 @@ export class PaymentsService {
   }
 
   async rejectPayment(
-    paymentId: number,
-    rejectionReason: string,
-    reviewedById: string,
-  ): Promise<PaymentResponse> {
-    const payment = await this.isValidPayment(paymentId);
+  paymentId: number,
+  rejectionReason: string,
+  reviewedById: string,
+): Promise<PaymentResponse> {
+  const payment = await this.isValidPayment(paymentId);
     return await this.transactionService.runInTransaction(async (queryRunner) => {
       payment.status = StatusPayment.REJECTED;
       payment.rejectionReason = rejectionReason;
@@ -172,6 +172,13 @@ export class PaymentsService {
         await this.salesService.updateStatusSale(
           sale.id,
           StatusSale.PENDING,
+          queryRunner,
+        );
+      }
+      if (payment.relatedEntityType === 'reservation' && payment.relatedEntityId) {
+        await this.salesService.updateStatusSale(
+          payment.relatedEntityId,
+          StatusSale.RESERVATION_PENDING,
           queryRunner,
         );
       }
@@ -501,13 +508,13 @@ export class PaymentsService {
           queryRunner,
         );
       }
-      // if (relatedEntityType === 'financingInstallments' && relatedEntityId) {
-      //   await this.financingInstallmentsService.updateStatus(
-      //     relatedEntityId,
-      //     StatusFinancingInstallments.PAID,
-      //     queryRunner,
-      //   );
-      // }
+      if (relatedEntityType === 'reservation' && relatedEntityId) {
+        await this.salesService.updateStatusSale(
+          relatedEntityId,
+          StatusSale.RESERVATION_PENDING_APPROVAL,
+          queryRunner,
+        );
+      }
   }
 
   private isValidPaymentsItems(
@@ -547,6 +554,7 @@ export class PaymentsService {
       throw new BadRequestException(
         `El pago con ID ${paymentId} no está en estado PENDIENTE y no puede ser aprobado. Estado actual: ${payment.status}.`,
       ); 
+    
     if(payment.relatedEntityType === 'sale' && payment.relatedEntityId) {
       const sale = await this.salesService.findOneById(payment.relatedEntityId);
       if (sale.type === SaleType.FINANCED)
@@ -554,6 +562,15 @@ export class PaymentsService {
           `El pago no puede ser aprobado porque esta venta está sujeta a un pago de financiación.`,
         );
     }
+    
+    if(payment.relatedEntityType === 'reservation' && payment.relatedEntityId) {
+      const sale = await this.salesService.findOneById(payment.relatedEntityId);
+      if (sale.status !== StatusSale.RESERVATION_PENDING_APPROVAL)
+        throw new BadRequestException(
+          `El pago de reserva no puede ser procesado porque la venta no está en estado de pago pendiente.`,
+        );
+    }
+    
     return payment;
   }
 
@@ -581,8 +598,14 @@ export class PaymentsService {
         throw new BadRequestException(`El pago de cuotas no se puede realizar porque tiene un pago pendiente en curso.`);
     }
     
-    if (relatedEntityType === 'reservation')
+    if (relatedEntityType === 'reservation') {
+      sale = await this.salesService.findOneById(relatedEntityId);
+      if (sale.status !== StatusSale.RESERVATION_PENDING)
+        throw new BadRequestException(`La reserva no está en estado pendiente de pago.`);
+      if (sale.status === StatusSale.RESERVATION_PENDING_APPROVAL)
+        throw new BadRequestException(`La reserva ya tiene un pago pendiente en curso.`);
       paymentConfig = await this.paymentConfigService.findOneByCode('RESERVATION_PAYMENT');
+    }
     return paymentConfig;
   }
 
@@ -628,6 +651,16 @@ export class PaymentsService {
         await this.salesService.updateStatusSale(
           sale.id,
           StatusSale.IN_PAYMENT_PROCESS,
+          queryRunner,
+        );
+      }
+      if (payment.relatedEntityType === 'reservation' && payment.relatedEntityId) {
+        sale = await this.salesService.findOneById(payment.relatedEntityId);
+        if (sale.status !== StatusSale.RESERVATION_PENDING_APPROVAL)
+          throw new BadRequestException(`El pago de reserva no puede ser aprobado porque no está pendiente de aprobación.`);
+        await this.salesService.updateStatusSale(
+          payment.relatedEntityId,
+          StatusSale.RESERVED,
           queryRunner,
         );
       }

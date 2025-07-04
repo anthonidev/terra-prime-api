@@ -67,6 +67,8 @@ import { AssignParticipantsToSaleDto } from './dto/assign-participants-to-sale.d
 import { ParticipantsService } from '../participants/participants.service';
 import { ParticipantType } from '../participants/entities/participant.entity';
 
+// SERVICIO ACTUALIZADO - UN SOLO ENDPOINT PARA VENTA/RESERVA
+
 @Injectable()
 export class SalesService {
   constructor(
@@ -84,7 +86,7 @@ export class SalesService {
     private readonly guarantorService: GuarantorsService,
     @Inject(forwardRef(() => UrbanDevelopmentService))
     private readonly urbanDevelopmentService: UrbanDevelopmentService,
-    private readonly reservationService: ReservationsService,
+    // ELIMINAR: private readonly reservationService: ReservationsService,
     private readonly paymentsService: PaymentsService,
     private readonly secondaryClientService: SecondaryClientService,
     private readonly participantsService: ParticipantsService,
@@ -95,38 +97,53 @@ export class SalesService {
     userId: string,
   ): Promise<SaleResponse> {
     try {
-      const { clientId, lotId, guarantorId, firstPaymentDateHu, reservationId, secondaryClientsIds = [] } = createSaleDto;
+      const { 
+        clientId, 
+        lotId, 
+        guarantorId, 
+        firstPaymentDateHu, 
+        secondaryClientsIds = [],
+        // Campos de reserva
+        reservationAmount,
+        maximumHoldPeriod,
+        isReservation,
+      } = createSaleDto;
+
       validateSaleDates({ firstPaymentDateHu });
 
-      if (reservationId)
-        await this.isValidReservationForSale(reservationId, clientId, lotId);
-      if (!reservationId)
-        await this.lotService.isLotValidForSale(lotId);
+      // Validar lote disponible
+      await this.lotService.isLotValidForSale(lotId);
 
+      if (isReservation) await this.validateReservationData(reservationAmount, maximumHoldPeriod);
+
+      // Validaciones comunes
       await Promise.all([
         this.clientService.isValidClient(clientId),
-        (guarantorId) ? this.guarantorService.isValidGuarantor(guarantorId): null,
-        (reservationId) ? this.reservationService.isValidReservation(reservationId): null,
+        (guarantorId) ? this.guarantorService.isValidGuarantor(guarantorId) : null,
         ...secondaryClientsIds.map(id => this.secondaryClientService.isValidSecondaryClient(id)),
       ]);
 
       let sale;
-      if (createSaleDto.saleType === SaleType.DIRECT_PAYMENT)
+      
+      if (createSaleDto.saleType === SaleType.DIRECT_PAYMENT) {
         sale = await this.handleSaleCreation(createSaleDto, userId, async (queryRunner, data) => {
           return await this.createSale(data, userId, null, queryRunner);
         });
-      if (createSaleDto.saleType === SaleType.FINANCED)
+      }
+      
+      if (createSaleDto.saleType === SaleType.FINANCED) {
         sale = await this.handleSaleCreation(createSaleDto, userId, async (queryRunner, data) => {
-          const { initialAmount, interestRate, quantitySaleCoutes, totalAmount, financingInstallments, reservationId } = data;
-          const reservationAmount = reservationId ? await this.reservationService.getAmountReservation(reservationId) : 0;
-          this.isValidFinancingDataSaLe(
+          const { initialAmount, interestRate, quantitySaleCoutes, totalAmount, financingInstallments } = data;
+          
+          this.isValidFinancingDataSale(
             totalAmount,
-            reservationAmount,
+            data.reservationAmount || 0, // Usar reservationAmount del DTO
             initialAmount,
             interestRate,
             quantitySaleCoutes,
             financingInstallments
           );
+          
           const financingData = {
             financingType: FinancingType.CREDITO,
             initialAmount,
@@ -134,37 +151,401 @@ export class SalesService {
             quantityCoutes: quantitySaleCoutes,
             financingInstallments: financingInstallments
           };
+          
           const financingSale = await this.financingService.create(financingData, queryRunner);
           return await this.createSale(data, userId, financingSale.id, queryRunner);
         });
+      }
+      
       return await this.findOneById(sale.id);
     } catch (error) {
       throw error;
     }
   }
 
-  async createPaymentSale(
-    saleId: string,
-    createPaymentSaleDto: CreatePaymentSaleDto,
-    files: Express.Multer.File[],
+  private async handleSaleCreation(
+    createSaleDto: CreateSaleDto,
     userId: string,
-  ): Promise<PaymentResponse> {
-    const { payments } = createPaymentSaleDto;
-    try {
-      const sale = await this.findOneById(saleId);
-      if (!sale)
-        throw new NotFoundException(`Venta con ID ${saleId} no encontrada`);
-      const paymentDto = await this.isValidDataPaymentSale(sale, payments);
-      return await this.transactionService.runInTransaction(async (queryRunner) => {
-        const paymentResult = await this.paymentsService.create(paymentDto, files, userId, queryRunner);
-        return paymentResult;
-      });
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-          throw error;
+    saleSpecificLogic: (queryRunner: QueryRunner, createSaleDto: CreateSaleDto) => Promise<Sale>,
+  ) {
+    return await this.transactionService.runInTransaction(async (queryRunner) => {
+      const savedSale = await saleSpecificLogic(queryRunner, createSaleDto);
+      
+      // Agregar clientes secundarios
+      const { secondaryClientsIds } = createSaleDto;
+      if (secondaryClientsIds && secondaryClientsIds.length > 0) {
+        await Promise.all(
+          createSaleDto.secondaryClientsIds.map(async (id) => {
+            const secondaryClientSale = await this.secondaryClientService.createSecondaryClientSale(savedSale.id, id, queryRunner);
+            return secondaryClientSale;
+          }),
+        );
       }
-      throw new BadRequestException(`Error al crear pago para venta: ${error.message}`);
+      
+      // Actualizar estado del lote
+      const lotStatus = savedSale.fromReservation ? LotStatus.RESERVED : LotStatus.SOLD;
+      await this.lotService.updateStatus(savedSale.lot.id, lotStatus, queryRunner);
+      
+      // Manejar habilitación urbana si corresponde
+      if (createSaleDto.totalAmountUrbanDevelopment === 0) return savedSale;
+      
+      this.isValidUrbanDevelopmentDataSale(
+        createSaleDto.firstPaymentDateHu,
+        createSaleDto.initialAmountUrbanDevelopment,
+        createSaleDto.quantityHuCuotes,
+      );
+      
+      const financingDataHu = this.calculateAndCreateFinancingHu(createSaleDto);
+      const financingHu = await this.financingService.create(financingDataHu, queryRunner);
+      await this.createUrbanDevelopment(savedSale.id, financingHu.id, createSaleDto, queryRunner);
+      
+      return savedSale;
+    });
+  }
+
+  async createSale(
+    createSaleDto: CreateSaleDto,
+    userId: string,
+    financingId?: string,
+    queryRunner?: QueryRunner,
+  ) {
+    const repository = queryRunner 
+      ? queryRunner.manager.getRepository(Sale) 
+      : this.saleRepository;
+
+    const sale = repository.create({
+      lot: { id: createSaleDto.lotId },
+      client: { id: createSaleDto.clientId },
+      guarantor: createSaleDto.guarantorId ? { id: createSaleDto.guarantorId } : null,
+      type: createSaleDto.saleType,
+      vendor: { id: userId },
+      totalAmount: createSaleDto.totalAmount,
+      contractDate: createSaleDto.contractDate,
+      financing: financingId ? { id: financingId } : null,
+      
+      // Campos de reserva
+      fromReservation: createSaleDto.isReservation,
+      reservationAmount: createSaleDto.reservationAmount || null,
+      maximumHoldPeriod: createSaleDto.maximumHoldPeriod || null,
+      // reservationDate: isReservation ? new Date() : null,
+      status: createSaleDto.isReservation ? StatusSale.RESERVATION_PENDING : StatusSale.PENDING,
+    });
+    
+    return await repository.save(sale);
+  }
+
+  // ACTUALIZAR QUERIES - ELIMINAR JOINS CON RESERVATION
+  async findAll(paginationDto: PaginationDto, userId?: string): Promise<Paginated<SaleResponse>> {
+    const { page = 1, limit = 10, order = 'DESC' } = paginationDto;
+    const skip = (page - 1) * limit;
+
+    let queryBuilder = this.saleRepository.createQueryBuilder('sale')
+      .leftJoinAndSelect('sale.client', 'client')
+      .leftJoinAndSelect('client.lead', 'lead')
+      .leftJoinAndSelect('sale.vendor', 'vendor')
+      .leftJoinAndSelect('sale.lot', 'lot')
+      .leftJoinAndSelect('lot.block', 'block')
+      .leftJoinAndSelect('block.stage', 'stage')
+      .leftJoinAndSelect('stage.project', 'project')
+      .leftJoinAndSelect('sale.guarantor', 'guarantor')
+      // ELIMINAR: .leftJoinAndSelect('sale.reservation', 'reservation')
+      .leftJoinAndSelect('sale.financing', 'financing')
+      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
+      .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
+      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
+      .leftJoinAndSelect('sale.liner', 'liner')
+      .leftJoinAndSelect('sale.telemarketingSupervisor', 'telemarketingSupervisor')
+      .leftJoinAndSelect('sale.telemarketingConfirmer', 'telemarketingConfirmer')
+      .leftJoinAndSelect('sale.telemarketer', 'telemarketer')
+      .leftJoinAndSelect('sale.fieldManager', 'fieldManager')
+      .leftJoinAndSelect('sale.fieldSupervisor', 'fieldSupervisor')
+      .leftJoinAndSelect('sale.fieldSeller', 'fieldSeller');
+
+    if (userId) {
+      queryBuilder.where('vendor.id = :userId', { userId });
+    } else {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      queryBuilder.where('sale.createdAt >= :thirtyDaysAgo', { thirtyDaysAgo });
     }
+
+    const totalCount = await queryBuilder.getCount();
+    const sales = await queryBuilder
+      .orderBy('sale.createdAt', order)
+      .skip(skip)
+      .take(limit)
+      .getMany();
+
+    const formattedSales = sales.map(formatSaleResponse);
+    return PaginationHelper.createPaginatedResponse(formattedSales, totalCount, paginationDto);
+  }
+
+  // ACTUALIZAR MÉTODO DE PAGO
+  private async isValidDataPaymentSale(
+    sale: SaleResponse,
+    paymentDetails: CreateDetailPaymentDto[]
+  ): Promise<CreatePaymentDto> {
+    let paymentDto: CreatePaymentDto;
+
+    // Pago de reserva
+    if (sale.status === StatusSale.RESERVATION_PENDING) {
+      if (!sale.reservationAmount)
+        throw new BadRequestException('No se encontró monto de reserva para esta venta');
+      
+      paymentDto = {
+        methodPayment: MethodPayment.VOUCHER,
+        amount: sale.reservationAmount,
+        relatedEntityType: 'reservation',
+        relatedEntityId: sale.id,
+        metadata: {
+          'Concepto de pago': 'Pago de reserva de lote',
+          'Fecha de pago': new Date().toISOString(),
+          'Monto de pago': sale.reservationAmount,
+        },
+        paymentDetails
+      };
+    }
+    // Pagos de venta (después de reserva aprobada o venta directa)
+    else if (sale.status === StatusSale.RESERVED || sale.status === StatusSale.PENDING) {
+      const reservationAmount = sale.fromReservation && sale.reservationAmount ? sale.reservationAmount : 0;
+      
+      if (sale.type === SaleType.DIRECT_PAYMENT) {
+        paymentDto = {
+          methodPayment: MethodPayment.VOUCHER,
+          amount: sale.totalAmount - reservationAmount,
+          relatedEntityType: 'sale', 
+          relatedEntityId: sale.id,
+          metadata: {
+            'Concepto de pago': 'Monto total de la venta de lote',
+            'Fecha de pago': new Date().toISOString(),
+            'Monto de pago': sale.totalAmount - reservationAmount,
+          },
+          paymentDetails
+        };
+      } else if (sale.type === SaleType.FINANCED) {
+        paymentDto = {
+          methodPayment: MethodPayment.VOUCHER,
+          amount: sale.financing.initialAmount - reservationAmount,
+          relatedEntityType: 'financing', 
+          relatedEntityId: sale.financing.id,
+          metadata: {
+            'Concepto de pago': 'Monto inicial de la venta de lote',
+            'Fecha de pago': new Date().toISOString(),
+            'Monto de pago': sale.financing.initialAmount - reservationAmount,
+          },
+          paymentDetails
+        };
+      }
+    }
+    else if (sale.status === StatusSale.PENDING_APPROVAL) {
+      throw new BadRequestException('No se puede realizar pago porque la venta tiene un pago pendiente de aprobación');
+    }
+    else if (sale.status === StatusSale.RESERVATION_PENDING_APPROVAL) {
+      throw new BadRequestException('No se puede realizar pago porque la reserva tiene un pago pendiente de aprobación');
+    }
+    else if (sale.status === StatusSale.IN_PAYMENT_PROCESS) {
+      throw new BadRequestException('No se puede realizar pago directo desde la venta porque la venta está en proceso de pago de cuotas');
+    }
+    else if (sale.status === StatusSale.COMPLETED) {
+      throw new BadRequestException('No se puede realizar pago directo desde la venta porque la venta ya se ha completado');
+    }
+    else if (sale.status === StatusSale.REJECTED) {
+      throw new BadRequestException('No se puede realizar pago directo desde la venta porque la venta ha sido rechazada');
+    }
+    // Estados que no permiten pagos
+    else {
+      throw new BadRequestException(`No se puede realizar pago en el estado actual: ${sale.status}`);
+    }
+    
+    return paymentDto;
+  }
+
+  // ACTUALIZAR MÉTODO getPaymentsSummaryForSale
+  private async getPaymentsSummaryForSale(saleId: string): Promise<any[]> {
+    // Obtener la venta (sin reservation join)
+    const sale = await this.saleRepository.createQueryBuilder('sale')
+      .leftJoinAndSelect('sale.financing', 'financing')
+      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
+      .where('sale.id = :saleId', { saleId })
+      .getOne();
+
+    if (!sale)
+      throw new NotFoundException(`Venta con ID ${saleId} no encontrada`);
+
+    // 1. Pagos directos a la venta
+    const salePayments = await this.paymentsService.findPaymentsByRelatedEntity('sale', saleId);
+    
+    // 2. Pagos de financiación (si existe)
+    let financingPayments = [];
+    if (sale.financing) {
+      financingPayments = await this.paymentsService.findPaymentsByRelatedEntity('financing', sale.financing.id);
+    }
+    
+    // 3. Si es una reserva, incluir pagos de reserva
+    let reservationPayments = [];
+    if (sale.fromReservation) {
+      // Los pagos de reserva ahora están asociados directamente a la venta
+      // Usando un campo relatedEntityType específico para reservas
+      reservationPayments = await this.paymentsService.findPaymentsByRelatedEntity('reservation', saleId);
+    }
+    
+    // Combinar todos los pagos
+    const allPayments = [
+      ...salePayments,
+      ...financingPayments,
+      ...reservationPayments
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    
+    return allPayments.map(payment => ({
+      id: payment.id,
+      amount: payment.amount,
+      status: payment.status,
+      createdAt: payment.createdAt,
+      reviewedAt: payment.reviewedAt,
+      reviewBy: payment.reviewedBy ? { 
+        id: payment.reviewedBy.id,
+        email: payment.reviewedBy.email 
+      } : null,
+      codeOperation: payment.codeOperation,
+      banckName: payment.banckName,
+      dateOperation: payment.dateOperation,
+      numberTicket: payment.numberTicket,
+      paymentConfig: payment.paymentConfig.name,
+      reason: payment?.rejectionReason ? payment.rejectionReason : null,
+    }));
+  }
+
+  // ACTUALIZAR TODOS LOS MÉTODOS findOne* PARA ELIMINAR RESERVATION JOINS
+  async findOneById(id: string): Promise<SaleResponse> {
+    const sale = await this.saleRepository.createQueryBuilder('sale')
+      .leftJoinAndSelect('sale.client', 'client')
+      .leftJoinAndSelect('client.lead', 'lead')
+      .leftJoinAndSelect('sale.vendor', 'vendor')
+      .leftJoinAndSelect('sale.lot', 'lot')
+      .leftJoinAndSelect('lot.block', 'block')
+      .leftJoinAndSelect('block.stage', 'stage')
+      .leftJoinAndSelect('stage.project', 'project')
+      .leftJoinAndSelect('sale.guarantor', 'guarantor')
+      // ELIMINAR: .leftJoinAndSelect('sale.reservation', 'reservation')
+      .leftJoinAndSelect('sale.financing', 'financing')
+      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
+      .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
+      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
+      .leftJoinAndSelect('sale.liner', 'liner')
+      .leftJoinAndSelect('sale.telemarketingSupervisor', 'telemarketingSupervisor')
+      .leftJoinAndSelect('sale.telemarketingConfirmer', 'telemarketingConfirmer')
+      .leftJoinAndSelect('sale.telemarketer', 'telemarketer')
+      .leftJoinAndSelect('sale.fieldManager', 'fieldManager')
+      .leftJoinAndSelect('sale.fieldSupervisor', 'fieldSupervisor')
+      .leftJoinAndSelect('sale.fieldSeller', 'fieldSeller')
+      .where('sale.id = :id', { id })
+      .getOne();
+
+    if (!sale)
+      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrada`);
+
+    // Obtener resumen de pagos
+    const paymentsSummary = await this.getPaymentsSummaryForSale(id);
+    const formattedSale = formatSaleResponse(sale);
+
+    return {
+      ...formattedSale,
+      paymentsSummary,
+    };
+  }
+
+  async findOneByIdWithCollections(id: string): Promise<SaleResponse> {
+    const sale = await this.saleRepository.createQueryBuilder('sale')
+      .leftJoinAndSelect('sale.client', 'client')
+      .leftJoinAndSelect('client.lead', 'lead')
+      .leftJoinAndSelect('sale.vendor', 'vendor')
+      .leftJoinAndSelect('sale.lot', 'lot')
+      .leftJoinAndSelect('lot.block', 'block')
+      .leftJoinAndSelect('block.stage', 'stage')
+      .leftJoinAndSelect('stage.project', 'project')
+      .leftJoinAndSelect('sale.guarantor', 'guarantor')
+      // ELIMINAR: .leftJoinAndSelect('sale.reservation', 'reservation')
+      .leftJoinAndSelect('sale.financing', 'financing')
+      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
+      .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
+      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
+      .where('sale.id = :id', { id })
+      .getOne();
+
+    if (!sale)
+      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrada`);
+    
+    return formatSaleCollectionResponse(sale);
+  }
+
+  async findAllByClient(clientId: number): Promise<SaleResponse[]> {
+    const sales = await this.saleRepository.createQueryBuilder('sale')
+      .leftJoinAndSelect('sale.client', 'client')
+      .leftJoinAndSelect('client.lead', 'lead')
+      .leftJoinAndSelect('sale.vendor', 'vendor')
+      .leftJoinAndSelect('sale.lot', 'lot')
+      .leftJoinAndSelect('lot.block', 'block')
+      .leftJoinAndSelect('block.stage', 'stage')
+      .leftJoinAndSelect('stage.project', 'project')
+      .leftJoinAndSelect('sale.guarantor', 'guarantor')
+      // ELIMINAR: .leftJoinAndSelect('sale.reservation', 'reservation')
+      .leftJoinAndSelect('sale.financing', 'financing')
+      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
+      .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
+      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
+      .where('client.id = :clientId', { clientId })
+      .andWhere('sale.type = :type', { type: SaleType.FINANCED })
+      .andWhere('sale.status = :status', { status: StatusSale.IN_PAYMENT_PROCESS })
+      .orderBy('sale.createdAt', 'DESC')
+      .getMany();
+
+    return sales.map(formatSaleResponse);
+  }
+
+  async updateStatusSale(
+    id: string,
+    status: StatusSale,
+    queryRunner: QueryRunner,
+  ): Promise<void> {
+    const repository = queryRunner 
+      ? queryRunner.manager.getRepository(Sale) 
+      : this.saleRepository;
+    const sale = await repository.update({ id: id }, { status: status });
+    if (sale.affected === 0)
+      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrada`);
+  }
+
+  async findOneByIdFinancing(id: string): Promise<Sale> {
+    const sale = await this.saleRepository.findOne({
+      where: { financing: { id } },
+      relations: ['lot'],
+    });
+    if (!sale)
+      throw new NotFoundException(`La venta no tiene un financiamiento con ID ${id}`);
+    return sale;
+  }
+
+  async findOneSaleWithPayments(id: string): Promise<Sale> {
+    return await this.saleRepository.findOne({
+        where: { id },
+        relations: [
+          'client',
+          'lot',
+          'lot.block',
+          'lot.block.stage',
+          'lot.block.stage.project'
+        ],
+      });
+  }
+
+  async isValidSaleForWithdrawal(saleId: string) {
+    const sale = await this.findOneById(saleId);
+    if (!sale)
+      throw new NotFoundException(`La venta con ID ${saleId} no se encuentra registrada`);
+    if (sale.status == StatusSale.COMPLETED)
+        throw new BadRequestException(`La venta con ID ${saleId} no se puede desistir porque ya fue completada`);
+    if (sale.status == StatusSale.REJECTED)
+        throw new BadRequestException(`La venta con ID ${saleId} no se puede desistir porque ya fue cancelada`);
   }
 
   async assignParticipantsToSale(
@@ -212,242 +593,6 @@ export class SalesService {
       }
       throw new BadRequestException(`Error al asignar participantes a la venta: ${error.message}`);
     }
-  }
-
-  async findAll(paginationDto: PaginationDto, userId?: string): Promise<Paginated<SaleResponse>> {
-    const { page = 1, limit = 10, order = 'DESC' } = paginationDto;
-    const skip = (page - 1) * limit;
-
-    // Construir el QueryBuilder principal
-    let queryBuilder = this.saleRepository.createQueryBuilder('sale')
-      // Seleccionar campos específicos de Sale
-      // Client y Lead
-      .leftJoinAndSelect('sale.client', 'client')
-      .leftJoinAndSelect('client.lead', 'lead')
-      // Vendor
-      .leftJoinAndSelect('sale.vendor', 'vendor')
-      // Lot, Block, Stage, Project - jerarquía completa
-      .leftJoinAndSelect('sale.lot', 'lot')
-      .leftJoinAndSelect('lot.block', 'block')
-      .leftJoinAndSelect('block.stage', 'stage')
-      .leftJoinAndSelect('stage.project', 'project')
-      // Guarantor (puede ser null)
-      .leftJoinAndSelect('sale.guarantor', 'guarantor')
-      // Reservation (puede ser null)
-      .leftJoinAndSelect('sale.reservation', 'reservation')
-      // Financing y sus installments
-      .leftJoinAndSelect('sale.financing', 'financing')
-      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
-      // Secondary Clients
-      .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
-      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
-      // Participants (todos pueden ser null)
-      .leftJoinAndSelect('sale.liner', 'liner')
-      .leftJoinAndSelect('sale.telemarketingSupervisor', 'telemarketingSupervisor')
-      .leftJoinAndSelect('sale.telemarketingConfirmer', 'telemarketingConfirmer')
-      .leftJoinAndSelect('sale.telemarketer', 'telemarketer')
-      .leftJoinAndSelect('sale.fieldManager', 'fieldManager')
-      .leftJoinAndSelect('sale.fieldSupervisor', 'fieldSupervisor')
-      .leftJoinAndSelect('sale.fieldSeller', 'fieldSeller');
-    // Aplicar filtros condicionales
-    if (userId) {
-      queryBuilder.where('vendor.id = :userId', { userId });
-    } else {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      queryBuilder.where('sale.createdAt >= :thirtyDaysAgo', { thirtyDaysAgo });
-    }
-
-    // Obtener total count para paginación
-    const totalCount = await queryBuilder.getCount();
-
-    // Aplicar paginación y orden
-    const sales = await queryBuilder
-      .orderBy('sale.createdAt', order)
-      .skip(skip)
-      .take(limit)
-      .getMany();
-
-    // Formatear respuesta
-    const formattedSales = sales.map(formatSaleResponse);
-
-    return PaginationHelper.createPaginatedResponse(formattedSales, totalCount, paginationDto);
-  }
-
-  async findOneById(id: string): Promise<SaleResponse> {
-  // Versión con QueryBuilder - Una sola consulta optimizada
-    const sale = await this.saleRepository.createQueryBuilder('sale')
-      // Client y Lead
-      .leftJoinAndSelect('sale.client', 'client')
-      .leftJoinAndSelect('client.lead', 'lead')
-      // Vendor
-      .leftJoinAndSelect('sale.vendor', 'vendor')
-      // Lot hierarchy completa
-      .leftJoinAndSelect('sale.lot', 'lot')
-      .leftJoinAndSelect('lot.block', 'block')
-      .leftJoinAndSelect('block.stage', 'stage')
-      .leftJoinAndSelect('stage.project', 'project')
-      // Guarantor (puede ser null)
-      .leftJoinAndSelect('sale.guarantor', 'guarantor')
-      // Reservation (puede ser null)
-      .leftJoinAndSelect('sale.reservation', 'reservation')
-      // Financing con installments
-      .leftJoinAndSelect('sale.financing', 'financing')
-      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
-      // Secondary clients
-      .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
-      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
-      // Participants (todos pueden ser null)
-      .leftJoinAndSelect('sale.liner', 'liner')
-      .leftJoinAndSelect('sale.telemarketingSupervisor', 'telemarketingSupervisor')
-      .leftJoinAndSelect('sale.telemarketingConfirmer', 'telemarketingConfirmer')
-      .leftJoinAndSelect('sale.telemarketer', 'telemarketer')
-      .leftJoinAndSelect('sale.fieldManager', 'fieldManager')
-      .leftJoinAndSelect('sale.fieldSupervisor', 'fieldSupervisor')
-      .leftJoinAndSelect('sale.fieldSeller', 'fieldSeller')
-      .where('sale.id = :id', { id })
-      .getOne();
-
-    if (!sale)
-      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrada`);
-
-    // Obtener resumen de pagos
-    const paymentsSummary = await this.getPaymentsSummaryForSale(id);
-    const formattedSale = formatSaleResponse(sale);
-
-    return {
-      ...formattedSale,
-      paymentsSummary,
-    };
-  }
-
-  private async getPaymentsSummaryForSale(saleId: string): Promise<any[]> {
-    // Primero obtenemos la venta con las relaciones necesarias
-    const sale = await this.saleRepository.createQueryBuilder('sale')
-      .leftJoinAndSelect('sale.reservation', 'reservation')
-      .leftJoinAndSelect('sale.financing', 'financing')
-      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
-      .where('sale.id = :saleId', { saleId })
-      .getOne();
-
-    if (!sale)
-        throw new NotFoundException(`Venta con ID ${saleId} no encontrada`);
-
-    // 1. Pagos directos a la venta
-    const salePayments = await this.paymentsService.findPaymentsByRelatedEntity('sale', saleId);
-    
-    // 2. Pagos de financiación (si existe)
-    let financingPayments = [];
-    let installmentsPayments = [];
-    
-    if (sale.financing) {
-        // Pagos asociados al financing
-        financingPayments = await this.paymentsService.findPaymentsByRelatedEntity('financing', sale.financing.id);
-    }
-    
-    // 3. Pagos de reserva (si existe)
-    let reservationPayments = [];
-    if (sale.reservation) {
-        reservationPayments = await this.paymentsService.findPaymentsByRelatedEntity('reservation', sale.reservation.id);
-    }
-    
-    // Combinar todos los pagos
-    const allPayments = [
-        ...salePayments,
-        ...financingPayments,
-        ...installmentsPayments,
-        ...reservationPayments
-    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());;
-    
-    // Formatear según el formato requerido
-    return allPayments.map(payment => ({
-        id: payment.id,
-        amount: payment.amount,
-        status: payment.status,
-        createdAt: payment.createdAt,
-        reviewedAt: payment.reviewedAt,
-        reviewBy: payment.reviewedBy ? { 
-            id: payment.reviewedBy.id,
-            email: payment.reviewedBy.email 
-        } : null,
-        codeOperation: payment.codeOperation,
-        banckName: payment.banckName,
-        dateOperation: payment.dateOperation,
-        numberTicket: payment.numberTicket,
-        paymentConfig: payment.paymentConfig.name,
-        reason: payment?.rejectionReason? payment.rejectionReason: null,
-    }));
-  }
-
-  async findOneByIdWithCollections(id: string): Promise<SaleResponse> {
-    const sale = await this.saleRepository.createQueryBuilder('sale')
-      // Client y Lead
-      .leftJoinAndSelect('sale.client', 'client')
-      .leftJoinAndSelect('client.lead', 'lead')
-      // Vendor
-      .leftJoinAndSelect('sale.vendor', 'vendor')
-      // Lot hierarchy
-      .leftJoinAndSelect('sale.lot', 'lot')
-      .leftJoinAndSelect('lot.block', 'block')
-      .leftJoinAndSelect('block.stage', 'stage')
-      .leftJoinAndSelect('stage.project', 'project')
-      // Guarantor (puede ser null)
-      .leftJoinAndSelect('sale.guarantor', 'guarantor')
-      // Reservation (puede ser null)
-      .leftJoinAndSelect('sale.reservation', 'reservation')
-      // Financing con installments
-      .leftJoinAndSelect('sale.financing', 'financing')
-      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
-      // Secondary clients
-      .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
-      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
-      .where('sale.id = :id', { id })
-      .getOne();
-
-    if (!sale)
-      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrada`);
-    return formatSaleCollectionResponse(sale);
-  }
-
-  async findAllByClient(clientId: number): Promise<SaleResponse[]> {
-    const sales = await this.saleRepository.createQueryBuilder('sale')
-      // Client y Lead
-      .leftJoinAndSelect('sale.client', 'client')
-      .leftJoinAndSelect('client.lead', 'lead')
-      // Vendor
-      .leftJoinAndSelect('sale.vendor', 'vendor')
-      // Lot hierarchy
-      .leftJoinAndSelect('sale.lot', 'lot')
-      .leftJoinAndSelect('lot.block', 'block')
-      .leftJoinAndSelect('block.stage', 'stage')
-      .leftJoinAndSelect('stage.project', 'project')
-      // Guarantor
-      .leftJoinAndSelect('sale.guarantor', 'guarantor')
-      // Reservation
-      .leftJoinAndSelect('sale.reservation', 'reservation')
-      // Financing con installments
-      .leftJoinAndSelect('sale.financing', 'financing')
-      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
-      // Secondary clients
-      .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
-      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
-      .where('client.id = :clientId', { clientId })
-      .andWhere('sale.type = :type', { type: SaleType.FINANCED })
-      .andWhere('sale.status = :status', { status: StatusSale.IN_PAYMENT_PROCESS })
-      .orderBy('sale.createdAt', 'DESC')
-      .getMany();
-
-    return sales.map(formatSaleResponse);
-  }
-
-  async findOneByIdFinancing(id: string): Promise<Sale> {
-    const sale = await this.saleRepository.findOne({
-      where: { financing: { id } },
-      relations: ['lot'],
-    });
-    if (!sale)
-      throw new NotFoundException(`La venta no tiene un financiamiento con ID ${id}`);
-    return sale;
   }
 
   async findAllLeadsByDay(
@@ -545,7 +690,7 @@ export class SalesService {
         const createdSecondaryClients = await Promise.all(
           createSecondaryClient.map(async (dto) => {
             const secondaryClient = await this.secondaryClientService.createOrUpdate(dto, userId, queryRunner);
-            return secondaryClient.id; // Asegúrate de que esto devuelva un objeto con `id`
+            return secondaryClient.id;
           }),
         );
         secondaryClientIds = createdSecondaryClients;
@@ -581,140 +726,31 @@ export class SalesService {
     };
   }
 
-  async updateStatusSale(
-    id: string,
-    status: StatusSale,
-    queryRunner: QueryRunner,
-  ): Promise<void> {
-    const repository = queryRunner 
-      ? queryRunner.manager.getRepository(Sale) 
-      : this.saleRepository;
-    const sale = await repository.update({ id: id }, { status: status });
-    if (sale.affected === 0)
-      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrada`);
-  }
-
-  // Internal helpers methods
-
-  private async isValidDataPaymentSale(
-    sale: SaleResponse,
-    paymentDetails: CreateDetailPaymentDto[]
-  ): Promise<CreatePaymentDto> {
-    const reservationAmount = sale.reservation ? await this.reservationService.getAmountReservation(sale.reservation.id) : 0;
-    let paymentDto: CreatePaymentDto;
-    if (sale.type === SaleType.DIRECT_PAYMENT) {
-      paymentDto = {
-        methodPayment: MethodPayment.VOUCHER,
-        amount: sale.totalAmount - reservationAmount,
-        relatedEntityType: 'sale', 
-        relatedEntityId: sale.id,
-        metadata: {
-          'Concepto de pago': 'Monto total de la venta de lote',
-          'Fecha de pago': new Date().toISOString(),
-          'Monto de pago': sale.totalAmount - reservationAmount,
-        },
-        paymentDetails
-      };
-    }
-    if (sale.type === SaleType.FINANCED) {
-      paymentDto = {
-        methodPayment: MethodPayment.VOUCHER,
-        amount: sale.financing.initialAmount - reservationAmount,
-        relatedEntityType: 'financing', 
-        relatedEntityId: sale.financing.id,
-        metadata: {
-          'Concepto de pago': 'Monto inicial de la venta de lote',
-          'Fecha de pago': new Date().toISOString(),
-          'Monto de pago': sale.financing.initialAmount - reservationAmount,
-        },
-        paymentDetails
-      };
-    }
-    return paymentDto;
-  }
-
-  private async handleSaleCreation(
-    createSaleDto: CreateSaleDto,
+  async createPaymentSale(
+    saleId: string,
+    createPaymentSaleDto: CreatePaymentSaleDto,
+    files: Express.Multer.File[],
     userId: string,
-    saleSpecificLogic: (queryRunner: QueryRunner, createSaleDto: CreateSaleDto) => Promise<Sale>,
-  ) {
-    return await this.transactionService.runInTransaction(async (queryRunner) => {
-      const savedSale = await saleSpecificLogic(queryRunner, createSaleDto);
-      const { secondaryClientsIds } = createSaleDto;
-      if (secondaryClientsIds && secondaryClientsIds.length > 0)
-        await Promise.all(
-          createSaleDto.secondaryClientsIds.map(async (id) => {
-            const secondaryClientSale = await this.secondaryClientService.createSecondaryClientSale(savedSale.id, id, queryRunner);
-            return secondaryClientSale;
-          }),
-        );
-      await this.lotService.updateStatus(savedSale.lot.id, LotStatus.SOLD, queryRunner);
-      if (createSaleDto.totalAmountUrbanDevelopment === 0) return savedSale;
-      this.isValidUrbanDevelopmentDataSaLe(
-        createSaleDto.firstPaymentDateHu,
-        createSaleDto.initialAmountUrbanDevelopment,
-        createSaleDto.quantityHuCuotes,
-      );
-      if (createSaleDto.reservationId)
-        await this.reservationService.updateStatusReservation(createSaleDto.reservationId, StatusReservation.SOLD);
-      const financingDataHu = this.calculateAndCreateFinancingHu(createSaleDto);
-      const financingHu = await this.financingService.create(financingDataHu, queryRunner);
-      await this.createUrbanDevelopment(savedSale.id, financingHu.id, createSaleDto, queryRunner);
-      return savedSale;
-    });
+  ): Promise<PaymentResponse> {
+    const { payments } = createPaymentSaleDto;
+    try {
+      const sale = await this.findOneById(saleId);
+      if (!sale)
+        throw new NotFoundException(`Venta con ID ${saleId} no encontrada`);
+      const paymentDto = await this.isValidDataPaymentSale(sale, payments);
+      return await this.transactionService.runInTransaction(async (queryRunner) => {
+        const paymentResult = await this.paymentsService.create(paymentDto, files, userId, queryRunner);
+        return paymentResult;
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+          throw error;
+      }
+      throw new BadRequestException(`Error al crear pago para venta: ${error.message}`);
+    }
   }
 
-  async createSale(
-    createSaleDto: CreateSaleDto,
-    userId: string,
-    financingId?: string,
-    queryRunner?: QueryRunner,
-  ) {
-    const repository = queryRunner 
-      ? queryRunner.manager.getRepository(Sale) 
-      : this.saleRepository;
-    const sale = repository.create({
-      lot: { id: createSaleDto.lotId },
-      client: { id: createSaleDto.clientId },
-      guarantor: createSaleDto.guarantorId 
-      ? { id: createSaleDto.guarantorId } 
-      : null,
-      type: createSaleDto.saleType, 
-      reservation: createSaleDto.reservationId 
-      ? { id: createSaleDto.reservationId } 
-      : null,
-      vendor: { id: userId },
-      totalAmount: createSaleDto.totalAmount,
-      contractDate: createSaleDto.contractDate,
-      financing: { id: financingId },
-    });
-    return await repository.save(sale);
-  }
-
-  private async createUrbanDevelopment(
-    savedSaleId: string,
-    financingHuId: string,
-    createSaleDto: CreateSaleDto,
-    queryRunner: QueryRunner,
-  ) {
-      await this.urbanDevelopmentService.create({
-          saleId: savedSaleId,
-          financingId: financingHuId,
-          amount: createSaleDto.totalAmountUrbanDevelopment,
-          initialAmount: createSaleDto.initialAmountUrbanDevelopment,
-      }, queryRunner);
-  }
-
-  private async isValidReservationForSale(reservationId: string, clientId: number, lotId: string) {
-    const reservation = await this.reservationService.isValidReservation(reservationId);
-    await this.lotService.isLotValidForSaleReservation(lotId);
-    if (reservation.client.id !== clientId)
-      throw new BadRequestException(`El cliente de la reserva no es el mismo del cliente de la venta`);
-    if (reservation.lot.id !== lotId)
-      throw new BadRequestException(`El lote de la reserva no es el mismo del lote de la venta`);
-  }
-
-  private isValidUrbanDevelopmentDataSaLe(
+  private isValidUrbanDevelopmentDataSale(
     datePayment: string,
     initialAmount: number,
     quantityHuCuotes: number,
@@ -727,44 +763,11 @@ export class SalesService {
       throw new BadRequestException('El número de cuotas de la habilitación urbana es requerida');
   }
 
-  private isValidFinancingDataSaLe(
-    totalAmount: number,
-    reservationAmount: number,
-    initialAmount: number,
-    interestRate: number,
-    quantitySaleCoutes: number,
-    financingInstallments: CreateFinancingInstallmentsDto[],
-  ): void {
-    if (!initialAmount)
-      throw new BadRequestException('El monto inicial de la financiación es requerido');
-    if (!interestRate)
-      throw new BadRequestException('El porcentaje de interés es requerido');
-    if (!quantitySaleCoutes)
-      throw new BadRequestException('La cantidad de cuotas es requerido');
-    if (!financingInstallments)
-      throw new BadRequestException('Las cuotas de financiación es requerida');
-    if (financingInstallments.length !== quantitySaleCoutes)
-      throw new BadRequestException(
-        `El número de cuotas enviadas (${financingInstallments.length}) no coincide con la cantidad de cuotas esperada (${quantitySaleCoutes}).`
-      );
-    const sumOfInstallmentAmounts = financingInstallments.reduce((sum, installment) => sum + installment.couteAmount, 0);
-    // const amount = totalAmount - initialAmount - reservationAmount;
-    const calculatedAmortization = this.financingService.generateAmortizationTable(
-      totalAmount,
-      initialAmount,
-      reservationAmount,
-      interestRate,
-      quantitySaleCoutes,
-      financingInstallments[0]?.expectedPaymentDate.toString(),
-      true
-    );
-
-    const expectedTotalAmortizedAmount = calculatedAmortization.reduce((sum, inst) => sum + inst.couteAmount, 0);
-
-    if (Math.abs(sumOfInstallmentAmounts - expectedTotalAmortizedAmount) > 0.01)
-      throw new BadRequestException(
-        `La suma de los montos de las cuotas enviadas (${sumOfInstallmentAmounts.toFixed(2)}) no coincide con el monto total esperado según la amortización (${expectedTotalAmortizedAmount.toFixed(2)}).`
-      );
+  private async validateReservationData(reservationAmount: number, maximumHoldPeriod: number) {
+    if (!reservationAmount || reservationAmount <= 0)
+      throw new BadRequestException('El monto de reserva es requerido y debe ser mayor a cero');
+    if (!maximumHoldPeriod || maximumHoldPeriod <= 0)
+      throw new BadRequestException('El periodo de reserva es requerido y debe ser mayor a cero');
   }
 
   private calculateAndCreateFinancingHu(createSaleDto: CreateSaleDto) {
@@ -787,26 +790,57 @@ export class SalesService {
     }
   }
 
-  async isValidSaleForWithdrawal(saleId: string) {
-    const sale = await this.findOneById(saleId);
-    if (!sale)
-      throw new NotFoundException(`La venta con ID ${saleId} no se encuentra registrada`);
-    if (sale.status == StatusSale.COMPLETED)
-        throw new BadRequestException(`La venta con ID ${saleId} no se puede desistir porque ya fue completada`);
-    if (sale.status == StatusSale.REJECTED)
-        throw new BadRequestException(`La venta con ID ${saleId} no se puede desistir porque ya fue cancelada`);
+  private async createUrbanDevelopment(
+    savedSaleId: string,
+    financingHuId: string,
+    createSaleDto: CreateSaleDto,
+    queryRunner: QueryRunner,
+  ) {
+      await this.urbanDevelopmentService.create({
+          saleId: savedSaleId,
+          financingId: financingHuId,
+          amount: createSaleDto.totalAmountUrbanDevelopment,
+          initialAmount: createSaleDto.initialAmountUrbanDevelopment,
+      }, queryRunner);
   }
 
-  async findOneSaleWithPayments(id: string): Promise<Sale> {
-    return await this.saleRepository.findOne({
-        where: { id },
-        relations: [
-          'client',
-          'lot',
-          'lot.block',
-          'lot.block.stage',
-          'lot.block.stage.project'
-        ],
-      });
+  private isValidFinancingDataSale(
+    totalAmount: number,
+    reservationAmount: number,
+    initialAmount: number,
+    interestRate: number,
+    quantitySaleCoutes: number,
+    financingInstallments: CreateFinancingInstallmentsDto[],
+  ): void {
+    if (!initialAmount)
+      throw new BadRequestException('El monto inicial de la financiación es requerido');
+    if (!interestRate)
+      throw new BadRequestException('El porcentaje de interés es requerido');
+    if (!quantitySaleCoutes)
+      throw new BadRequestException('La cantidad de cuotas es requerido');
+    if (!financingInstallments)
+      throw new BadRequestException('Las cuotas de financiación es requerida');
+    if (financingInstallments.length !== quantitySaleCoutes)
+      throw new BadRequestException(
+        `El número de cuotas enviadas (${financingInstallments.length}) no coincide con la cantidad de cuotas esperada (${quantitySaleCoutes}).`
+      );
+
+    const sumOfInstallmentAmounts = financingInstallments.reduce((sum, installment) => sum + installment.couteAmount, 0);
+    const calculatedAmortization = this.financingService.generateAmortizationTable(
+      totalAmount,
+      initialAmount,
+      reservationAmount,
+      interestRate,
+      quantitySaleCoutes,
+      financingInstallments[0]?.expectedPaymentDate.toString(),
+      true
+    );
+
+    const expectedTotalAmortizedAmount = calculatedAmortization.reduce((sum, inst) => sum + inst.couteAmount, 0);
+
+    if (Math.abs(sumOfInstallmentAmounts - expectedTotalAmortizedAmount) > 0.01)
+      throw new BadRequestException(
+        `La suma de los montos de las cuotas enviadas (${sumOfInstallmentAmounts.toFixed(2)}) no coincide con el monto total esperado según la amortización (${expectedTotalAmortizedAmount.toFixed(2)}).`
+      );
   }
 }

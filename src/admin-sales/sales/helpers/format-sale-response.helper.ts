@@ -8,6 +8,10 @@ export function formatSaleResponse(sale: Sale) {
     totalAmount: sale.totalAmount,
     contractDate: sale.contractDate?.toISOString(),
     status: sale.status,
+    createdAt: sale.createdAt?.toISOString(),
+    reservationAmount: sale.reservationAmount || null,
+    maximumHoldPeriod: sale.maximumHoldPeriod || null,
+    fromReservation: sale.fromReservation,
     currency: sale.lot.block?.stage?.project?.currency,
     client: {
       address: sale.client?.address,
@@ -101,10 +105,10 @@ export function formatSaleResponse(sale: Sale) {
       firstName: sale.guarantor.firstName,
       lastName: sale.guarantor.lastName,
     } : null,
-    reservation: sale.reservation ? {
-      id: sale.reservation.id,
-      amount: sale.reservation.amount,
-    } : null,
+    // reservation: sale.reservation ? {
+    //   id: sale.reservation.id,
+    //   amount: sale.reservation.amount,
+    // } : null,
     vendor: sale.vendor ? {
       document: sale.vendor.document,
       firstName: sale.vendor.firstName,

@@ -101,4 +101,19 @@ export class CreateSaleDto {
   @ValidateNested({ each: true })
   @Type(() => CreateFinancingInstallmentsDto)
 	financingInstallments?: CreateFinancingInstallmentsDto[];
+
+	@IsOptional()
+  @IsNumber({}, { message: 'El monto de reserva debe ser un número válido' })
+  @Type(() => Number)
+  reservationAmount?: number;
+
+  @IsOptional()
+  @IsInt({ message: 'El número de cuotas de la habilitación urbana debe ser un número entero' })
+  @Min(1)
+  @Type(() => Number)
+  maximumHoldPeriod?: number;
+
+  @IsOptional()
+  @Type(() => Boolean)
+  isReservation?: boolean = false;
 }
