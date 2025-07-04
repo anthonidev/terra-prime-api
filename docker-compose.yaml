@@ -3,15 +3,23 @@ services:
     image: nats:2.10-alpine
     container_name: smart-nats
     ports:
-      - '${NATS_EXTERNAL_PORT:-4222}:4222'
-      - '${NATS_CLUSTER_EXTERNAL_PORT:-6222}:6222'
-      - '${NATS_HTTP_EXTERNAL_PORT:-8222}:8222'
+      - '4222:4222'
+      - '6222:6222'
+      - '8222:8222'
     command:
-      ['--js', '--sd', '/data', '--http_port', '8222', '--name', 'smart-nats']
+      [
+        '--js',
+        '--sd',
+        '/data',
+        '--http_port',
+        '8222',
+        '--name',
+        'smart-nats',
+        '--server_name',
+        'smart-nats',
+      ]
     volumes:
       - nats_data:/data
-    networks:
-      - smart-network
 
   db:
     image: postgres:16
@@ -19,8 +27,9 @@ services:
     ports:
       - '5432:5432'
     environment:
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123
+      POSTGRES_DB: HuertasDB
       TZ: 'America/Lima'
       POSTGRES_INITDB_ARGS: '--encoding=UTF8'
       PGCLIENTENCODING: 'UTF8'
@@ -28,24 +37,21 @@ services:
     command: postgres -c 'client_encoding=UTF8'
     volumes:
       - postgres:/var/lib/postgresql/data
-    networks:
-      - smart-network
 
   mongodb:
     image: mongo:7.0
     container_name: chabot-mongodb
     restart: always
     ports:
-      - '${MONGODB_EXTERNAL_PORT:-27017}:27017'
+      - '27017:27017'
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
-      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: chatbot_db
     volumes:
       - mongodb_data:/data/db
       - mongodb_config:/data/configdb
-    networks:
-      - smart-network
+
     command: mongod --auth
 
 volumes:
@@ -57,8 +63,3 @@ volumes:
     driver: local
   mongodb_config:
     driver: local
-
-networks:
-  smart-network:
-    driver: bridge
-    name: smart-network
