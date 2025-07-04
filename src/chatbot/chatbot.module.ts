@@ -18,5 +18,6 @@ import { ContextController } from './controllers/context.controller';
     ]),
   ],
   controllers: [ChatbotController, ContextController],
+  exports: [ClientsModule],
 })
 export class ChatbotModule {}
