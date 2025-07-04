@@ -340,7 +340,7 @@ export class ReportsPaymentAcordPdfService {
     const paymentDate = sale.contractDate ? 
       new Date(sale.contractDate).toLocaleDateString('es-PE') : '';
     const initialPayment = Number(sale.financing?.initialAmount || 0);
-    const reservationPayment = Number(sale.reservation?.amount || 0);
+    const reservationPayment = Number(sale.reservationAmount || 0);
     const totalAmount = Number(sale.totalAmount || 0);
 
     const rowData = [

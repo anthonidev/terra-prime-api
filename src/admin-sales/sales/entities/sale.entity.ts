@@ -5,8 +5,6 @@ import { Column, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGene
 import { StatusSale } from "../enums/status-sale.enum";
 import { Financing } from "src/admin-sales/financing/entities/financing.entity";
 import { Lot } from "src/project/entities/lot.entity";
-import { Reservation } from "src/admin-sales/reservations/entities/reservation.entity";
-import { LateTee } from "src/admin-sales/late-fee/entities/lafe-tee.entity";
 import { UrbanDevelopment } from "src/admin-sales/urban-development/entities/urban-development.entity";
 import { SaleType } from "../enums/sale-type.enum";
 import { Guarantor } from "src/admin-sales/guarantors/entities/guarantor.entity";
@@ -22,8 +20,8 @@ export class Sale extends Timestamped {
   @ManyToOne(() => Client, (client) => client.sales)
   client: Client;
 
-  @ManyToOne(() => Guarantor, (guarantor) => guarantor.sales)
-  guarantor: Guarantor;
+  @ManyToOne(() => Guarantor, (guarantor) => guarantor.sales, { nullable: true })
+  guarantor?: Guarantor;
 
   @Column({
     type: 'enum',
@@ -32,20 +30,12 @@ export class Sale extends Timestamped {
   })
   type: SaleType;
 
-  @OneToOne(() => Financing, (financing) => financing.sale)
+  @OneToOne(() => Financing, (financing) => financing.sale, { nullable: true })
   @JoinColumn({ name: 'financing_id' })
-  financing: Financing;
+  financing?: Financing;
 
   @ManyToOne(() => Lot, (lot) => lot.sales)
   lot: Lot;
-
-  @OneToOne(
-    () => Reservation,
-    (reservation) => reservation.sale,
-    {nullable: true}
-  )
-  @JoinColumn({ name: 'reservation_id' })
-  reservation: Reservation;
 
   @ManyToOne(() => User, (user) => user.sales)
   vendor: User;
@@ -57,6 +47,32 @@ export class Sale extends Timestamped {
   })
   totalAmount: number;
 
+  // ========== CAMPOS DE RESERVA INTEGRADOS ==========
+  
+  @Column({
+    type: 'boolean',
+    default: false,
+  })
+  fromReservation?: boolean;
+
+  @Column({
+    type: 'decimal',
+    nullable: true,
+    precision: 10,
+    scale: 2,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value),
+    },
+  })
+  reservationAmount?: number;
+
+  @Column({
+    type: 'int',
+    nullable: true,
+  })
+  maximumHoldPeriod?: number;
+
   @Column({
     type: 'timestamp',
     nullable: true,
@@ -66,7 +82,7 @@ export class Sale extends Timestamped {
   @Column({
     type: 'enum',
     enum: StatusSale,
-    default: StatusSale.PENDING,
+    default: StatusSale.RESERVATION_PENDING,
   })
   status: StatusSale;
   
@@ -76,8 +92,6 @@ export class Sale extends Timestamped {
     nullable: true,
   })
   radicationPdfUrl?: string;
-  // @OneToMany(() => LateTee, (lateFeeTee) => lateFeeTee.sale)
-  // lateFeeTee: LateTee[];
 
   @Column({
     type: 'varchar',
@@ -86,14 +100,14 @@ export class Sale extends Timestamped {
   })
   paymentAcordPdfUrl?: string;
 
-  @OneToOne(() => UrbanDevelopment, (urbanDevelopment) => urbanDevelopment.sale)
-  urbanDevelopment: UrbanDevelopment;
+  @OneToOne(() => UrbanDevelopment, (urbanDevelopment) => urbanDevelopment.sale, { nullable: true })
+  urbanDevelopment?: UrbanDevelopment;
 
   @OneToMany(() => SecondaryClientSale, (secondaryClient) => secondaryClient.sale)
   secondaryClientSales: SecondaryClientSale[];
 
-  @OneToOne(() => SaleWithdrawal, (saleWithdrawal) => saleWithdrawal.sale)
-  withdrawal: SaleWithdrawal;
+  @OneToOne(() => SaleWithdrawal, (saleWithdrawal) => saleWithdrawal.sale, { nullable: true })
+  withdrawal?: SaleWithdrawal;
 
   @ManyToOne(() => Participant, (participant) => participant.liner, { nullable: true })
   liner?: Participant;

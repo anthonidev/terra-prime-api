@@ -132,7 +132,7 @@ export class ReportsPaymentAcordService {
         'lot.block.stage.project',            // Proyecto
         'financing',                          // Financiamiento
         'financing.financingInstallments',    // Cuotas de financiamiento
-        'reservation',                        // Reserva
+        // 'reservation',                        // Reserva
         'guarantor',                          // Garante
         'vendor',                             // Vendedor
         'liner',

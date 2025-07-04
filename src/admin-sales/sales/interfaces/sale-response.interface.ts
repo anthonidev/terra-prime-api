@@ -8,6 +8,10 @@ export interface SaleResponse {
   contractDate: string;
   status: string;
   currency: CurrencyType;
+  createdAt: string;
+  reservationAmount?: number;
+  maximumHoldPeriod?: number;
+  fromReservation?: boolean;
   client: {
     address: string;
     firstName: string;
@@ -69,10 +73,10 @@ export interface SaleResponse {
     firstName: string;
     lastName: string;
   };
-  reservation: {
-    id: string;
-    amount: number;
-  };
+  // reservation: {
+  //   id: string;
+  //   amount: number;
+  // };
   vendor: {
     document: string;
     firstName: string;

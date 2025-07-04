@@ -149,7 +149,6 @@ export class RadicationService {
         'lot.block.stage',
         'lot.block.stage.project',
         'financing',
-        'reservation',
         'guarantor',
         'vendor',
         'liner',
