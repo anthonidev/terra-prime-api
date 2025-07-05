@@ -4,6 +4,7 @@ import { envs } from 'src/config/envs';
 import { CHATBOT_SERVICE } from 'src/config/services';
 import { ChatbotController } from './controllers/chatbot.controller';
 import { ContextController } from './controllers/context.controller';
+import { HelpController } from './controllers/help.controller';
 
 @Module({
   imports: [
@@ -17,7 +18,7 @@ import { ContextController } from './controllers/context.controller';
       },
     ]),
   ],
-  controllers: [ChatbotController, ContextController],
+  controllers: [ChatbotController, ContextController, HelpController],
   exports: [ClientsModule],
 })
 export class ChatbotModule {}
