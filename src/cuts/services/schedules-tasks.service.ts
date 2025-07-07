@@ -24,4 +24,20 @@ export class ScheduledTasksService {
       );
     }
   }
+  @Cron('10 0 * * *', {
+    name: 'daily-expired-reservations',
+    timeZone: 'America/Lima',
+  })
+  async handleExpiredReservations() {
+    this.logger.log('Iniciando tarea programada: Corte diario de reservas expiradas');
+    try {
+      await this.cutsService.executeCut('DAILY_EXPIRED_RESERVATIONS');
+      this.logger.log('Tarea programada completada: Corte diario de reservas expiradas');
+    } catch (error) {
+      this.logger.error(
+        `Error en tarea programada de reservas expiradas: ${error.message}`,
+        error.stack,
+      );
+    }
+  }
 }

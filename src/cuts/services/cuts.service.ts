@@ -15,6 +15,7 @@ import {
   LogLevel,
 } from '../entities/cut_execution_logs.entity';
 import { LeadService } from 'src/lead/services/lead.service';
+import { SalesService } from '../../admin-sales/sales/sales.service';
 
 @Injectable()
 export class CutsService {
@@ -28,6 +29,7 @@ export class CutsService {
     @InjectRepository(CutExecutionLog)
     private readonly cutExecutionLogRepository: Repository<CutExecutionLog>,
     private readonly leadService: LeadService,
+    private readonly salesService: SalesService,
   ) {}
 
   async executeCut(configCode: string): Promise<CutExecution> {
@@ -79,6 +81,9 @@ export class CutsService {
       switch (config.code) {
         case 'DAILY_LEADS_CLEANUP':
           result = await this.leadService.updateIsOfficeAndAssignVendor();
+          break;
+        case 'DAILY_EXPIRED_RESERVATIONS':
+          result = await this.salesService.processExpiredReservations();
           break;
         // Otros tipos de cortes
         default:

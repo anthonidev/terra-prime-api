@@ -73,6 +73,14 @@ export class Sale extends Timestamped {
   })
   maximumHoldPeriod?: number;
 
+   @Column({
+    type: 'varchar',
+    length: 500,
+    nullable: true,
+    default: null,
+  })
+  cancellationReason?: string;
+
   @Column({
     type: 'timestamp',
     nullable: true,

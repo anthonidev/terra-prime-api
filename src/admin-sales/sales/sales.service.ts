@@ -1,4 +1,4 @@
-import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, forwardRef, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Sale } from './entities/sale.entity';
@@ -842,5 +842,70 @@ export class SalesService {
       throw new BadRequestException(
         `La suma de los montos de las cuotas enviadas (${sumOfInstallmentAmounts.toFixed(2)}) no coincide con el monto total esperado según la amortización (${expectedTotalAmortizedAmount.toFixed(2)}).`
       );
+  }
+
+  async processExpiredReservations(): Promise<{
+    processed: number;
+    successful: number;
+    failed: number;
+    totalPoints: number;
+  }> {
+    const logger = new Logger('SalesService - processExpiredReservations');
+    logger.log('Iniciando procesamiento de reservas expiradas');
+    let processed = 0;
+    let successful = 0;
+    let failed = 0;
+    try {
+      const currentDate = new Date();
+      
+      // Buscar todas las ventas en estado RESERVATION_PENDING
+      const pendingReservations = await this.saleRepository
+        .createQueryBuilder('sale')
+        .where('sale.status = :status', { status: StatusSale.RESERVATION_PENDING })
+        .andWhere('sale.maximumHoldPeriod IS NOT NULL')
+        .andWhere('sale.createdAt IS NOT NULL')
+        .getMany();
+
+      logger.log(`Encontradas ${pendingReservations.length} reservas pendientes para evaluar`);
+
+      for (const sale of pendingReservations) {
+        processed++;
+        
+        try {
+          // Calcular la fecha límite para la reserva
+          const createdAt = new Date(sale.createdAt);
+          const expirationDate = new Date(createdAt.getTime() + (sale.maximumHoldPeriod * 24 * 60 * 60 * 1000));
+          
+          // Verificar si la reserva ha expirado
+          if (currentDate > expirationDate) {
+            // Actualizar el estado de la venta a REJECTED y agregar el motivo
+            await this.saleRepository.update(sale.id, {
+              status: StatusSale.REJECTED,
+              cancellationReason: `Reserva expirada automáticamente. Período máximo de retención: ${sale.maximumHoldPeriod} días. Fecha de expiración: ${expirationDate.toISOString().split('T')[0]}`
+            });
+
+            logger.log(`Venta ${sale.id} marcada como REJECTED por expiración de reserva`);
+            successful++;
+          }
+        } catch (error) {
+          logger.error(`Error procesando venta ${sale.id}: ${error.message}`, error.stack);
+          failed++;
+        }
+      }
+
+      const result = {
+        processed,
+        successful,
+        failed,
+        totalPoints: pendingReservations.length
+      };
+
+      logger.log(`Procesamiento completado: ${successful}/${processed} reservas procesadas exitosamente`);
+      return result;
+
+    } catch (error) {
+      logger.error(`Error general en processExpiredReservations: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 }
