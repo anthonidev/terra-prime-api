@@ -1,15 +1,21 @@
 import {
-  Injectable,
   CanActivate,
   ExecutionContext,
   HttpException,
   HttpStatus,
+  Inject,
+  Injectable,
 } from '@nestjs/common';
-import { RateLimitService } from '../services/rate-limit.service';
+import { ClientProxy } from '@nestjs/microservices';
+import { firstValueFrom } from 'rxjs';
+import { CHATBOT_SERVICE } from 'src/config/services';
 
 @Injectable()
 export class ChatbotRateLimitGuard implements CanActivate {
-  constructor(private readonly rateLimitService: RateLimitService) {}
+  constructor(
+    @Inject(CHATBOT_SERVICE)
+    private readonly chatbotClient: ClientProxy,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
@@ -19,30 +25,24 @@ export class ChatbotRateLimitGuard implements CanActivate {
       return false;
     }
 
-    const rateLimitResult = await this.rateLimitService.checkRateLimit(user);
+    const rateLimitResult = await firstValueFrom(
+      this.chatbotClient.send(
+        { cmd: 'chatbot.rate-limit.can-request' },
+        { user: user },
+      ),
+    );
+    console.log('Rate limit result:', rateLimitResult);
 
-    if (!rateLimitResult.allowed) {
+    if (!rateLimitResult) {
       throw new HttpException(
         {
           success: false,
           message: 'Límite de mensajes excedido',
           error: 'RATE_LIMIT_EXCEEDED',
-          details: {
-            blockReason: rateLimitResult.blockReason,
-            resetTime: rateLimitResult.resetTime,
-            remaining: rateLimitResult.remaining,
-          },
         },
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-
-    // Añadir información de rate limit a la respuesta
-    request.rateLimitInfo = {
-      remaining: rateLimitResult.remaining,
-      resetTime: rateLimitResult.resetTime,
-      isWarning: rateLimitResult.isWarning,
-    };
 
     return true;
   }
