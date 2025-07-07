@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -16,6 +17,9 @@ import { JwtUser } from 'src/auth/interface/jwt-payload.interface';
 import { CHATBOT_SERVICE } from 'src/config/services';
 import { SendMessageDto } from '../dto/message.dto';
 import { ChatbotRateLimitGuard } from '../guards/rate-limit.guard';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { User } from 'src/user/entities/user.entity';
 
 @Controller('chatbot')
 @UseGuards(JwtAuthGuard)
@@ -23,15 +27,33 @@ export class ChatbotController {
   constructor(
     @Inject(CHATBOT_SERVICE)
     private readonly chatbotClient: ClientProxy,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
   ) {}
 
   @Post('message')
   @UseGuards(ChatbotRateLimitGuard)
-  sendMessage(@GetUser() user: JwtUser, @Body() dto: SendMessageDto) {
-    return this.chatbotClient.send(
-      { cmd: 'chatbot.send.message' },
-      { user: user, data: dto },
-    );
+  async sendMessage(@GetUser() user: JwtUser, @Body() dto: SendMessageDto) {
+    try {
+      const infoUser = await this.getFullUserInfo(user.id);
+      return this.chatbotClient.send(
+        { cmd: 'chatbot.send.message' },
+        {
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: infoUser.firstName,
+            lastName: infoUser.lastName,
+            fullName: `${infoUser.firstName} ${infoUser.lastName}`,
+            role: user.role,
+          },
+          data: dto,
+        },
+      );
+    } catch (error) {
+      console.error('Error fetching user info:', error);
+      throw error;
+    }
   }
 
   @Get('history/:sessionId')
@@ -78,5 +100,15 @@ export class ChatbotController {
   @Get('rate-limit/status')
   getRateLimitStatus(@GetUser() user: JwtUser) {
     return this.chatbotClient.send({ cmd: 'chatbot.rate-limit.status' }, user);
+  }
+
+  private async getFullUserInfo(userId: string): Promise<User> {
+    const user = await this.userRepository.findOneBy({ id: userId });
+
+    if (!user) {
+      throw new BadRequestException('Usuario no encontrado');
+    }
+
+    return user;
   }
 }

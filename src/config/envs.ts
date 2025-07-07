@@ -21,7 +21,6 @@ interface Envvars {
   EMAIL_FROM: string;
 
   FRONTEND_URL: string;
-  CLAUDE_API_KEY: string;
 
   PASSWORD_MASTER: string;
 
@@ -48,7 +47,6 @@ const envVarsSchema = joi
     EMAIL_FROM: joi.string().email().required(),
 
     FRONTEND_URL: joi.string().uri().required(),
-    CLAUDE_API_KEY: joi.string().required(),
     PASSWORD_MASTER: joi.string().default('12345678'),
     NATS_SERVERS: joi
       .string()
@@ -84,7 +82,6 @@ export const envs = {
   emailFrom: envVars.EMAIL_FROM,
 
   frontendUrl: envVars.FRONTEND_URL,
-  claudeApiKey: envVars.CLAUDE_API_KEY,
   passwordMaster: envVars.PASSWORD_MASTER,
   natsServers: envVars.NATS_SERVERS,
 };

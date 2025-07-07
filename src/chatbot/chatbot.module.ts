@@ -5,6 +5,7 @@ import { CHATBOT_SERVICE } from 'src/config/services';
 import { ChatbotController } from './controllers/chatbot.controller';
 import { ContextController } from './controllers/context.controller';
 import { HelpController } from './controllers/help.controller';
+import { UsersModule } from 'src/user/user.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { HelpController } from './controllers/help.controller';
         },
       },
     ]),
+    UsersModule,
   ],
   controllers: [ChatbotController, ContextController, HelpController],
   exports: [ClientsModule],
