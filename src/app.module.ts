@@ -1,22 +1,22 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AuthModule } from './auth/auth.module';
-import { envs } from './config/envs';
-import { UsersModule } from './user/user.module';
-import { SeedModule } from './seed/seed.module';
-import { ProjectModule } from './project/project.module';
-import { DashboardModule } from './dashboard/dashboard.module';
-import { LeadModule } from './lead/lead.module';
-import { AdminSalesModule } from './admin-sales/admin-sales.module';
+import { AdminCollectionsModule } from './admin-collections/admin-collections.module';
 import { AdminPaymentsModule } from './admin-payments/admin-payments.module';
+import { AdminSalesModule } from './admin-sales/admin-sales.module';
+import { AuthModule } from './auth/auth.module';
+import { ChatbotModule } from './chatbot/chatbot.module';
+import { envs } from './config/envs';
+import { CutsModule } from './cuts/cuts.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { EmailModule } from './email/email.module';
 import { FilesModule } from './files/files.module';
-import { SystemsModule } from './systems/systems.module';
-import { AdminCollectionsModule } from './admin-collections/admin-collections.module';
-import { ScheduleModule } from '@nestjs/schedule';
-import { CutsModule } from './cuts/cuts.module';
+import { LeadModule } from './lead/lead.module';
+import { ProjectModule } from './project/project.module';
 import { ReportsModule } from './reports/reports.module';
-import { ChatbotModule } from './chatbot/chatbot.module';
+import { SeedModule } from './seed/seed.module';
+import { SystemsModule } from './systems/systems.module';
+import { UsersModule } from './user/user.module';
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({
@@ -37,7 +37,16 @@ import { ChatbotModule } from './chatbot/chatbot.module';
     SeedModule,
     ProjectModule,
     DashboardModule,
-    LeadModule, AdminSalesModule, AdminPaymentsModule, EmailModule, FilesModule, SystemsModule, AdminCollectionsModule, CutsModule, ReportsModule, ChatbotModule,
+    LeadModule,
+    AdminSalesModule,
+    AdminPaymentsModule,
+    EmailModule,
+    FilesModule,
+    SystemsModule,
+    AdminCollectionsModule,
+    CutsModule,
+    ReportsModule,
+    ChatbotModule,
   ],
 })
 export class AppModule {}

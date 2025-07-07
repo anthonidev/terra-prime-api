@@ -35,6 +35,15 @@
                     "code": "LEADS",
                     "children": null,
                     "parent": "G_LEAD"
+                },
+                {
+                    "name": "Perfil",
+                    "url": "/perfil",
+                    "order": 3,
+                    "icon": "user",
+                    "code": "PROFILE",
+                    "children": null,
+                    "parent": null
                 }
             ]
         }
