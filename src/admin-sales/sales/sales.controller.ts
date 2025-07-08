@@ -113,7 +113,7 @@ export class SalesController {
   }
 
   @Get('blocks/lots/:blockId')
-  @Roles('JVE', 'VEN')
+  @Roles('JVE', 'VEN', 'ADM')
   async findAllLotsByBlockId(
     @Param('blockId', ParseUUIDPipe) blockId: string,
     @Query() findAllLotsDto: FindAllLotsDto,
@@ -122,7 +122,7 @@ export class SalesController {
   }
 
   @Get('projects/lots/:blockId')
-  @Roles('JVE', 'VEN')
+  @Roles('JVE', 'VEN', 'ADM')
   async findAllLotsByProjectId(
     @Param('blockId', ParseUUIDPipe) blockId: string,
     @Query() findAllLotsDto: FindAllLotsDto,
