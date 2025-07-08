@@ -66,6 +66,8 @@ import { formatSaleCollectionResponse } from './helpers/format-sale-collection-r
 import { AssignParticipantsToSaleDto } from './dto/assign-participants-to-sale.dto';
 import { ParticipantsService } from '../participants/participants.service';
 import { ParticipantType } from '../participants/entities/participant.entity';
+import { LotDetailResponseDto } from 'src/project/dto/lot.dto';
+import { transformLotToDetail } from 'src/project/helpers/transform-lot-to-detail.helper';
 
 // SERVICIO ACTUALIZADO - UN SOLO ENDPOINT PARA VENTA/RESERVA
 
@@ -648,6 +650,14 @@ export class SalesService {
     const { status } = findAllLotsDto;
     const lots = await this.lotService.findAllByBlockId(blockId, status);
     return lots.map(formatLotResponse);
+  }
+
+  async findAllLotsByProjectId(
+    projectId: string,
+    findAllLotsDto: FindAllLotsDto,
+  ): Promise<LotDetailResponseDto[]> {
+    const { status } = findAllLotsDto;
+    return await this.lotService.findLotsByProjectId(projectId, status);
   }
 
   async findAllLeadsByUser(

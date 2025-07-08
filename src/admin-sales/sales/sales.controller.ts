@@ -112,13 +112,22 @@ export class SalesController {
     return this.salesService.findAllBlocksByStageId(stageId);
   }
 
-  @Get('lots/:blockId')
+  @Get('blocks/lots/:blockId')
   @Roles('JVE', 'VEN')
   async findAllLotsByBlockId(
     @Param('blockId', ParseUUIDPipe) blockId: string,
     @Query() findAllLotsDto: FindAllLotsDto,
   ) {
     return this.salesService.findAllLotsByBlockId(blockId, findAllLotsDto);
+  }
+
+  @Get('projects/lots/:blockId')
+  @Roles('JVE', 'VEN')
+  async findAllLotsByProjectId(
+    @Param('blockId', ParseUUIDPipe) blockId: string,
+    @Query() findAllLotsDto: FindAllLotsDto,
+  ) {
+    return this.salesService.findAllLotsByProjectId(blockId, findAllLotsDto);
   }
 
   @Get('leads/vendor')

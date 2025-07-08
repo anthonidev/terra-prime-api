@@ -26,6 +26,7 @@ import { formatLotResponse } from '../helpers/format-lot-response.helper';
 import { LotResponse } from '../interfaces/lot-response.interface';
 import { UpdatePriceTokenService } from './update-price-token.service';
 import { UpdatePriceByVendorDto } from '../dto/update-price-by-vendor.dto';
+import { transformLotToDetail } from '../helpers/transform-lot-to-detail.helper';
 @Injectable()
 export class LotService {
   private readonly logger = new Logger(LotService.name);
@@ -155,7 +156,7 @@ export class LotService {
         where: { id: savedLot.id },
         relations: ['block', 'block.stage', 'block.stage.project'],
       });
-      return this.transformLotToDetailDto(lotWithRelations);
+      return transformLotToDetail(lotWithRelations);
     } catch (error) {
       if (
         error instanceof NotFoundException ||
@@ -212,7 +213,7 @@ export class LotService {
         where: { id },
         relations: ['block', 'block.stage', 'block.stage.project'],
       });
-      return this.transformLotToDetailDto(updatedLot);
+      return transformLotToDetail(updatedLot);
     } catch (error) {
       if (
         error instanceof NotFoundException ||
@@ -236,7 +237,7 @@ export class LotService {
       if (!lot) {
         throw new NotFoundException(`Lote con ID ${id} no encontrado`);
       }
-      return this.transformLotToDetailDto(lot);
+      return transformLotToDetail(lot);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -249,26 +250,65 @@ export class LotService {
     }
   }
 
-  private transformLotToDetailDto(lot: Lot): LotDetailResponseDto {
-    return {
-      id: lot.id,
-      name: lot.name,
-      area: lot.area,
-      lotPrice: lot.lotPrice,
-      urbanizationPrice: lot.urbanizationPrice,
-      totalPrice: lot.totalPrice,
-      status: lot.status,
-      blockId: lot.block.id,
-      blockName: lot.block.name,
-      stageId: lot.block.stage.id,
-      stageName: lot.block.stage.name,
-      projectId: lot.block.stage.project.id,
-      projectName: lot.block.stage.project.name,
-      projectCurrency: lot.block.stage.project.currency,
-      createdAt: lot.createdAt,
-      updatedAt: lot.updatedAt,
-    };
+  async findLotsByProjectId(projectId: string, status?: LotStatus): Promise<LotDetailResponseDto[]> {
+    try {
+      // Verificar que el proyecto existe
+      const projectExists = await this.projectRepository.findOne({
+        where: { id: projectId },
+      });
+      if (!projectExists)
+        throw new NotFoundException(`Proyecto con ID ${projectId} no encontrado`);
+
+      const queryBuilder = this.lotRepository
+        .createQueryBuilder('lot')
+        .leftJoinAndSelect('lot.block', 'block')
+        .leftJoinAndSelect('block.stage', 'stage')
+        .leftJoinAndSelect('stage.project', 'project')
+        .where('project.id = :projectId', { projectId });
+
+      if (status)
+        queryBuilder.andWhere('lot.status = :status', { status });
+
+      const lots = await queryBuilder
+        .orderBy('stage.name', 'ASC')
+        .addOrderBy('block.name', 'ASC')
+        .addOrderBy('lot.name', 'ASC')
+        .getMany();
+
+      if (!lots || lots.length === 0) return [];
+      return lots.map(lot => transformLotToDetail(lot));
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      this.logger.error(
+        `Error al obtener lotes del proyecto ${projectId}: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException('Error al obtener los lotes del proyecto');
+    }
   }
+
+  // private transformLotToDetailDto(lot: Lot): LotDetailResponseDto {
+  //   return {
+  //     id: lot.id,
+  //     name: lot.name,
+  //     area: lot.area,
+  //     lotPrice: lot.lotPrice,
+  //     urbanizationPrice: lot.urbanizationPrice,
+  //     totalPrice: lot.totalPrice,
+  //     status: lot.status,
+  //     blockId: lot.block.id,
+  //     blockName: lot.block.name,
+  //     stageId: lot.block.stage.id,
+  //     stageName: lot.block.stage.name,
+  //     projectId: lot.block.stage.project.id,
+  //     projectName: lot.block.stage.project.name,
+  //     projectCurrency: lot.block.stage.project.currency,
+  //     createdAt: lot.createdAt,
+  //     updatedAt: lot.updatedAt,
+  //   };
+  // }
 
   // Internal helper Methods
   async findAllByBlockId(
