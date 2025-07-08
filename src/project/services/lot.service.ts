@@ -27,6 +27,8 @@ import { LotResponse } from '../interfaces/lot-response.interface';
 import { UpdatePriceTokenService } from './update-price-token.service';
 import { UpdatePriceByVendorDto } from '../dto/update-price-by-vendor.dto';
 import { transformLotToDetail } from '../helpers/transform-lot-to-detail.helper';
+import { FindAllLotsDto } from 'src/admin-sales/sales/dto/find-all-lots.dto';
+import { Paginated } from 'src/common/interfaces/paginated.interface';
 @Injectable()
 export class LotService {
   private readonly logger = new Logger(LotService.name);
@@ -250,7 +252,8 @@ export class LotService {
     }
   }
 
-  async findLotsByProjectId(projectId: string, status?: LotStatus): Promise<LotDetailResponseDto[]> {
+  async findLotsByProjectId(projectId: string, findAllLotsDto: FindAllLotsDto): Promise<Paginated<LotDetailResponseDto>> {
+    const { status, ...paginationDto } = findAllLotsDto;
     try {
       // Verificar que el proyecto existe
       const projectExists = await this.projectRepository.findOne({
@@ -275,8 +278,12 @@ export class LotService {
         .addOrderBy('lot.name', 'ASC')
         .getMany();
 
-      if (!lots || lots.length === 0) return [];
-      return lots.map(lot => transformLotToDetail(lot));
+      if (!lots || lots.length === 0) return;
+      return PaginationHelper.createPaginatedResponse(
+        lots.map(transformLotToDetail),
+        lots.length,
+        paginationDto
+      );
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;

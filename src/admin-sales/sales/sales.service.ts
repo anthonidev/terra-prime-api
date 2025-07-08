@@ -655,9 +655,8 @@ export class SalesService {
   async findAllLotsByProjectId(
     projectId: string,
     findAllLotsDto: FindAllLotsDto,
-  ): Promise<LotDetailResponseDto[]> {
-    const { status } = findAllLotsDto;
-    return await this.lotService.findLotsByProjectId(projectId, status);
+  ): Promise<Paginated<LotDetailResponseDto>> {
+    return await this.lotService.findLotsByProjectId(projectId, findAllLotsDto);
   }
 
   async findAllLeadsByUser(
