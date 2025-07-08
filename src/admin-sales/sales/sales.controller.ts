@@ -112,7 +112,7 @@ export class SalesController {
     return this.salesService.findAllBlocksByStageId(stageId);
   }
 
-  @Get('blocks/lots/:blockId')
+  @Get('lots/:blockId')
   @Roles('JVE', 'VEN', 'ADM')
   async findAllLotsByBlockId(
     @Param('blockId', ParseUUIDPipe) blockId: string,
