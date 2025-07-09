@@ -18,6 +18,7 @@ import { CreateDetailPaymentDto } from 'src/admin-payments/payments/dto/create-d
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { CreatePaymentSaleDto } from './dto/create-payment-sale.dto';
 import { AssignParticipantsToSaleDto } from './dto/assign-participants-to-sale.dto';
+import { UpdateReservationPeriodDto } from './dto/update-reservation-period.dto';
 
 @Controller('sales')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -198,5 +199,17 @@ export class SalesController {
     files: Array<Express.Multer.File>,
   ) {   
     return this.salesService.createPaymentSale(id, createPaymentSaleDto, files, user.id);
+  }
+
+  @Patch(':saleId/reservation-period')
+  @Roles('JVE', 'ADM', 'VEN')
+  async updateReservationPeriod(
+    @Param('saleId', ParseUUIDPipe) saleId: string,
+    @Body() updatePeriodDto: UpdateReservationPeriodDto,
+  ) {
+    return this.salesService.updateReservationPeriod(
+      saleId, 
+      updatePeriodDto.additionalDays
+    );
   }
 }

@@ -253,7 +253,15 @@ export class LotService {
   }
 
   async findLotsByProjectId(projectId: string, findAllLotsDto: FindAllLotsDto): Promise<Paginated<LotDetailResponseDto>> {
-    const { status, ...paginationDto } = findAllLotsDto;
+    const {
+      status,
+      term,
+      stageId,
+      blockId,
+      limit = 10,
+      page = 1,
+      order = 'ASC',
+    } = findAllLotsDto;
     try {
       // Verificar que el proyecto existe
       const projectExists = await this.projectRepository.findOne({
@@ -261,7 +269,6 @@ export class LotService {
       });
       if (!projectExists)
         throw new NotFoundException(`Proyecto con ID ${projectId} no encontrado`);
-
       const queryBuilder = this.lotRepository
         .createQueryBuilder('lot')
         .leftJoinAndSelect('lot.block', 'block')
@@ -269,20 +276,35 @@ export class LotService {
         .leftJoinAndSelect('stage.project', 'project')
         .where('project.id = :projectId', { projectId });
 
-      if (status)
+      if (stageId)
+        queryBuilder.andWhere('stage.id = :stageId', { stageId });
+
+      if (blockId)
+        queryBuilder.andWhere('block.id = :blockId', { blockId });
+
+      if (term && term.trim()) 
+        queryBuilder.andWhere(
+          '(lot.name ILIKE :term OR block.name ILIKE :term OR stage.name ILIKE :term)',
+          { term: `%${term.trim()}%` },
+        );
+
+      if(status)
         queryBuilder.andWhere('lot.status = :status', { status });
 
-      const lots = await queryBuilder
+      queryBuilder
         .orderBy('stage.name', 'ASC')
         .addOrderBy('block.name', 'ASC')
         .addOrderBy('lot.name', 'ASC')
-        .getMany();
-
-      if (!lots || lots.length === 0) return;
+        .skip((page - 1) * limit)
+        .take(limit);
+      
+      const [lots, totalItems] = await queryBuilder.getManyAndCount();
+      const transformedLots = lots.map(transformLotToDetail);
+      // if (!lots || totalItems === 0) return;
       return PaginationHelper.createPaginatedResponse(
-        lots.map(transformLotToDetail),
-        lots.length,
-        paginationDto
+        transformedLots,
+        totalItems,
+        { page, limit, order }
       );
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -295,27 +317,6 @@ export class LotService {
       throw new InternalServerErrorException('Error al obtener los lotes del proyecto');
     }
   }
-
-  // private transformLotToDetailDto(lot: Lot): LotDetailResponseDto {
-  //   return {
-  //     id: lot.id,
-  //     name: lot.name,
-  //     area: lot.area,
-  //     lotPrice: lot.lotPrice,
-  //     urbanizationPrice: lot.urbanizationPrice,
-  //     totalPrice: lot.totalPrice,
-  //     status: lot.status,
-  //     blockId: lot.block.id,
-  //     blockName: lot.block.name,
-  //     stageId: lot.block.stage.id,
-  //     stageName: lot.block.stage.name,
-  //     projectId: lot.block.stage.project.id,
-  //     projectName: lot.block.stage.project.name,
-  //     projectCurrency: lot.block.stage.project.currency,
-  //     createdAt: lot.createdAt,
-  //     updatedAt: lot.updatedAt,
-  //   };
-  // }
 
   // Internal helper Methods
   async findAllByBlockId(

@@ -1,4 +1,4 @@
-import { BadRequestException, forwardRef, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, forwardRef, Inject, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Sale } from './entities/sale.entity';
@@ -68,6 +68,7 @@ import { ParticipantsService } from '../participants/participants.service';
 import { ParticipantType } from '../participants/entities/participant.entity';
 import { LotDetailResponseDto } from 'src/project/dto/lot.dto';
 import { transformLotToDetail } from 'src/project/helpers/transform-lot-to-detail.helper';
+import { UpdateReservationPeriodResponseDto } from './dto/update-reservation-period.dto';
 
 // SERVICIO ACTUALIZADO - UN SOLO ENDPOINT PARA VENTA/RESERVA
 
@@ -851,6 +852,62 @@ export class SalesService {
       throw new BadRequestException(
         `La suma de los montos de las cuotas enviadas (${sumOfInstallmentAmounts.toFixed(2)}) no coincide con el monto total esperado según la amortización (${expectedTotalAmortizedAmount.toFixed(2)}).`
       );
+  }
+
+  async updateReservationPeriod(
+    saleId: string,
+    additionalDays: number
+  ): Promise<UpdateReservationPeriodResponseDto> {
+    try {
+      // Buscar la venta
+      const sale = await this.saleRepository.findOne({
+        where: { id: saleId },
+      });
+
+      if (!sale)
+        throw new NotFoundException(`Venta con ID ${saleId} no encontrada`);
+
+      // Validar que esté en estado RESERVATION_PENDING
+      if (sale.status !== StatusSale.RESERVATION_PENDING)
+        throw new BadRequestException(
+          `Solo se puede actualizar el período de reservas en estado RESERVATION_PENDING. Estado actual: ${sale.status}`
+        );
+
+      // Validar que tenga un período máximo configurado
+      if (!sale.maximumHoldPeriod)
+        throw new BadRequestException(
+          'Esta venta no tiene un período máximo de reserva configurado'
+        );
+      // Calcular nuevo período
+      const previousPeriod = sale.maximumHoldPeriod;
+      const newPeriod = previousPeriod + additionalDays;
+
+      // Calcular nueva fecha de expiración
+      const createdAt = new Date(sale.createdAt);
+      const newExpirationDate = new Date(
+        createdAt.getTime() + (newPeriod * 24 * 60 * 60 * 1000)
+      );
+
+      // Actualizar en base de datos
+      await this.saleRepository.update(saleId, {
+        maximumHoldPeriod: newPeriod
+      });
+
+      return {
+        saleId,
+        previousPeriod,
+        newPeriod,
+        newExpirationDate: newExpirationDate.toISOString().split('T')[0], // Solo la fecha
+        message: `Período extendido ${additionalDays} días. Nuevo total: ${newPeriod} días.`
+      };
+
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException)
+        throw error;
+      throw new InternalServerErrorException(
+        'Error al actualizar el período de reserva'
+      );
+    }
   }
 
   async processExpiredReservations(): Promise<{
