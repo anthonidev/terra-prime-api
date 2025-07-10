@@ -254,7 +254,7 @@ export class LotService {
 
   async findLotsByProjectId(projectId: string, findAllLotsDto: FindAllLotsDto): Promise<Paginated<LotDetailResponseDto>> {
     const {
-      status,
+      // status,
       term,
       stageId,
       blockId,
@@ -274,7 +274,8 @@ export class LotService {
         .leftJoinAndSelect('lot.block', 'block')
         .leftJoinAndSelect('block.stage', 'stage')
         .leftJoinAndSelect('stage.project', 'project')
-        .where('project.id = :projectId', { projectId });
+        .where('project.id = :projectId', { projectId })
+        .andWhere('lot.status = :status', { status: LotStatus.ACTIVE });
 
       if (stageId)
         queryBuilder.andWhere('stage.id = :stageId', { stageId });
@@ -287,9 +288,6 @@ export class LotService {
           '(lot.name ILIKE :term OR block.name ILIKE :term OR stage.name ILIKE :term)',
           { term: `%${term.trim()}%` },
         );
-
-      if(status)
-        queryBuilder.andWhere('lot.status = :status', { status });
 
       queryBuilder
         .orderBy('stage.name', 'ASC')
@@ -319,18 +317,19 @@ export class LotService {
   }
 
   // Internal helper Methods
-  async findAllByBlockId(
-    blockId: string,
-    status?: LotStatus
-  ): Promise<LotResponse[]> {
-    const whereCondition = status
-      ? { block: { id: blockId}, status } 
-      : {block: { id: blockId}};
+  async findAllByBlockId(blockId: string): Promise<LotResponse[]> {
     const lots = await this.lotRepository.find({
-      where: whereCondition,
+      where: { 
+        block: { id: blockId }, 
+        status: LotStatus.ACTIVE 
+      },
+      order: { name: 'ASC' }
     });
-    if (!lots)
-      throw new NotFoundException(`No se encontraron lotes para esta manzana`);
+    
+    if (!lots || lots.length === 0) {
+      throw new NotFoundException(`No se encontraron lotes activos para esta manzana`);
+    }
+    
     return lots.map(formatLotResponse);
   }
 

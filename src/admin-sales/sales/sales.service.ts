@@ -648,8 +648,7 @@ export class SalesService {
     blockId: string,
     findAllLotsDto: FindAllLotsDto,
   ): Promise<LotResponse[]> {
-    const { status } = findAllLotsDto;
-    const lots = await this.lotService.findAllByBlockId(blockId, status);
+    const lots = await this.lotService.findAllByBlockId(blockId);
     return lots.map(formatLotResponse);
   }
 

@@ -16,6 +16,7 @@ import { Block } from '../entities/block.entity';
 import { Stage } from '../entities/stage.entity';
 import { formatBlockResponse } from '../helpers/format-block-response.helper';
 import { BlockResponse } from '../interfaces/block-response.interface';
+import { LotStatus } from '../entities/lot.entity';
 @Injectable()
 export class BlockService {
   private readonly logger = new Logger(BlockService.name);
@@ -169,11 +170,17 @@ export class BlockService {
 
   // Internal helper Methods
   async findAllByStageId(stageId: string): Promise<BlockResponse[]> {
-    const blocks = await this.blockRepository.find({
-      where: { stage: { id: stageId }, isActive: true },
-    });
-    if (!blocks)
-      throw new NotFoundException(`No se encontraron manzanas para esta etapa`);
+    const blocks = await this.blockRepository
+      .createQueryBuilder('block')
+      .leftJoin('block.lots', 'lot')
+      .where('block.stage.id = :stageId', { stageId })
+      .andWhere('block.isActive = :isActive', { isActive: true })
+      .andWhere('lot.status = :status', { status: LotStatus.ACTIVE })
+      .groupBy('block.id')
+      .orderBy('block.name', 'ASC')
+      .getMany();
+    if (!blocks || blocks.length === 0)
+      throw new NotFoundException(`No se encontraron manzanas con lotes activos para esta etapa`);
     return blocks.map(formatBlockResponse);
   }
 }

@@ -16,6 +16,7 @@ import { Project } from '../entities/project.entity';
 import { Stage } from '../entities/stage.entity';
 import { StageResponse } from '../interfaces/stage-response.interface';
 import { formatStageResponse } from '../helpers/format-stage-response.helper';
+import { LotStatus } from '../entities/lot.entity';
 @Injectable()
 export class StageService {
   private readonly logger = new Logger(StageService.name);
@@ -158,13 +159,21 @@ export class StageService {
     };
   }
 
-  // Internal helper Methods
   async findAllByProjectId(projectId: string): Promise<StageResponse[]> {
-    const stages = await this.stageRepository.find({
-      where: { project: { id: projectId }, isActive: true },
-    });
-    if (!stages)
-      throw new NotFoundException(`No se encontraron etapas para este proyecto`);
+    const stages = await this.stageRepository
+      .createQueryBuilder('stage')
+      .leftJoin('stage.blocks', 'block')
+      .leftJoin('block.lots', 'lot')
+      .where('stage.project.id = :projectId', { projectId })
+      .andWhere('stage.isActive = :isActive', { isActive: true })
+      .andWhere('block.isActive = :isActive', { isActive: true })
+      .andWhere('lot.status = :status', { status: LotStatus.ACTIVE })
+      .groupBy('stage.id')
+      .orderBy('stage.name', 'ASC')
+      .getMany();
+
+    if (!stages || stages.length === 0)
+      throw new NotFoundException(`No se encontraron etapas con lotes activos para este proyecto`);
     return stages.map(formatStageResponse);
   }
 }
