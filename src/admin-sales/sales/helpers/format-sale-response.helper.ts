@@ -52,6 +52,8 @@ export function formatSaleResponse(sale: Sale) {
             coutePending: installment.coutePending,
             coutePaid: installment.coutePaid,
             expectedPaymentDate: installment.expectedPaymentDate?.toISOString(), // Se mantiene el formato ISO string
+            lateFeeAmountPending: installment.lateFeeAmountPending,
+            lateFeeAmountPaid: installment.lateFeeAmountPaid,
             status: installment.status,
           };
         })

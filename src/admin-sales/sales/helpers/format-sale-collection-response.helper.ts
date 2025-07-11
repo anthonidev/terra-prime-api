@@ -51,7 +51,9 @@ export function formatSaleCollectionResponse(sale: Sale) {
             couteAmount: installment.couteAmount,
             coutePending: installment.coutePending,
             coutePaid: installment.coutePaid,
-            expectedPaymentDate: installment.expectedPaymentDate?.toISOString(), // Se mantiene el formato ISO string
+            expectedPaymentDate: installment.expectedPaymentDate?.toISOString(),
+            lateFeeAmountPending: installment.lateFeeAmountPending,
+            lateFeeAmountPaid: installment.lateFeeAmountPaid,
             status: installment.status,
           };
         })
