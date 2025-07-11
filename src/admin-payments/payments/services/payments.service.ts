@@ -456,7 +456,7 @@ export class PaymentsService {
             case 'financingInstallments':
               return (await this.financingInstallmentsService.findOneWithPayments(id));
             case 'reservation':
-              return await this.reservationService.findOneWithPayments(id);
+              return await this.salesService.findOneSaleWithPayments(id);
             default:
               return null;
           }
@@ -468,21 +468,26 @@ export class PaymentsService {
         return {
           ...basePayment,
           currency: sale.lot.block?.stage?.project?.currency,
-          client: sale.client && {
-            address: sale.client.address,
-            lead: {
-              firstName: sale.client.lead?.firstName,
-              lastName: sale.client.lead?.lastName,
-              document: sale.client.lead?.document
-            }
-          },
-          lot: sale.lot && {
-            name: sale.lot.name,
-            lotPrice: sale.lot.lotPrice,
-            block: sale.lot.block?.name,
-            stage: sale.lot.block?.stage?.name,
-            project: sale.lot.block?.stage?.project?.name,
-          }
+          client: sale.client
+            ? {
+                address: sale.client.address,
+                lead: {
+                  firstName: sale.client.lead?.firstName,
+                  lastName: sale.client.lead?.lastName,
+                  document: sale.client.lead?.document
+                }
+              }
+            : null,
+
+          lot: sale.lot
+            ? {
+                name: sale.lot.name,
+                lotPrice: sale.lot.lotPrice,
+                block: sale.lot.block?.name,
+                stage: sale.lot.block?.stage?.name,
+                project: sale.lot.block?.stage?.project?.name,
+              }
+            : null
         };
       })
     );
