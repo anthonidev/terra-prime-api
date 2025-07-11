@@ -1,4 +1,5 @@
 import { StatusPayment } from "src/admin-payments/payments/enums/status-payments.enum";
+import { StatusFinancingInstallments } from "src/admin-sales/financing/enums/status-financing-installments.enum";
 import { CurrencyType } from "src/project/entities/project.entity";
 
 export interface SaleResponse {
@@ -40,6 +41,17 @@ export interface SaleResponse {
     initialAmount: number;
     interestRate: number;
     quantityCoutes: number;
+    // AGREGAR ESTO:
+    financingInstallments: {
+      id: string;
+      couteAmount: number;
+      coutePending: number;
+      coutePaid: number;
+      expectedPaymentDate: string;
+      lateFeeAmountPending: number;
+      lateFeeAmountPaid: number;
+      status: StatusFinancingInstallments;
+    }[];
   };
   guarantor: {
     firstName: string;

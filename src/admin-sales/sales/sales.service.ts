@@ -69,6 +69,7 @@ import { ParticipantType } from '../participants/entities/participant.entity';
 import { LotDetailResponseDto } from 'src/project/dto/lot.dto';
 import { transformLotToDetail } from 'src/project/helpers/transform-lot-to-detail.helper';
 import { UpdateReservationPeriodResponseDto } from './dto/update-reservation-period.dto';
+import { FinancingInstallmentsService } from '../financing/services/financing-installments.service';
 
 // SERVICIO ACTUALIZADO - UN SOLO ENDPOINT PARA VENTA/RESERVA
 
@@ -86,6 +87,7 @@ export class SalesService {
     private readonly clientService: ClientsService,
     private readonly transactionService: TransactionService,
     private readonly financingService: FinancingService,
+    private readonly financingInstallmentsService: FinancingInstallmentsService,
     private readonly guarantorService: GuarantorsService,
     @Inject(forwardRef(() => UrbanDevelopmentService))
     private readonly urbanDevelopmentService: UrbanDevelopmentService,
@@ -449,11 +451,18 @@ export class SalesService {
 
     // Obtener resumen de pagos
     const paymentsSummary = await this.getPaymentsSummaryForSale(id);
+    let installmentsWithPayments = [];
+    if (sale.financing)
+      installmentsWithPayments = await this.financingInstallmentsService.getInstallmentsWithPayments(sale.financing.id);
     const formattedSale = formatSaleResponse(sale);
 
     return {
       ...formattedSale,
       paymentsSummary,
+      financing: sale.financing ? {
+      ...formattedSale.financing,
+      financingInstallments: installmentsWithPayments // Reemplazar cuotas simples con cuotas + pagos
+    } : undefined
     };
   }
 
@@ -476,7 +485,19 @@ export class SalesService {
 
     if (!sale)
       throw new NotFoundException(`La venta con ID ${id} no se encuentra registrada`);
-    return formatSaleCollectionResponse(sale);
+
+    let installmentsWithPayments = [];
+    if (sale.financing)
+      installmentsWithPayments = await this.financingInstallmentsService.getInstallmentsWithPayments(sale.financing.id);
+    const formattedSale = formatSaleResponse(sale);
+
+    return {
+      ...formattedSale,
+      financing: sale.financing ? {
+      ...formattedSale.financing,
+      financingInstallments: installmentsWithPayments // Reemplazar cuotas simples con cuotas + pagos
+    } : undefined
+    };
   }
 
   async findAllByClient(clientId: number): Promise<SaleResponse[]> {

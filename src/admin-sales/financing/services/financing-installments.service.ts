@@ -11,6 +11,8 @@ import { PaymentsService } from "src/admin-payments/payments/services/payments.s
 import { PaymentResponse } from "src/admin-payments/payments/interfaces/payment-response.interface";
 import { TransactionService } from "src/common/services/transaction.service";
 import { Sale } from "src/admin-sales/sales/entities/sale.entity";
+import { InstallmentWithPayments } from "../interfaces/installment-with-payments.interface";
+import { PaymentContribution } from "../interfaces/payment-contribution.interface";
 
 export class FinancingInstallmentsService {
   constructor(
@@ -217,6 +219,128 @@ export class FinancingInstallmentsService {
         }
 
         await queryRunner.manager.save(installment);
+    }
+  }
+
+  async getInstallmentsWithPayments(financingId: string) {
+    // Obtener todas las cuotas ordenadas por fecha de vencimiento
+    const installments = await this.financingInstallmentsRepository.find({
+      where: { financing: { id: financingId } },
+      order: { expectedPaymentDate: 'ASC' },
+    });
+
+    // Obtener todos los pagos de cuotas de esta financiación, ordenados por fecha
+    const payments = await this.paymentsService.findPaymentsByRelatedEntity(
+      'financingInstallments', 
+      financingId
+    );
+    
+    // Filtrar solo pagos aprobados y ordenarlos cronológicamente
+    const approvedPayments = payments
+      .filter(payment => payment.status === 'APPROVED') // Ajustar según tu enum
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    // Calcular la distribución de cada pago
+    const installmentPayments = this.calculatePaymentDistribution(installments, approvedPayments);
+
+    return installmentPayments;
+  }
+
+  private calculatePaymentDistribution(
+    installments: FinancingInstallments[], 
+    payments: any[]
+  ): InstallmentWithPayments[] {
+    
+    // Crear una copia de las cuotas para simular
+    const simulatedInstallments = installments.map(installment => ({
+      id: installment.id,
+      couteAmount: installment.couteAmount,
+      coutePaid: 0, // Empezamos desde 0 para simular
+      coutePending: installment.couteAmount,
+      expectedPaymentDate: installment.expectedPaymentDate,
+      lateFeeAmountPending: installment.lateFeeAmountPending,
+      lateFeeAmountPaid: 0,
+      status: installment.status,
+      payments: [] as PaymentContribution[]
+    }));
+
+    // Aplicar cada pago secuencialmente
+    for (const payment of payments) {
+      this.simulatePaymentApplication(simulatedInstallments, payment);
+    }
+
+    return simulatedInstallments;
+  }
+
+  private simulatePaymentApplication(
+    installments: InstallmentWithPayments[], 
+    payment: any
+  ): void {
+    let remainingAmount = Number(payment.amount);
+
+    for (const installment of installments) {
+      if (remainingAmount <= 0) break;
+
+      // Calcular monto total pendiente de esta cuota (moras + principal)
+      const lateFeeAmountPending = Number(Number(installment.lateFeeAmountPending).toFixed(2));
+      const principalAmountPending = Number(Number(installment.coutePending).toFixed(2));
+      const totalPendingForThisInstallment = lateFeeAmountPending + principalAmountPending;
+
+      if (totalPendingForThisInstallment > 0) {
+        // Calcular cuánto de este pago se aplica a esta cuota
+        const paymentAmountForThisInstallment = Math.min(remainingAmount, totalPendingForThisInstallment);
+        
+        if (paymentAmountForThisInstallment > 0) {
+          // Variables para rastrear la distribución del pago
+          let amountAppliedToLateFee = 0;
+          let amountAppliedToPrincipal = 0;
+          let remainingForThisInstallment = paymentAmountForThisInstallment;
+
+          // PASO 1: Primero pagar las moras (si las hay)
+          if (lateFeeAmountPending > 0 && remainingForThisInstallment > 0) {
+            amountAppliedToLateFee = Math.min(remainingForThisInstallment, lateFeeAmountPending);
+            
+            // Actualizar estado de las moras
+            installment.lateFeeAmountPaid = Number((Number(installment.lateFeeAmountPaid) + amountAppliedToLateFee).toFixed(2));
+            installment.lateFeeAmountPending = Number((Number(installment.lateFeeAmountPending) - amountAppliedToLateFee).toFixed(2));
+            
+            remainingForThisInstallment = Number((remainingForThisInstallment - amountAppliedToLateFee).toFixed(2));
+          }
+
+          // PASO 2: Luego pagar el monto principal (si sobra dinero)
+          if (principalAmountPending > 0 && remainingForThisInstallment > 0) {
+            amountAppliedToPrincipal = Math.min(remainingForThisInstallment, principalAmountPending);
+            
+            // Actualizar estado del principal
+            installment.coutePaid = Number((Number(installment.coutePaid) + amountAppliedToPrincipal).toFixed(2));
+            installment.coutePending = Number((Number(installment.coutePending) - amountAppliedToPrincipal).toFixed(2));
+          }
+
+          // Registrar la contribución de este pago a esta cuota
+          if (amountAppliedToLateFee > 0 || amountAppliedToPrincipal > 0) {
+            installment.payments.push({
+              paymentId: payment.id,
+              amountApplied: paymentAmountForThisInstallment,
+              amountAppliedToLateFee: amountAppliedToLateFee,
+              amountAppliedToPrincipal: amountAppliedToPrincipal,
+              paymentDate: payment.createdAt,
+              paymentStatus: payment.status,
+              codeOperation: payment.codeOperation,
+              banckName: payment.banckName,
+              dateOperation: payment.dateOperation,
+              numberTicket: payment.numberTicket
+            });
+          }
+
+          // Actualizar el monto restante del pago
+          remainingAmount = Number((remainingAmount - paymentAmountForThisInstallment).toFixed(2));
+
+          // Actualizar status si la cuota queda completamente pagada (sin moras ni principal pendiente)
+          if (installment.coutePending <= 0 && installment.lateFeeAmountPending <= 0) {
+            installment.status = StatusFinancingInstallments.PAID;
+          }
+        }
+      }
     }
   }
 }
