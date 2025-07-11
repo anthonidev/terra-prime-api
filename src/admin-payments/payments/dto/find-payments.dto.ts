@@ -30,4 +30,8 @@ export class FindPaymentsDto extends PaginationDto {
   @IsOptional()
   @IsDateString()
   endDate?: string;
+
+  @IsOptional()
+  @IsString()
+  collectorId?: string;
 }

@@ -242,6 +242,7 @@ export class PaymentsService {
         endDate,
         paymentConfigId,
         status,
+        collectorId,
         order = 'DESC',
         search,
       } = filters;
@@ -265,24 +266,25 @@ export class PaymentsService {
           startDate: new Date(startDate),
         });
 
-      if (search) {
-        queryBuilder.andWhere(
-          '(user.email ILIKE :search)',
-          { search: `%${search}%` },
-        );
-      }
-
       if (endDate) {
         const endOfDay = new Date(endDate);
         endOfDay.setHours(23, 59, 59, 999);
-
         queryBuilder.andWhere('payment.createdAt <= :endDate', {
           endDate: endOfDay,
         });
       }
 
+      if (search)
+        queryBuilder.andWhere(
+          '(user.email ILIKE :search)',
+          { search: `%${search}%` },
+        );
+
       if (userId)
         queryBuilder.andWhere('payment.user.id = :userId', { userId });
+
+      if (collectorId)
+        queryBuilder.andWhere('payment.user.id = :collectorId', { collectorId });
 
       queryBuilder
         .orderBy('payment.createdAt', order)
