@@ -463,7 +463,6 @@ export class PaymentsService {
         };
 
         const sale = await getSaleData();
-        console.log(sale);
         if (!sale) return basePayment;
 
         return {

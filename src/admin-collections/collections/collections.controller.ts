@@ -75,6 +75,14 @@ export class CollectionsController {
     return this.collectionsService.findAllPaymentsByCollector(filters, user.id);
   }
 
+  @Get('list/all/payments')
+  @Roles('SCO')
+  async findAllPaymentsAll(
+    @Query() filters: FindPaymentsDto,
+  ) {
+    return this.collectionsService.findAllPaymentsByCollector(filters);
+  }
+
   @Get('payments/details/:id')
   @Roles('COB', 'SCO')
   async findOnePayment(

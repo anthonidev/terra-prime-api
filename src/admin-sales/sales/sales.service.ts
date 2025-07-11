@@ -467,7 +467,6 @@ export class SalesService {
       .leftJoinAndSelect('block.stage', 'stage')
       .leftJoinAndSelect('stage.project', 'project')
       .leftJoinAndSelect('sale.guarantor', 'guarantor')
-      // ELIMINAR: .leftJoinAndSelect('sale.reservation', 'reservation')
       .leftJoinAndSelect('sale.financing', 'financing')
       .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
       .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
@@ -477,7 +476,6 @@ export class SalesService {
 
     if (!sale)
       throw new NotFoundException(`La venta con ID ${id} no se encuentra registrada`);
-    
     return formatSaleCollectionResponse(sale);
   }
 
@@ -491,7 +489,6 @@ export class SalesService {
       .leftJoinAndSelect('block.stage', 'stage')
       .leftJoinAndSelect('stage.project', 'project')
       .leftJoinAndSelect('sale.guarantor', 'guarantor')
-      // ELIMINAR: .leftJoinAndSelect('sale.reservation', 'reservation')
       .leftJoinAndSelect('sale.financing', 'financing')
       .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
       .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
@@ -501,7 +498,6 @@ export class SalesService {
       .andWhere('sale.status = :status', { status: StatusSale.IN_PAYMENT_PROCESS })
       .orderBy('sale.createdAt', 'DESC')
       .getMany();
-
     return sales.map(formatSaleResponse);
   }
 

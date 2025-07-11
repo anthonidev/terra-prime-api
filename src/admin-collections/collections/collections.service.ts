@@ -106,7 +106,7 @@ export class CollectionsService {
     return await this.financingInstallmentsService.payInstallments(financingId, amountPaid, paymentDetails, files, userId);
   }
 
-  async findAllPaymentsByCollector(filters: FindPaymentsDto, userId: string)
+  async findAllPaymentsByCollector(filters: FindPaymentsDto, userId?: string)
   : Promise<Paginated<PaymentAllResponse>> {
     return await this.paymentsService.findAllPayments(filters, userId);
   }
