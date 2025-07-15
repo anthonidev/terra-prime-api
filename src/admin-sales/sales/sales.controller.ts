@@ -1,4 +1,22 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, ParseUUIDPipe, ParseIntPipe, UploadedFiles, ParseFilePipeBuilder, HttpStatus, ValidationPipe, UseInterceptors, UsePipes } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseGuards,
+  ParseUUIDPipe,
+  ParseIntPipe,
+  UploadedFiles,
+  ParseFilePipeBuilder,
+  HttpStatus,
+  ValidationPipe,
+  UseInterceptors,
+  UsePipes,
+} from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { FindAllLeadsByDayDto } from './dto/find-all-leads-by-day.dto';
@@ -27,10 +45,7 @@ export class SalesController {
 
   @Post()
   @Roles('JVE', 'VEN')
-  create(
-    @Body() createSaleDto: CreateSaleDto,
-    @GetUser() user: User,
-  ) {
+  create(@Body() createSaleDto: CreateSaleDto, @GetUser() user: User) {
     return this.salesService.create(createSaleDto, user.id);
   }
 
@@ -40,48 +55,39 @@ export class SalesController {
     @Body() assignParticipantsDto: AssignParticipantsToSaleDto,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.salesService.assignParticipantsToSale(id, assignParticipantsDto);
+    return this.salesService.assignParticipantsToSale(
+      id,
+      assignParticipantsDto,
+    );
   }
 
   @Get('all/list')
   @Roles('JVE', 'FAC')
-  findAllActives(
-    @GetUser() user: User,
-    @Query() paginationDto: PaginationDto,
-  ) {
+  findAllActives(@GetUser() user: User, @Query() paginationDto: PaginationDto) {
     return this.salesService.findAll(paginationDto);
   }
 
   @Get('all/list/vendor')
   @Roles('JVE', 'VEN')
-  findAll(
-    @GetUser() user: User,
-    @Query() paginationDto: PaginationDto,
-  ) {
+  findAll(@GetUser() user: User, @Query() paginationDto: PaginationDto) {
     return this.salesService.findAll(paginationDto, user.id);
   }
 
   @Get(':id')
   @Roles('JVE', 'VEN')
-  async findOneById(
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
+  async findOneById(@Param('id', ParseUUIDPipe) id: string) {
     return this.salesService.findOneById(id);
   }
 
   @Get('leads/day')
   @Roles('JVE')
-  findAllLeadsByDay(
-    @Query() findAllLeadsByDayDto: FindAllLeadsByDayDto,
-  ) {
+  findAllLeadsByDay(@Query() findAllLeadsByDayDto: FindAllLeadsByDayDto) {
     return this.salesService.findAllLeadsByDay(findAllLeadsByDayDto);
   }
 
   @Post('leads/assign/vendor')
   @Roles('JVE')
-  assignLeadsToVendor(
-    @Body() assignLeadsToVendorDto: AssignLeadsToVendorDto,
-  ) {
+  assignLeadsToVendor(@Body() assignLeadsToVendorDto: AssignLeadsToVendorDto) {
     return this.salesService.assignLeadsToVendor(assignLeadsToVendorDto);
   }
 
@@ -92,7 +98,7 @@ export class SalesController {
   }
 
   @Get('projects/actives')
-  @Roles('JVE', 'VEN')
+  @Roles('JVE', 'VEN', 'ADM')
   findAllActiveProjects() {
     return this.salesService.findAllActiveProjects();
   }
@@ -133,9 +139,7 @@ export class SalesController {
 
   @Get('leads/vendor')
   @Roles('VEN')
-  async findAllLeadsByUser(
-    @GetUser() user: User,
-  ) {
+  async findAllLeadsByUser(@GetUser() user: User) {
     return this.salesService.findAllLeadsByUser(user.id);
   }
 
@@ -149,18 +153,14 @@ export class SalesController {
 
   @Get('guarantors/:id')
   @Roles('JVE', 'VEN')
-  async findOneGuarantorById(
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async findOneGuarantorById(@Param('id', ParseIntPipe) id: number) {
     return this.salesService.findOneGuarantorById(id);
   }
 
   @Get('clients/document/:document')
   @Roles('JVE', 'VEN')
-  async findOneClientByDocument(
-    @Param('document') document: string,
-  ) { 
-    return this.salesService.findOneClientByDocument(document); 
+  async findOneClientByDocument(@Param('document') document: string) {
+    return this.salesService.findOneClientByDocument(document);
   }
 
   @Post('clients/guarantors/create')
@@ -168,7 +168,7 @@ export class SalesController {
   async createClientAndGuarantor(
     @Body() createClientAndGuarantorDto: CreateClientAndGuarantorDto,
     @GetUser() user: User,
-  ) {   
+  ) {
     return this.salesService.createClientAndGuarantor({
       ...createClientAndGuarantorDto,
       userId: user.id,
@@ -197,8 +197,13 @@ export class SalesController {
         }),
     )
     files: Array<Express.Multer.File>,
-  ) {   
-    return this.salesService.createPaymentSale(id, createPaymentSaleDto, files, user.id);
+  ) {
+    return this.salesService.createPaymentSale(
+      id,
+      createPaymentSaleDto,
+      files,
+      user.id,
+    );
   }
 
   @Patch(':saleId/reservation-period')
@@ -208,8 +213,8 @@ export class SalesController {
     @Body() updatePeriodDto: UpdateReservationPeriodDto,
   ) {
     return this.salesService.updateReservationPeriod(
-      saleId, 
-      updatePeriodDto.additionalDays
+      saleId,
+      updatePeriodDto.additionalDays,
     );
   }
 }
