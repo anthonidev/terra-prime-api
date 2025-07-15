@@ -1,42 +1,50 @@
 {
-    "code": "SYS",
+    "code": "REC",
     "views": [
         {
-            "name": "Usuarios",
-            "url": "/usuarios",
-            "order": 1,
-            "icon": "user",
-            "parent": null,
-            "children": null,
-            "code": "USER"
-        },
-        {
-            "name": "Gestión de Proyectos",
+            "name": "Gestión de Leads",
             "url": null,
-            "order": 2,
-            "icon": "g-project",
-            "code": "G_PROJECT",
+            "order": 4,
+            "icon": "g-lead",
+            "code": "G_LEAD",
             "parent": null,
             "children": [
                 {
-                    "name": "Nuevo Proyecto",
-                    "url": "/proyectos/nuevo",
+                    "name": "Fuentes de Leads",
+                    "url": "/leads/fuentes",
                     "order": 1,
-                    "icon": "lote",
-                    "code": "NEW_PROJECT",
+                    "icon": "lead-source",
+                    "code": "LEAD_SOURCE",
                     "children": null,
-                    "parent": "G_PROJECT"
+                    "parent": "G_LEAD"
                 },
                 {
-                    "name": "Proyectos",
-                    "url": "/proyectos",
+                    "name": "Nuevo Lead",
+                    "url": "/leads/nuevo",
                     "order": 2,
-                    "icon": "project",
-                    "code": "PROJECT",
+                    "icon": "new-lead",
+                    "code": "NEW_LEAD",
                     "children": null,
-                    "parent": "G_PROJECT"
+                    "parent": "G_LEAD"
+                },
+                {
+                    "name": "Leads",
+                    "url": "/leads",
+                    "order": 3,
+                    "icon": "leads",
+                    "code": "LEADS",
+                    "children": null,
+                    "parent": "G_LEAD"
                 }
             ]
+        },
+        {
+            "name": "Perfil",
+            "url": "/perfil",
+            "order": 3,
+            "icon": "user",
+            "code": "PROFILE",
+            "children": null
         }
     ]
 }
