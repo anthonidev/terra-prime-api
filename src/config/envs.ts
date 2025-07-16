@@ -25,6 +25,8 @@ interface Envvars {
   PASSWORD_MASTER: string;
 
   NATS_SERVERS: string;
+
+  API_KEY_EXTERNAL: string;
 }
 const envVarsSchema = joi
   .object({
@@ -52,6 +54,7 @@ const envVarsSchema = joi
       .string()
       .default('nats://localhost:4222')
       .description('NATS server URI'),
+    API_KEY_EXTERNAL: joi.string().required(),
   })
   .unknown(true);
 const { error, value } = envVarsSchema.validate({
@@ -84,4 +87,6 @@ export const envs = {
   frontendUrl: envVars.FRONTEND_URL,
   passwordMaster: envVars.PASSWORD_MASTER,
   natsServers: envVars.NATS_SERVERS,
+
+  apiKeyExternal: envVars.API_KEY_EXTERNAL,
 };

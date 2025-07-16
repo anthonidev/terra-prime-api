@@ -14,37 +14,37 @@ export class ParticipantsController {
   constructor(private readonly participantsService: ParticipantsService) {}
 
   @Post()
-  @Roles('JVE')
+  @Roles('JVE', 'SYS')
   create(@Body() createParticipantDto: CreateParticipantDto) {
     return this.participantsService.create(createParticipantDto);
   }
 
   @Get()
-  @Roles('JVE')
+  @Roles('JVE', 'SYS')
   findAll() {
     return this.participantsService.findAll();
   }
 
   @Get(':id')
-  @Roles('JVE')
+  @Roles('JVE', 'SYS')
   findOne(@Param('id') id: string) {
     return this.participantsService.findOne(id);
   }
 
   @Patch(':id')
-  @Roles('JVE')
+  @Roles('JVE', 'SYS')
   update(@Param('id') id: string, @Body() updateParticipantDto: UpdateParticipantDto) {
     return this.participantsService.update(id, updateParticipantDto);
   }
 
   @Delete(':id')
-  @Roles('JVE')
+  @Roles('JVE', 'SYS')
   remove(@Param('id') id: string) {
     return this.participantsService.remove(id);
   }
 
   @Get('all/actives')
-  @Roles('JVE')
+  @Roles('JVE', 'SYS')
   async findAllParticipants(
     @Query() findParticipantsDto: FindParticipantsActivesDto,
   ) {
