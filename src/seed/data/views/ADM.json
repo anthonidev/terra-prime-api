@@ -8,6 +8,22 @@
             "icon": "pin",
             "code": "ADM_PIN",
             "parent": null
+        },
+        {
+            "name": "Perfil",
+            "url": "/perfil",
+            "order": 3,
+            "icon": "user",
+            "code": "PROFILE",
+            "children": null
+        },
+        {
+            "name": "Lotes",
+            "url": "/ventas/lotes",
+            "order": 1,
+            "icon": "lote",
+            "code": "JVE-LOTES",
+            "parent": null
         }
     ]
 }

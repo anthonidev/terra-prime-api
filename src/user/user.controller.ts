@@ -19,6 +19,7 @@ import { UsersService } from './user.service';
 import { PaginatedResult } from 'src/common/helpers/pagination.helper';
 import { FindUsersDto } from './dto/find-users.dto';
 import { AssignRoleViewsDto } from './dto/assign-role-view.dto';
+import { Public } from 'src/auth/decorators/is-public.decorator';
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
@@ -53,7 +54,7 @@ export class UsersController {
     return this.usersService.deleteAllViews();
   }
   @Post('assign-to-role')
-  @Roles('SYS')
+  @Public()
   async assignViewsToRole(@Body() assignRoleViewsDto: AssignRoleViewsDto) {
     return this.usersService.assignViewsToRole(assignRoleViewsDto);
   }

@@ -12,7 +12,7 @@
         {
             "name": "Bienvenidos",
             "url": "/ventas/bienvenidos-asignados",
-            "order": 1,
+            "order": 2,
             "icon": "welcome-assign",
             "code": "VEN_WELCOME_ASSIGN",
             "children": null
@@ -20,7 +20,7 @@
         {
             "name": "Crear Ventas",
             "url": "/ventas/crear-venta",
-            "order": 2,
+            "order": 3,
             "icon": "create-sale",
             "code": "VEN_CREATE_SALE",
             "parent": null
@@ -28,10 +28,18 @@
         {
             "name": "Mis Ventas",
             "url": "/ventas",
-            "order": 3,
+            "order": 4,
             "icon": "ventas",
             "code": "VEN_VENTAS",
             "parent": null
+        },
+        {
+            "name": "Perfil",
+            "url": "/perfil",
+            "order": 6,
+            "icon": "user",
+            "code": "PROFILE",
+            "children": null
         }
     ]
 }

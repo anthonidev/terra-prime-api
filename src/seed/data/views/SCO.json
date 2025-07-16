@@ -1,21 +1,21 @@
 {
-    "code": "COB",
+    "code": "SCO",
     "views": [
         {
-            "name": "Mis Clientes",
-            "url": "/cobranza/clientes-asignados",
+            "name": "Clientes",
+            "url": "/cobranza",
             "order": 1,
             "icon": "clientes",
-            "code": "COB_CLIENTES",
+            "code": "SCO_CLIENTES",
             "parent": null
         },
         {
-            "name": "Pagos",
-            "url": "/cobranza/pagos",
-            "order": 2,
-            "icon": "pagos",
-            "code": "COB_PAGOS",
-            "parent": null
+            "name": "Perfil",
+            "url": "/perfil",
+            "order": 3,
+            "icon": "user",
+            "code": "PROFILE",
+            "children": null
         }
     ]
 }
