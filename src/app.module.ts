@@ -17,6 +17,7 @@ import { ReportsModule } from './reports/reports.module';
 import { SeedModule } from './seed/seed.module';
 import { SystemsModule } from './systems/systems.module';
 import { UsersModule } from './user/user.module';
+import { ExternalApiModule } from './external-api/external-api.module';
 @Module({
   imports: [
     TypeOrmModule.forRootAsync({
@@ -47,6 +48,7 @@ import { UsersModule } from './user/user.module';
     CutsModule,
     ReportsModule,
     ChatbotModule,
+    ExternalApiModule,
   ],
 })
 export class AppModule {}
