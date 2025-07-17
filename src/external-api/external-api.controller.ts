@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, UseGuards, UseInterceptors } from "@nestjs/common";
 import { ApiKeyGuard } from "./guards/api-key.guard";
 import { ExternalApiService } from "./external-api.service";
 import { FindAllLotsDto } from "src/admin-sales/sales/dto/find-all-lots.dto";
@@ -7,9 +7,11 @@ import { CreateUpdateLeadDto } from "src/lead/dto/create-update-lead.dto";
 import { CreateClientAndGuarantorDto } from "src/admin-sales/sales/dto/create-client-and-guarantor.dto";
 import { CreateSaleDto } from "src/admin-sales/sales/dto/create-sale.dto";
 import { PaginationDto } from "src/common/dto/paginationDto";
+import { ExternalApiResponseInterceptor } from "./interceptors/external-api-response.interceptor";
 
 @Controller('external')
 @UseGuards(ApiKeyGuard) 
+@UseInterceptors(ExternalApiResponseInterceptor)
 export class ExternalApiController {
   private readonly EXTERNAL_USER_ID = '3f9f5e47-bfe5-4e85-b9b2-f4cd20e5e3a4';
   constructor(private readonly externalApiService: ExternalApiService) {}
