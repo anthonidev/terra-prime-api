@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards, UseInterceptors } from "@nestjs/common";
 import { ApiKeyGuard } from "./guards/api-key.guard";
 import { ExternalApiService } from "./external-api.service";
 import { FindAllLotsDto } from "src/admin-sales/sales/dto/find-all-lots.dto";
@@ -22,17 +22,17 @@ export class ExternalApiController {
   }
 
   @Get('projects/:projectId/stages')
-  async getStages(@Param('projectId') projectId: string) {
+  async getStages(@Param('projectId', ParseUUIDPipe) projectId: string) {
     return this.externalApiService.getStages(projectId);
   }
 
   @Get('stages/:stageId/blocks')
-  async getBlocks(@Param('stageId') stageId: string) {
+  async getBlocks(@Param('stageId', ParseUUIDPipe) stageId: string) {
     return this.externalApiService.getBlocks(stageId);
   }
 
   @Get('blocks/:blockId/lots')
-  async getLots(@Param('blockId') blockId: string) {
+  async getLots(@Param('blockId', ParseUUIDPipe) blockId: string) {
     return this.externalApiService.getLots(blockId);
   }
 

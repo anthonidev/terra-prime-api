@@ -326,10 +326,8 @@ export class LotService {
       order: { name: 'ASC' }
     });
     
-    if (!lots || lots.length === 0) {
+    if (!lots || lots.length === 0)
       throw new NotFoundException(`No se encontraron lotes activos para esta manzana`);
-    }
-    
     return lots.map(formatLotResponse);
   }
 
