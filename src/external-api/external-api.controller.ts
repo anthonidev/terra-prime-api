@@ -11,7 +11,7 @@ import { PaginationDto } from "src/common/dto/paginationDto";
 @Controller('external')
 @UseGuards(ApiKeyGuard) 
 export class ExternalApiController {
-  private readonly EXTERNAL_USER_ID = 'external-api-system';
+  private readonly EXTERNAL_USER_ID = '3f9f5e47-bfe5-4e85-b9b2-f4cd20e5e3a4';
   constructor(private readonly externalApiService: ExternalApiService) {}
 
   @Get('projects')
