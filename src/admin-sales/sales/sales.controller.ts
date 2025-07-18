@@ -104,7 +104,7 @@ export class SalesController {
   }
 
   @Get('stages/:projectId')
-  @Roles('JVE', 'VEN')
+  @Roles('JVE', 'VEN', 'ADM')
   async findAllStagesByProjectId(
     @Param('projectId', ParseUUIDPipe) projectId: string,
   ) {
@@ -112,7 +112,7 @@ export class SalesController {
   }
 
   @Get('blocks/:stageId')
-  @Roles('JVE', 'VEN')
+  @Roles('JVE', 'VEN', 'ADM')
   async findAllBlocksByStageId(
     @Param('stageId', ParseUUIDPipe) stageId: string,
   ) {
