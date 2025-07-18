@@ -60,7 +60,7 @@ export class ClientsService {
       const repository = queryRunner
         ? queryRunner.manager.getRepository(Client)
         : this.clientRepository;
-      // const lead = await this.leadService.findOneById(leadId);
+      const lead = await this.leadService.findOneById(leadId);
       // if (lead.vendor?.id !== userId)
       //   throw new NotFoundException(
       //     `El lead con ID ${leadId} no se encuentra asignado al vendedor activo`,
