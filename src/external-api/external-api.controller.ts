@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, UseGuards, UseInterceptors } from "@nestjs/common";
+import { Body, Controller, Get, HttpStatus, Param, ParseFilePipeBuilder, ParseUUIDPipe, Post, Query, UploadedFiles, UseGuards, UseInterceptors, UsePipes, ValidationPipe } from "@nestjs/common";
 import { ApiKeyGuard } from "./guards/api-key.guard";
 import { ExternalApiService } from "./external-api.service";
 import { FindAllLotsDto } from "src/admin-sales/sales/dto/find-all-lots.dto";
@@ -8,6 +8,12 @@ import { CreateClientAndGuarantorDto } from "src/admin-sales/sales/dto/create-cl
 import { CreateSaleDto } from "src/admin-sales/sales/dto/create-sale.dto";
 import { PaginationDto } from "src/common/dto/paginationDto";
 import { ExternalApiResponseInterceptor } from "./interceptors/external-api-response.interceptor";
+import { FilesInterceptor } from "@nestjs/platform-express";
+import { Roles } from "src/auth/decorators/roles.decorator";
+import { CreatePaymentSaleDto } from "src/admin-sales/sales/dto/create-payment-sale.dto";
+import { User } from "src/user/entities/user.entity";
+import { GetUser } from "src/auth/decorators/get-user.decorator";
+import { PaidInstallmentsDto } from "src/admin-collections/collections/dto/paid-installments.dto";
 
 @Controller('external')
 @UseGuards(ApiKeyGuard) 
@@ -89,4 +95,67 @@ export class ExternalApiController {
   async findOneSaleById(@Param('id') id: string) {
     return this.externalApiService.findOneSaleById(id);
   }
+
+  @Post('payments/sale/:id')
+  @Roles('JVE', 'VEN')
+  @UseInterceptors(FilesInterceptor('files'))
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async createPaymentSale(
+    @Body() createPaymentSaleDto: CreatePaymentSaleDto,
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user: User,
+    @UploadedFiles(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({
+          fileType: /(jpg|jpeg|png|webp)$/,
+        })
+        .addMaxSizeValidator({
+          maxSize: 1024 * 1024 * 2,
+        })
+        .build({
+          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+          fileIsRequired: false,
+        }),
+    )
+    files: Array<Express.Multer.File>,
+  ) {
+    return this.externalApiService.createPaymentSale(
+      id,
+      createPaymentSaleDto,
+      files,
+      user.id,
+    );
+  }
+
+  @Post('financing/installments/paid/:financingId')
+    @Roles('COB', 'SCO')
+    @UseInterceptors(FilesInterceptor('files'))
+    @UsePipes(new ValidationPipe({ transform: true }))
+    paidInstallments(
+      @Param('financingId') financingId: string,
+      @Body() paidInstallmentsDto: PaidInstallmentsDto,
+      @GetUser() user: User,
+        @UploadedFiles(
+          new ParseFilePipeBuilder()
+            .addFileTypeValidator({
+              fileType: /(jpg|jpeg|png|webp)$/,
+            })
+            .addMaxSizeValidator({
+              maxSize: 1024 * 1024 * 2,
+            })
+            .build({
+              errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+              fileIsRequired: false,
+            }),
+        )
+        files: Array<Express.Multer.File>,
+    ) {
+      return this.externalApiService.paidInstallments(
+        financingId,
+        paidInstallmentsDto.amountPaid,
+        paidInstallmentsDto.payments,
+        files,
+        user.id
+      );
+    }
 }

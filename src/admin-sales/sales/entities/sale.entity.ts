@@ -108,6 +108,9 @@ export class Sale extends Timestamped {
   })
   paymentAcordPdfUrl?: string;
 
+  @Column({ type: 'json', nullable: true })
+  metadata?: Record<string, any>;
+
   @OneToOne(() => UrbanDevelopment, (urbanDevelopment) => urbanDevelopment.sale, { nullable: true })
   urbanDevelopment?: UrbanDevelopment;
 

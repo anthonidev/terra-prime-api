@@ -5,12 +5,14 @@ import { ApiKeyGuard } from './guards/api-key.guard';
 import { ProjectModule } from 'src/project/project.module';
 import { SalesModule } from 'src/admin-sales/sales/sales.module';
 import { LeadModule } from 'src/lead/lead.module';
+import { FinancingModule } from 'src/admin-sales/financing/financing.module';
 
 @Module({
   imports: [
     ProjectModule,
     SalesModule,
     LeadModule,
+    FinancingModule,
   ],
   controllers: [ExternalApiController],
   providers: [ExternalApiService, ApiKeyGuard],

@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import { CreateDetailPaymentDto } from 'src/admin-payments/payments/dto/create-detail-payment.dto';
+import { PaymentResponse } from 'src/admin-payments/payments/interfaces/payment-response.interface';
 import { CreateClientDto } from 'src/admin-sales/clients/dto/create-client.dto';
+import { FinancingInstallmentsService } from 'src/admin-sales/financing/services/financing-installments.service';
 import { CreateGuarantorDto } from 'src/admin-sales/guarantors/dto/create-guarantor.dto';
+import { CreatePaymentSaleDto } from 'src/admin-sales/sales/dto/create-payment-sale.dto';
 import { CreateSaleDto } from 'src/admin-sales/sales/dto/create-sale.dto';
 import { FindAllLotsDto } from 'src/admin-sales/sales/dto/find-all-lots.dto';
 import { CalculateAmortizationResponse } from 'src/admin-sales/sales/interfaces/calculate-amortization-response.interface';
@@ -32,6 +36,7 @@ export class ExternalApiService {
     private readonly lotService: LotService,
     private readonly salesService: SalesService,
     private readonly leadService: LeadService,
+    private readonly financingInstallmentsService: FinancingInstallmentsService,
   ) {}
 
   async getProjects(): Promise<ProjectListResponseDto> {
@@ -108,5 +113,29 @@ export class ExternalApiService {
     id: string,
   ): Promise<SaleResponse> {
     return await this.salesService.findOneById(id);
+  }
+
+  async createPaymentSale(
+    saleId: string,
+    createPaymentSaleDto: CreatePaymentSaleDto,
+    files: Express.Multer.File[],
+    userId: string,
+  ): Promise<PaymentResponse> {
+    return await this.salesService.createPaymentSale(
+      saleId,
+      createPaymentSaleDto,
+      files,
+      userId,
+    );
+  }
+
+  async paidInstallments(
+    financingId: string,
+    amountPaid: number,
+    paymentDetails: CreateDetailPaymentDto[],
+    files: Express.Multer.File[],
+    userId: string,
+  ): Promise<PaymentResponse> {
+    return await this.financingInstallmentsService.payInstallments(financingId, amountPaid, paymentDetails, files, userId);
   }
 }

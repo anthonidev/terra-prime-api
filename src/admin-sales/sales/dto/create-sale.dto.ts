@@ -1,4 +1,4 @@
-import { IsArray, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min, ValidateNested } from "class-validator";
+import { IsArray, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsObject, IsOptional, IsString, IsUUID, Min, ValidateNested } from "class-validator";
 import { SaleType } from "../enums/sale-type.enum";
 import { plainToInstance, Transform, Type } from "class-transformer";
 import { MethodPayment } from "src/admin-payments/payments/enums/method-payment.enum";
@@ -56,6 +56,10 @@ export class CreateSaleDto {
 	@IsOptional()
 	@IsInt({ message: 'El número de cuotas de la habilitación urbana debe ser un número entero' })
   quantityHuCuotes?: number;
+
+	@IsObject()
+	@IsOptional()
+	metadata?: Record<string, any>;
 
   // Financiado
 	@IsOptional()

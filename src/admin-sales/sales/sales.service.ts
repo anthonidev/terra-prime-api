@@ -227,7 +227,7 @@ export class SalesService {
       totalAmount: createSaleDto.totalAmount,
       contractDate: createSaleDto.contractDate,
       financing: financingId ? { id: financingId } : null,
-      
+      metadata: createSaleDto?.metadata || null,
       // Campos de reserva
       fromReservation: createSaleDto.isReservation,
       reservationAmount: createSaleDto.reservationAmount || null,
