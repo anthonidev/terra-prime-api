@@ -103,7 +103,6 @@ export class ExternalApiController {
   async createPaymentSale(
     @Body() createPaymentSaleDto: CreatePaymentSaleDto,
     @Param('id', ParseUUIDPipe) id: string,
-    @GetUser() user: User,
     @UploadedFiles(
       new ParseFilePipeBuilder()
         .addFileTypeValidator({
@@ -123,7 +122,7 @@ export class ExternalApiController {
       id,
       createPaymentSaleDto,
       files,
-      user.id,
+      this.EXTERNAL_USER_ID,
     );
   }
 
