@@ -128,34 +128,33 @@ export class ExternalApiController {
   }
 
   @Post('financing/installments/paid/:financingId')
-    @Roles('COB', 'SCO')
-    @UseInterceptors(FilesInterceptor('files'))
-    @UsePipes(new ValidationPipe({ transform: true }))
-    paidInstallments(
-      @Param('financingId') financingId: string,
-      @Body() paidInstallmentsDto: PaidInstallmentsDto,
-      @GetUser() user: User,
-        @UploadedFiles(
-          new ParseFilePipeBuilder()
-            .addFileTypeValidator({
-              fileType: /(jpg|jpeg|png|webp)$/,
-            })
-            .addMaxSizeValidator({
-              maxSize: 1024 * 1024 * 2,
-            })
-            .build({
-              errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
-              fileIsRequired: false,
-            }),
-        )
-        files: Array<Express.Multer.File>,
-    ) {
-      return this.externalApiService.paidInstallments(
-        financingId,
-        paidInstallmentsDto.amountPaid,
-        paidInstallmentsDto.payments,
-        files,
-        user.id
-      );
-    }
+  @Roles('COB', 'SCO')
+  @UseInterceptors(FilesInterceptor('files'))
+  @UsePipes(new ValidationPipe({ transform: true }))
+  paidInstallments(
+    @Param('financingId') financingId: string,
+    @Body() paidInstallmentsDto: PaidInstallmentsDto,
+      @UploadedFiles(
+        new ParseFilePipeBuilder()
+          .addFileTypeValidator({
+            fileType: /(jpg|jpeg|png|webp)$/,
+          })
+          .addMaxSizeValidator({
+            maxSize: 1024 * 1024 * 2,
+          })
+          .build({
+            errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+            fileIsRequired: false,
+          }),
+      )
+      files: Array<Express.Multer.File>,
+  ) {
+    return this.externalApiService.paidInstallments(
+      financingId,
+      paidInstallmentsDto.amountPaid,
+      paidInstallmentsDto.payments,
+      files,
+      this.EXTERNAL_USER_ID,
+    );
+  }
 }
