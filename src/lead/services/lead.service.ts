@@ -93,11 +93,11 @@ export class LeadService {
     }
     delete createUpdateDto.isNewLead;
 
-    if (lead && lead.isInOffice) {
-      throw new ConflictException(
-        `El lead con documento ${documentType} ${document} ya se encuentra en la oficina`,
-      );
-    }
+    // if (lead && lead.isInOffice) {
+    //   throw new ConflictException(
+    //     `El lead con documento ${documentType} ${document} ya se encuentra en la oficina`,
+    //   );
+    // }
 
     if (lead) {
       const { firstName, lastName, document, documentType, sourceId, ubigeoId, ...updateFields } =
