@@ -223,6 +223,12 @@ export class UsersService {
         dto.roleId,
         dto.document !== user.document ? dto.document : null,
       );
+
+      if (dto.password) {
+        dto.password = await this.hashPassword(dto.password);
+      }
+      
+
       const updatedUser = await this.userRepository.save({
         ...user,
         ...dto,
