@@ -16,7 +16,7 @@ export class ReportsLeadsPdfService {
       // Crear nuevo documento PDF
       const doc = new PDFDocument({ 
         size: 'A4',
-        margins: { top: 50, bottom: 50, left: 50, right: 50 }
+        margins: { top: 50, bottom: 10, left: 50, right: 50 }
       });
 
       // Buffer para almacenar el PDF
@@ -64,11 +64,11 @@ export class ReportsLeadsPdfService {
     this.addCompactHeader(doc, darkGreen, lightGreen);
     
     // Título principal
-    doc.fontSize(16)
+    doc.fontSize(14)
        .fillColor('#000000')
-       .text('BIENVENIDOS', 50, 90, { align: 'center' })
-       .fontSize(12)
-       .text('A HUERTAS INMOBILIARIA', 50, 110, { align: 'center' });
+       .text('BIENVENIDOS A HUERTAS INMOBILIARIA', 50, 90, { align: 'center' })
+      //  .fontSize(12)
+      //  .text('A HUERTAS INMOBILIARIA', 50, 110, { align: 'center' });
 
     // Subtítulo descriptivo
     doc.fontSize(9)
@@ -76,19 +76,19 @@ export class ReportsLeadsPdfService {
        .text('Te invitamos a responder este breve formulario para brindarte un servicio cada vez más óptimo y', 50, 130)
        .text('personalizado. Porque tu comodidad y satisfacción son nuestra prioridad.', 50, 145);
 
-    let yPosition = 160; // Reducido de 170
+    let yPosition = 160;
 
     // Sección: Datos Personales
     yPosition = this.addPersonalDataSection(doc, lead, yPosition);
     
     // Sección: ¿Qué medio de transporte utiliza para llegar?
-    yPosition = this.addTransportSection(doc, yPosition - 5); // Reducir espacio
+    yPosition = this.addTransportSection(doc, yPosition - 5);
 
     // Sección: Ingresos Familiares
-    yPosition = this.addFamilyIncomeSection(doc, yPosition - 5); // Reducir espacio
+    yPosition = this.addFamilyIncomeSection(doc, yPosition - 5);
 
     // Sección: ¿Esta es su primera visita a Huertas Inmobiliaria?
-    yPosition = this.addFirstVisitSection(doc, yPosition - 5); // Reducir espacio
+    yPosition = this.addFirstVisitSection(doc, yPosition - 5);
 
     // Sección: Proyectos
     yPosition = this.addProjectsSection(doc, yPosition - 5, lightGreen);
@@ -108,16 +108,18 @@ export class ReportsLeadsPdfService {
     // Sección: Acepto términos y condiciones
     yPosition = this.addTermsSection(doc, yPosition);
 
-    // Sección: USO INTERNO TLMK (en cuadro)
+    // Sección: USO INTERNO TLMK (en cuadro) - más compacto
     yPosition = this.addInternalUseSection(doc, yPosition);
 
-    // Espacio para firma
+
+    // NUEVO: Texto de consentimiento
+    yPosition = this.addConsentText(doc, yPosition);
+
+    // Espacio para firma - más compacto
     yPosition = this.addSignatureSection(doc, yPosition);
 
     // Footer real (información de contacto)
-    // if (yPosition < doc.page.height - 100) {
-      this.addFooterAtFixedPosition(doc);
-    // }
+    this.addFooterAtFixedPosition(doc);
   }
 
   private addCompactHeader(doc: PDFKit.PDFDocument, darkGreen: string, lightGreen: string): void {
@@ -217,11 +219,6 @@ export class ReportsLeadsPdfService {
     doc.text('¿En qué distrito reside?', 320, yPos);
 
     return yPos + 25;
-  }
-
-  private addResidenceSection(doc: PDFKit.PDFDocument, startY: number): number {
-    // Esta línea ya está incluida en la sección anterior
-    return startY;
   }
 
   private addTransportSection(doc: PDFKit.PDFDocument, startY: number): number {
@@ -422,7 +419,7 @@ export class ReportsLeadsPdfService {
     doc.text('DNI:', 350, yPos);
     this.drawUnderline(doc, 380, yPos + 10, 150);
 
-    return yPos + 25;
+    return yPos + 20; // Reducido de 25 a 20
   }
 
   private addTermsSection(doc: PDFKit.PDFDocument, startY: number): number {
@@ -434,68 +431,97 @@ export class ReportsLeadsPdfService {
     
     this.drawCheckbox(doc, 280, yPos - 2, false);
 
-    return yPos + 25;
+    return yPos + 15; // Reducido de 25 a 15
+  }
+
+  // NUEVA FUNCIÓN: Texto de consentimiento
+  private addConsentText(doc: PDFKit.PDFDocument, startY: number): number {
+    let yPos = startY;
+
+    const consentText = `Otorgo mi consentimiento a Inmobiliaria Huertas Grupo Inv. S.R.L. y sus empresas vinculadas domiciliadas en Calle Luis Espejo 1097 Oficina 803 Santa Catalina - La Victoria para recopilar, almacenar y tratar mis datos personales. La recopilación, organización y tratamiento de mis datos personales tiene como finalidad ofrecer productos y servicios a través de SMS, correo electrónico, teléfono, Whatsapp. Mis datos personales serán conservados bajo las medidas de seguridad establecidas por Inmobiliaria Huertas Grupo Inv. S.R.L. y sus empresas vinculadas. Puedo revocar mi consentimiento en cualquier momento. En tal sentido, podré ejercer mis derechos de acceso, rectificación, cancelación y oposición a través del correo electrónico ventas@inmobiliariahuertas.com.`;
+
+    doc.fontSize(7) // Fuente muy pequeña para que quepa
+       .fillColor('#000000')
+       .text(consentText, 50, yPos, {
+         width: doc.page.width - 100,
+         align: 'justify',
+         lineGap: 1
+       });
+
+    return yPos + 80; // Espacio compacto después del texto
   }
 
   private addInternalUseSection(doc: PDFKit.PDFDocument, startY: number): number {
-    let yPos = startY;
+  let yPos = startY;
 
-    // Título centrado
-    doc.fontSize(9)
-      .fillColor('#666666')
-      .text('USO INTERNO TLMK', 50, yPos, { align: 'center' });
+  // Título centrado
+  doc.fontSize(9)
+    .fillColor('#666666')
+    .text('USO INTERNO TLMK', 50, yPos, { align: 'center' });
 
-    yPos += 15;
+  yPos += 10;
 
-    // Cuadro más compacto
-    const boxX = 80;
-    const boxY = yPos;
-    const boxWidth = doc.page.width - 160;
-    const boxHeight = 70;
+  // Cuadro
+  const boxX = 80;
+  const boxY = yPos;
+  const boxWidth = doc.page.width - 160;
+  const boxHeight = 70;
 
-    doc.rect(boxX, boxY, boxWidth, boxHeight)
-      .stroke('#000000');
+  doc.rect(boxX, boxY, boxWidth, boxHeight)
+    .stroke('#000000');
 
-    yPos += 12;
+  yPos += 10;
 
-    doc.fontSize(8)
-      .fillColor('#000000');
+  doc.fontSize(7)
+    .fillColor('#000000');
 
-    // Primera línea - más compacta
-    doc.text('TLMK:', boxX + 15, yPos);
-    this.drawUnderline(doc, boxX + 45, yPos + 8, 50);
+  // PRIMERA LÍNEA: L: ___ Jefatura: ___ Supervisor: ___
+  doc.text('L:', boxX + 10, yPos);
+  this.drawUnderline(doc, boxX + 20, yPos + 8, 95);
 
-    doc.text('Coordinador:', boxX + 120, yPos);
-    this.drawUnderline(doc, boxX + 175, yPos + 8, 70);
+  doc.text('Jefatura:', boxX + 130, yPos);
+  this.drawUnderline(doc, boxX + 165, yPos + 8, 95);
 
-    doc.text('Supervisor:', boxX + 270, yPos);
-    this.drawUnderline(doc, boxX + 320, yPos + 8, 70);
-    
-    yPos += 18;
+  doc.text('Supervisor:', boxX + 275, yPos);
+  this.drawUnderline(doc, boxX + 320, yPos + 8, 95);
+  
+  yPos += 15;
 
-    // Segunda línea
-    doc.text('L:', boxX + 15, yPos);
-    this.drawUnderline(doc, boxX + 25, yPos + 8, 50);
+  // SEGUNDA LÍNEA: C: ___ Confirmador: ___ TLMK: ___
+  doc.text('C:', boxX + 10, yPos);
+  this.drawUnderline(doc, boxX + 20, yPos + 8, 95);
 
-    doc.text('Hora de ingreso:', boxX + 90, yPos);
-    this.drawUnderline(doc, boxX + 155, yPos + 8, 50);
+  doc.text('Confirmador:', boxX + 130, yPos);
+  this.drawUnderline(doc, boxX + 185, yPos + 8, 75);
 
-    doc.text('Hora de salida:', boxX + 220, yPos);
-    this.drawUnderline(doc, boxX + 280, yPos + 8, 50);
-    
-    yPos += 18;
+  doc.text('TLMK:', boxX + 275, yPos);
+  this.drawUnderline(doc, boxX + 305, yPos + 8, 110);
+  
+  yPos += 15;
 
-    // Tercera línea
-    doc.text('C:', boxX + 15, yPos);
-    this.drawUnderline(doc, boxX + 25, yPos + 8, 120);
-    
-    yPos += 18;
+  // TERCERA LÍNEA: Deal PROC PEN RES + Hora de ingreso: ___ Hora de salida: ___
+  doc.text('Deal', boxX + 10, yPos);
+  doc.text('PROC', boxX + 35, yPos);
+  doc.text('PEN', boxX + 65, yPos);
+  doc.text('RES', boxX + 90, yPos);
 
-    return yPos + 30;
-  }
+  doc.text('Hora de ingreso:', boxX + 130, yPos);
+  this.drawUnderline(doc, boxX + 185, yPos + 8, 85);
+
+  doc.text('Hora de salida:', boxX + 275, yPos);
+  this.drawUnderline(doc, boxX + 330, yPos + 8, 85);
+  
+  yPos += 15;
+
+  // CUARTA LÍNEA: Obs. ________________________
+  doc.text('Obs.', boxX + 10, yPos);
+  this.drawUnderline(doc, boxX + 30, yPos + 8, 385);
+
+  return yPos + 20;
+}
 
   private addSignatureSection(doc: PDFKit.PDFDocument, startY: number): number {
-    let yPos = startY + 20; // Más espacio arriba
+    let yPos = startY + 10; // Reducido de 20 a 10
 
     // Calcular posición centrada para la sección completa
     const centerX = doc.page.width / 2;
@@ -509,22 +535,22 @@ export class ReportsLeadsPdfService {
     // Línea para firma
     this.drawUnderline(doc, centerX - (lineWidth / 2), yPos + 2, lineWidth);
 
-    return yPos + 40;
+    return yPos + 25; // Reducido de 40 a 25
   }
 
   private addFooterAtFixedPosition(doc: PDFKit.PDFDocument): void {
-  // Posición fija del footer - 60px desde abajo
-    const footerY = doc.page.height - 90;
+    // Posición fija del footer - más cerca del fondo
+    const footerY = doc.page.height - 60; // Reducido de 90 a 60
     
     // Footer real exacto como en la imagen - centrado
-    doc.fontSize(8)
-      .fillColor('#4a90e2') // Color azul para el email
-      .text('ventas@inmobiliariahuertas.com', 50, footerY, { align: 'center' });
+    // doc.fontSize(8)
+    //   .fillColor('#4a90e2') // Color azul para el email
+    //   .text('ventas@inmobiliariahuertas.com', 50, footerY, { align: 'center' });
 
     // Información de contacto en una sola línea centrada
     doc.fontSize(8)
       .fillColor('#000000')
-      .text('984 403 259      Calle Luis Espejo 1097 Of. 803 - La Victoria / Av. Universidad 7099, 2do piso - Comas', 50, footerY + 12, { align: 'center' });
+      .text('984 403 259      Calle Luis Espejo 1097 Of. 803 - La Victoria      ventas@inmobiliariahuertas.com', 50, footerY + 12, { align: 'center' });
   }
 
   // Métodos helper
