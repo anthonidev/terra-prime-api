@@ -313,17 +313,30 @@ export class LeadService {
   }
 
   // internal helpers methods
-  async findAllByDay(day: Date): Promise<Lead[]> {
-
+  async findAllByDay(day: Date): Promise<LeadWithParticipantsResponse[]> {
     const leads = await this.leadRepository.find({
-      where: {
-        isInOffice: true,
+      where: { isInOffice: true,
         isActive: true,
       },
-      relations: ['source', 'ubigeo', 'vendor'],
+      order: {
+        createdAt: 'DESC',
+      },
+      relations: [
+        'source', 
+        'ubigeo', 
+        'vendor',
+        'visits',
+        'visits.liner',
+        'liner',
+        'telemarketingSupervisor',
+        'telemarketingConfirmer', 
+        'telemarketer',
+        'fieldManager',
+        'fieldSupervisor',
+        'fieldSeller'
+      ]
     });
-
-    return leads;
+    return leads.map(formatLeadWithParticipants);
   }
 
   async findAllByUser(userId: string): Promise<LeadWithParticipantsResponse[]> {

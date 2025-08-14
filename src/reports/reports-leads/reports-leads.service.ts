@@ -131,6 +131,13 @@ export class ReportsLeadsService {
         'visits.liner',    // Liner de cada visita
         'vendor',          // Usuario vendedor
         'client',          // Cliente si ya se convirtió
+        'liner',                    // Liner principal del lead
+        'telemarketingSupervisor',  // Supervisor de telemarketing
+        'telemarketingConfirmer',   // Confirmador de telemarketing
+        'telemarketer',             // Telemarketer asignado
+        'fieldManager',             // Jefe de campo
+        'fieldSupervisor',          // Supervisor de campo
+        'fieldSeller',              // Vendedor de campo (vendor/C)
       ],
     });
 

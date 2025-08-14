@@ -619,7 +619,7 @@ export class SalesService {
 
   async findAllLeadsByDay(
     findAllLeadsByDayDto: FindAllLeadsByDayDto,
-  ): Promise<Paginated<LeadsByDayResponse>> {
+  ): Promise<Paginated<LeadWithParticipantsResponse>> {
     const {
       day,
       page = 1,
@@ -629,7 +629,7 @@ export class SalesService {
     const paginationDto = { page, limit, order };
     const leads = await this.leadService.findAllByDay(day? new Date(day) : new Date());
     return PaginationHelper.createPaginatedResponse(
-      leads.map(formatFindAllLedsByDayResponse),
+      leads,
       leads.length,
       paginationDto
     );
