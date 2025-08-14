@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
 import { LeadSource } from 'src/lead/entities/lead-source.entity';
-import { DocumentType } from 'src/lead/entities/lead.entity';
 import { Liner } from 'src/lead/entities/liner.entity';
 import { Ubigeo } from 'src/lead/entities/ubigeo.entity';
 import { Role } from 'src/user/entities/role.entity';
@@ -22,6 +21,7 @@ import { paymentConfigsData } from './data/payment-configs.data';
 import { CutConfiguration } from 'src/cuts/entities/cut_configurations.entity';
 import { cutConfigurationsData } from './data/cuts.data';
 import { SYSTEM_USER_CONFIG } from './data/user-system.data';
+import { DocumentType } from 'src/lead/enums/document-type.enum';
 @Injectable()
 export class SeedService {
   private readonly logger = new Logger(SeedService.name);

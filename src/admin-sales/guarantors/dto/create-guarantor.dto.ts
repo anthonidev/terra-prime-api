@@ -1,5 +1,5 @@
 import { IsEmail, IsEnum, IsNotEmpty, IsNumberString, IsOptional, IsString } from "class-validator";
-import { DocumentType } from "src/lead/entities/lead.entity";
+import { DocumentType } from "src/lead/enums/document-type.enum";
 
 export class CreateGuarantorDto {
   @IsString({ message: 'El nombre es una cadena de caracteres' })

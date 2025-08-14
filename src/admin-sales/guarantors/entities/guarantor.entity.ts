@@ -1,7 +1,7 @@
 import { Client } from "src/admin-sales/clients/entities/client.entity";
 import { Sale } from "src/admin-sales/sales/entities/sale.entity";
 import { Timestamped } from "src/common/entities/timestamped.entity";
-import { DocumentType } from "src/lead/entities/lead.entity";
+import { DocumentType } from "src/lead/enums/document-type.enum";
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity('guarantors')

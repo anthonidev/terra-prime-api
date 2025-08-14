@@ -1,7 +1,7 @@
 import { Sale } from "src/admin-sales/sales/entities/sale.entity";
-import { DocumentType } from "src/lead/entities/lead.entity";
 import { Column, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 import { SecondaryClientSale } from './secondary-client-sale.entity';
+import { DocumentType } from "src/lead/enums/document-type.enum";
 
 @Entity('secondary_clients')
 export class SecondaryClient {

@@ -10,9 +10,14 @@ import {
   IsEnum,
   IsUUID,
   IsBoolean,
+  IsArray,
+  ArrayMaxSize,
+  IsObject,
+  IsNotEmptyObject,
+  IsNotEmpty,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { DocumentType } from '../entities/lead.entity';
+import { DocumentType } from '../enums/document-type.enum';
 export class CreateUpdateLeadDto {
   @IsString()
   @MaxLength(100, { message: 'El nombre no puede tener más de 100 caracteres' })
@@ -37,6 +42,48 @@ export class CreateUpdateLeadDto {
   document: string;
   @IsEnum(DocumentType, { message: 'El tipo de documento debe ser DNI o CE' })
   documentType: DocumentType;
+
+  @IsArray({ message: 'Los proyectos de interés es un array' })
+  @IsString({ each: true })
+  @ArrayMaxSize(10, { message: 'No se pueden agregar más de 10 proyectos de interés' })
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return value;
+  })
+  interestProjects: string[];
+
+  @IsString({ message: 'El nombre del acompañante es una cadena de texto' })
+  @MaxLength(200, { message: 'El nombre del acompañante no puede tener más de 200 caracteres' })
+  @Matches(/^[a-zA-ZÀ-ÿ\s]*$/, {
+    message: 'El nombre del acompañante solo debe contener letras y espacios',
+  })
+  @Transform(({ value }) => value?.trim())
+  @IsNotEmpty({ message: 'El nombre del acompañante es requerido' })
+  companionFullName: string;
+
+  @IsString({ message: 'El DNI del acompañante es una cadena de texto' })
+  @MaxLength(20, { message: 'El DNI del acompañante no puede tener más de 20 caracteres' })
+  @IsNotEmpty({ message: 'El DNI del acompañante es requerido' })
+  companionDni: string;
+
+  @IsString({ message: 'La relación del acompañante es una cadena de texto' })
+  @MaxLength(50, { message: 'El parentesco no puede tener más de 50 caracteres' })
+  @Transform(({ value }) => value?.trim())
+  @IsNotEmpty({ message: 'La relación del acompañante es requerida' })
+  companionRelationship: string;
+
+  @IsObject({ message: 'Los metadatos son un objeto' })
+  @IsNotEmptyObject({}, { message: 'Los metadatos no pueden estar vacíos' })
+  metadata: Record<string, any>;
+
+
   @IsOptional()
   @IsEmail({}, { message: 'El email debe tener un formato válido' })
   @Transform(({ value }) => value?.toLowerCase().trim())

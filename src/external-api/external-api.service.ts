@@ -16,6 +16,7 @@ import { PaginationDto } from 'src/common/dto/paginationDto';
 import { Paginated } from 'src/common/interfaces/paginated.interface';
 import { CreateUpdateLeadDto } from 'src/lead/dto/create-update-lead.dto';
 import { Lead } from 'src/lead/entities/lead.entity';
+import { LeadWithParticipantsResponse } from 'src/lead/interfaces/lead-formatted-response.interface';
 import { LeadService } from 'src/lead/services/lead.service';
 import { LotDetailResponseDto } from 'src/project/dto/lot.dto';
 import { ProjectListResponseDto } from 'src/project/dto/project-list.dto';
@@ -82,7 +83,7 @@ export class ExternalApiService {
 
   async createOrUpdateLead(
       createUpdateDto: CreateUpdateLeadDto,
-    ): Promise<Lead> {
+    ): Promise<LeadWithParticipantsResponse> {
     return await this.leadService.createOrUpdateLead(createUpdateDto);
   }
 

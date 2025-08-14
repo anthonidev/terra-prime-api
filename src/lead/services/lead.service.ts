@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
@@ -20,6 +21,12 @@ import {
 import { UsersService } from 'src/user/user.service';
 import { TransactionService } from 'src/common/services/transaction.service';
 import { CutsResponse } from 'src/cuts/interfaces/cuts-response.interface';
+import { AssignParticipantsToLeadDto } from '../dto/assign-participants-to-lead.dto';
+import { ParticipantType } from 'src/admin-sales/participants/entities/participant.entity';
+import { ParticipantsService } from 'src/admin-sales/participants/participants.service';
+import { formatLeadWithParticipants } from '../helpers/format-lead-participnats-response.helper';
+import { formatLeadWithParticipantsSummary } from '../helpers/format-lead-participnats-summary-response.helper';
+import { LeadSummaryResponse, LeadWithParticipantsResponse } from '../interfaces/lead-formatted-response.interface';
 @Injectable()
 export class LeadService {
   private readonly logger = new Logger(LeadService.name);
@@ -34,6 +41,7 @@ export class LeadService {
     private readonly leadVisitRepository: Repository<LeadVisit>,
     private readonly userService: UsersService,
     private readonly transactionService: TransactionService,
+    private readonly participantsService: ParticipantsService,
   ) { }
   async findByDocument(
     findDto: FindLeadByDocumentDto,
@@ -78,31 +86,36 @@ export class LeadService {
   }
   async createOrUpdateLead(
     createUpdateDto: CreateUpdateLeadDto,
-  ): Promise<Lead> {
+  ): Promise<LeadWithParticipantsResponse> {
     const { document, documentType, isNewLead, sourceId } = createUpdateDto;
     let lead = await this.leadRepository.findOne({
       where: { document, documentType },
     });
 
     if (isNewLead) {
-      if (lead) {
+      if (lead)
         throw new ConflictException(
           `El lead con documento ${documentType} ${document} ya existe`,
         );
       }
-    }
     delete createUpdateDto.isNewLead;
 
-    // if (lead && lead.isInOffice) {
-    //   throw new ConflictException(
-    //     `El lead con documento ${documentType} ${document} ya se encuentra en la oficina`,
-    //   );
-    // }
-
     if (lead) {
-      const { firstName, lastName, document, documentType, sourceId, ubigeoId, ...updateFields } =
-        createUpdateDto;
-      const updateData: Partial<Lead> = { ...updateFields, isInOffice: true };
+      const { 
+        firstName, 
+        lastName, 
+        document, 
+        documentType, 
+        sourceId, 
+        ubigeoId, 
+        ...updateFields 
+      } = createUpdateDto;
+      
+      const updateData: Partial<Lead> = { 
+        ...updateFields, 
+        isInOffice: true 
+      };
+      
       if (sourceId) {
         const source = await this.leadSourceRepository.findOne({
           where: { id: sourceId },
@@ -110,8 +123,8 @@ export class LeadService {
         if (source) {
           updateData.source = source;
         }
-
       }
+      
       if (ubigeoId) {
         const ubigeo = await this.ubigeoRepository.findOne({
           where: { id: ubigeoId },
@@ -131,6 +144,7 @@ export class LeadService {
         ...createUpdateDto,
         isInOffice: true,
       });
+      
       if (createUpdateDto.sourceId) {
         const source = await this.leadSourceRepository.findOne({
           where: { id: sourceId },
@@ -139,46 +153,46 @@ export class LeadService {
           newLead.source = source;
         }
       }
+      
       if (createUpdateDto.ubigeoId) {
         const ubigeo = await this.ubigeoRepository.findOne({
           where: { id: createUpdateDto.ubigeoId },
         });
-        if (ubigeo) {
-          newLead.ubigeo = ubigeo;
-        }
+        if (ubigeo) newLead.ubigeo = ubigeo;
       }
-
       lead = await this.leadRepository.save(newLead);
     }
+    
     const visit = this.leadVisitRepository.create({
       lead,
       arrivalTime: new Date(),
     });
     await this.leadVisitRepository.save(visit);
-    return this.leadRepository.findOne({
-      where: { id: lead.id },
-      relations: ['source', 'ubigeo', 'visits'],
-    });
+    
+    const leadSaved = await this.findOneById(lead.id);
+    return formatLeadWithParticipants(leadSaved);
   }
 
-  async updateLead(id: string, updateDto: CreateUpdateLeadDto): Promise<Lead> {
+  async updateLead(id: string, updateDto: CreateUpdateLeadDto)
+  : Promise<LeadWithParticipantsResponse> {
     const lead = await this.leadRepository.findOne({
       where: { id },
       relations: ['source', 'ubigeo'],
     });
-    if (!lead) {
+    
+    if (!lead)
       throw new NotFoundException(`Lead con ID ${id} no encontrado`);
-    }
+    
     const { sourceId, ubigeoId, isNewLead, ...updateFields } = updateDto;
     const updateData: Partial<Lead> = { ...updateFields };
+    
     if (updateDto.sourceId) {
       const source = await this.leadSourceRepository.findOne({
         where: { id: sourceId },
       });
-      if (source) {
-        updateData.source = source;
-      }
+      if (source) updateData.source = source;
     }
+    
     if (updateDto.ubigeoId) {
       const ubigeo = await this.ubigeoRepository.findOne({
         where: { id: ubigeoId },
@@ -188,13 +202,12 @@ export class LeadService {
       }
     }
     await this.leadRepository.update(lead.id, updateData);
-    return this.leadRepository.findOne({
-      where: { id },
-      relations: ['source', 'ubigeo', 'visits', 'visits.liner'],
-    });
+    const leadWithParticipants = await this.findOneById(lead.id);
+    return formatLeadWithParticipants(leadWithParticipants);
   }
 
-  async findAll(filters: FindLeadsDto): Promise<PaginatedResult<Lead>> {
+  async findAll(filters: FindLeadsDto)
+  : Promise<PaginatedResult<LeadSummaryResponse>> {
     const {
       page = 1,
       limit = 10,
@@ -234,22 +247,37 @@ export class LeadService {
     queryBuilder.orderBy('lead.createdAt', order);
     queryBuilder.skip((page - 1) * limit).take(limit);
     const [items, totalItems] = await queryBuilder.getManyAndCount();
-    return PaginationHelper.createPaginatedResponse(items, totalItems, filters);
+    const formattedLeads = items.map(formatLeadWithParticipantsSummary);
+    return PaginationHelper.createPaginatedResponse(formattedLeads, totalItems, filters);
   }
-  async findOneWithDetails(id: string): Promise<Lead> {
+
+  async findOneWithDetails(id: string): Promise<LeadWithParticipantsResponse> {
     const lead = await this.leadRepository.findOne({
       where: { id },
-      relations: ['source', 'ubigeo', 'visits', 'visits.liner'],
       order: {
         visits: {
           createdAt: 'DESC',
         },
       },
+      relations: [
+        'source', 
+        'ubigeo', 
+        'vendor',
+        'visits',
+        'visits.liner',
+        'liner',
+        'telemarketingSupervisor',
+        'telemarketingConfirmer', 
+        'telemarketer',
+        'fieldManager',
+        'fieldSupervisor',
+        'fieldSeller'
+      ]
     });
     if (!lead) {
       throw new NotFoundException(`Lead con ID ${id} no encontrado`);
     }
-    return lead;
+    return formatLeadWithParticipants(lead);
   }
 
   async registerDeparture(id: string): Promise<Lead> {
@@ -342,13 +370,76 @@ export class LeadService {
     return lead;
   }
 
+  async assignParticipantsToLead(
+    leadId: string,
+    assignParticipantsDto: AssignParticipantsToLeadDto,
+  ) {
+    try {
+      // Mapeo de campos DTO a validaciones de tipo
+      const participantValidations = [
+        { id: assignParticipantsDto.linerId, type: ParticipantType.LINER, field: 'liner' },
+        { id: assignParticipantsDto.telemarketingSupervisorId, type: ParticipantType.TELEMARKETING_SUPERVISOR, field: 'telemarketingSupervisor' },
+        { id: assignParticipantsDto.telemarketingConfirmerId, type: ParticipantType.TELEMARKETING_CONFIRMER, field: 'telemarketingConfirmer' },
+        { id: assignParticipantsDto.telemarketerId, type: ParticipantType.TELEMARKETER, field: 'telemarketer' },
+        { id: assignParticipantsDto.fieldManagerId, type: ParticipantType.FIELD_MANAGER, field: 'fieldManager' },
+        { id: assignParticipantsDto.fieldSupervisorId, type: ParticipantType.FIELD_SUPERVISOR, field: 'fieldSupervisor' },
+        { id: assignParticipantsDto.fieldSellerId, type: ParticipantType.FIELD_SELLER, field: 'fieldSeller' },
+      ];
+
+      // Validar participantes que se están asignando
+      await Promise.all(participantValidations
+        .filter(({ id }) => id !== undefined && id !== null)
+        .map(({ id, type }) => this.participantsService.validateParticipantByType(id, type)));
+
+      // Preparar datos para preload
+      const updateData: any = { id: leadId };
+      
+      participantValidations.forEach(({ id, field }) => {
+        if (id !== undefined) {
+          updateData[field] = id ? { id } : null;
+        }
+      });
+
+      // Usar preload para actualizar
+      const leadToUpdate = await this.leadRepository.preload(updateData);
+      
+      if (!leadToUpdate)
+        throw new NotFoundException(`El lead con ID ${leadId} no se encuentra registrado`);
+
+      await this.leadRepository.save(leadToUpdate);
+      
+      // Retornar el lead actualizado con sus relaciones
+      const lead = await this.findOneById(leadId);
+      return formatLeadWithParticipants(lead);
+
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(`Error al asignar participantes al lead: ${error.message}`);
+    }
+  }
+
   async findOneById(id: string): Promise<Lead> {
     const lead = await this.leadRepository.findOne({
       where: { id },
-      relations: ['source', 'ubigeo', 'vendor']
+      relations: [
+        'source', 
+        'ubigeo', 
+        'vendor',
+        'liner',
+        'telemarketingSupervisor',
+        'telemarketingConfirmer', 
+        'telemarketer',
+        'fieldManager',
+        'fieldSupervisor',
+        'fieldSeller'
+      ]
     });
+    
     if (!lead)
       throw new NotFoundException(`Lead con ID ${id} no encontrado`);
+      
     return lead;
   }
 
