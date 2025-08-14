@@ -52,7 +52,7 @@ export interface LeadWithParticipantsResponse {
   visits: FormattedVisit[];
   source: FormattedSource | null;
   ubigeo: FormattedUbigeo | null;
-  vendor: FormattedVendor | null;
+  vendor?: FormattedVendor | null;
   liner: FormattedParticipant | null;
   telemarketingSupervisor: FormattedParticipant | null;
   telemarketingConfirmer: FormattedParticipant | null;

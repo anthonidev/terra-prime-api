@@ -326,19 +326,31 @@ export class LeadService {
     return leads;
   }
 
-  async findAllByUser(userId: string): Promise<Lead[]> {
-
+  async findAllByUser(userId: string): Promise<LeadWithParticipantsResponse[]> {
     const user = await this.userService.findOne(userId);
     const leads = await this.leadRepository.find({
-      where: {
-        isInOffice: true,
+      where: { isInOffice: true,
         isActive: true,
-        vendor: { id: user.id },
+        vendor: { id: user.id }, },
+      order: {
+        createdAt: 'DESC',
       },
-      relations: ['source', 'ubigeo', 'vendor'],
+      relations: [
+        'source', 
+        'ubigeo', 
+        'vendor',
+        'visits',
+        'visits.liner',
+        'liner',
+        'telemarketingSupervisor',
+        'telemarketingConfirmer', 
+        'telemarketer',
+        'fieldManager',
+        'fieldSupervisor',
+        'fieldSeller'
+      ]
     });
-
-    return leads;
+    return leads.map(formatLeadWithParticipants);
   }
 
   // asignar leads a un vendedor:

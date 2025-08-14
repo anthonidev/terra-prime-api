@@ -70,6 +70,7 @@ import { LotDetailResponseDto } from 'src/project/dto/lot.dto';
 import { transformLotToDetail } from 'src/project/helpers/transform-lot-to-detail.helper';
 import { UpdateReservationPeriodResponseDto } from './dto/update-reservation-period.dto';
 import { FinancingInstallmentsService } from '../financing/services/financing-installments.service';
+import { LeadWithParticipantsResponse } from 'src/lead/interfaces/lead-formatted-response.interface';
 
 // SERVICIO ACTUALIZADO - UN SOLO ENDPOINT PARA VENTA/RESERVA
 
@@ -679,10 +680,9 @@ export class SalesService {
 
   async findAllLeadsByUser(
     userId: string,
-  ): Promise<LeadsByDayResponse[]> {
+  ): Promise<LeadWithParticipantsResponse[]> {
     const leads = await this.leadService.findAllByUser(userId);
-    const leadsFormatted = leads.map(formatFindAllLedsByDayResponse);
-    return leadsFormatted.map( lead => {
+    return leads.map( lead => {
       const { vendor, ...rest } = lead;
       return rest;
     });
