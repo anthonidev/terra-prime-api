@@ -35,7 +35,7 @@ export class Participant extends Timestamped {
 
   @Column({
     type: 'varchar',
-    length: 35,
+    length: 70,
     nullable: true
   })
   email: string;
