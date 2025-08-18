@@ -108,6 +108,16 @@ export class ClientsService {
   async isValidClient(clientId: number): Promise<Client> {
     const client = await this.clientRepository.findOne({
       where: { id: clientId, isActive: true },
+      relations: [
+        'lead',
+        'lead.liner',
+        'lead.telemarketingSupervisor',
+        'lead.telemarketingConfirmer',
+        'lead.telemarketer',
+        'lead.fieldManager',
+        'lead.fieldSupervisor',
+        'lead.fieldSeller'
+      ]
     });
     if (!client)
       throw new NotFoundException(

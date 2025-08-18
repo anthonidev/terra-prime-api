@@ -1,6 +1,7 @@
 import { Sale } from "src/admin-sales/sales/entities/sale.entity";
 import { Timestamped } from "src/common/entities/timestamped.entity";
-import { DocumentType } from "src/lead/entities/lead.entity";
+import { Lead } from "src/lead/entities/lead.entity";
+import { DocumentType } from "src/lead/enums/document-type.enum";
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 
 export enum ParticipantType {
@@ -34,7 +35,7 @@ export class Participant extends Timestamped {
 
   @Column({
     type: 'varchar',
-    length: 35,
+    length: 70,
     nullable: true
   })
   email: string;
@@ -111,4 +112,25 @@ export class Participant extends Timestamped {
   // La relación que ya tenías (probablemente como garante/guarantor)
   @OneToMany(() => Sale, (sale) => sale.guarantor)
   sales: Sale[];
+
+  @OneToMany(() => Lead, (lead) => lead.liner)
+  leadLiner: Lead[];
+
+  @OneToMany(() => Lead, (lead) => lead.telemarketingSupervisor)
+  leadTelemarketingSupervisor: Lead[];
+
+  @OneToMany(() => Lead, (lead) => lead.telemarketingConfirmer)
+  leadTelemarketingConfirmer: Lead[];
+
+  @OneToMany(() => Lead, (lead) => lead.telemarketer)
+  leadTelemarketer: Lead[];
+
+  @OneToMany(() => Lead, (lead) => lead.fieldManager)
+  leadFieldManager: Lead[];
+
+  @OneToMany(() => Lead, (lead) => lead.fieldSupervisor)
+  leadFieldSupervisor: Lead[];
+
+  @OneToMany(() => Lead, (lead) => lead.fieldSeller)
+  leadFieldSeller: Lead[];
 }

@@ -6,6 +6,7 @@ import {
   HttpException,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -18,6 +19,7 @@ import { CreateUpdateLeadDto } from '../dto/create-update-lead.dto';
 import { FindLeadByDocumentDto } from '../dto/find-by-document.dto';
 import { LeadService } from '../services/lead.service';
 import { FindLeadsDto } from '../dto/find-leads.dto';
+import { AssignParticipantsToLeadDto } from '../dto/assign-participants-to-lead.dto';
 @Controller('leads')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class LeadController {
@@ -63,7 +65,7 @@ export class LeadController {
     }
   }
   @Post('register')
-  @Roles('SYS', 'REC')
+  @Roles('SYS', 'REC', 'JVE')
   async createOrUpdateLead(@Body() createUpdateDto: CreateUpdateLeadDto) {
     try {
       const lead = await this.leadService.createOrUpdateLead(createUpdateDto);
@@ -99,7 +101,7 @@ export class LeadController {
   }
 
   @Patch('update/:id')
-  @Roles('SYS', 'REC')
+  @Roles('SYS', 'REC', 'JVE')
   async updateLead(
     @Param('id') id: string,
     @Body() updateDto: CreateUpdateLeadDto,
@@ -206,4 +208,34 @@ export class LeadController {
     }
   }
 
+  @Post('assign/participants/:id')
+  @Roles('SYS', 'REC', 'JVE')
+  async assignParticipantsToLead(
+    @Body() assignParticipantsDto: AssignParticipantsToLeadDto,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    try {
+      const lead = await this.leadService.assignParticipantsToLead(
+        id,
+        assignParticipantsDto,
+      );
+      return {
+        success: true,
+        message: 'Participantes asignados exitosamente al lead',
+        data: lead,
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Error al asignar participantes al lead',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }

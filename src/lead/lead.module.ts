@@ -17,11 +17,13 @@ import { BulkLeadController } from './controllers/bulk-lead.controller';
 import { BulkLeadService } from './services/bulk-lead.service';
 import { UsersModule } from 'src/user/user.module';
 import { CommonModule } from 'src/common/common.module';
+import { ParticipantsModule } from 'src/admin-sales/participants/participants.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Lead, Liner, Ubigeo, LeadSource, LeadVisit]),
     UsersModule,
     CommonModule,
+    ParticipantsModule,
   ],
   controllers: [
     LeadController,

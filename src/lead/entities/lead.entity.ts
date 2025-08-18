@@ -28,11 +28,8 @@ import { LeadVisit } from './lead-visit.entity';
 import { Ubigeo } from './ubigeo.entity';
 import { Client } from 'src/admin-sales/clients/entities/client.entity';
 import { User } from 'src/user/entities/user.entity';
-export enum DocumentType {
-  DNI = 'DNI',
-  CE = 'CE',
-  RUC = 'RUC',
-}
+import { Participant } from 'src/admin-sales/participants/entities/participant.entity';
+import { DocumentType } from '../enums/document-type.enum';
 @Entity('leads')
 export class Lead {
   @PrimaryGeneratedColumn('uuid')
@@ -110,7 +107,7 @@ export class Lead {
   isActive: boolean;
   @CreateDateColumn()
   createdAt: Date;
-  @UpdateDateColumn()
+  @UpdateDateColumn({ select: false })
   updatedAt: Date;
   @Column({ default: false })
   @IsBoolean()
@@ -120,9 +117,71 @@ export class Lead {
   }
 
   @Column({
+    type: 'text',
+    array: true,
+    default: [],
+  })
+  interestProjects?: string[];
+
+  @Column({
+    type: 'varchar',
+    length: 200,
+    nullable: true,
+  })
+  companionFullName?: string;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
+  companionDni?: string;
+
+  @Column({
+    type: 'varchar',
+    length: 50,
+    nullable: true,
+  })
+  companionRelationship?: string;
+
+  @Column({
+    type: 'json',
+    nullable: true,
+  })
+  metadata?: Record<string, any>;
+
+  @Column({
     type: 'varchar',
     length: 500,
     nullable: true,
   })
   reportPdfUrl?: string;
+
+  @ManyToOne(() => Participant, (participant) => participant.leadLiner, { nullable: true })
+  @JoinColumn({ name: 'liner_id' })
+  liner?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.leadTelemarketingSupervisor, { nullable: true })
+  @JoinColumn({ name: 'telemarketing_supervisor_id' })
+  telemarketingSupervisor?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.leadTelemarketingConfirmer, { nullable: true })
+  @JoinColumn({ name: 'telemarketing_confirmer_id' })
+  telemarketingConfirmer?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.leadTelemarketer, { nullable: true })
+  @JoinColumn({ name: 'telemarketer_id' })
+  telemarketer?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.leadFieldManager, { nullable: true })
+  @JoinColumn({ name: 'field_manager_id' })
+  fieldManager?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.leadFieldSupervisor, { nullable: true })
+  @JoinColumn({ name: 'field_supervisor_id' })
+  fieldSupervisor?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.leadFieldSeller, { nullable: true })
+  @JoinColumn({ name: 'field_seller_id' })
+  fieldSeller?: Participant;
 }

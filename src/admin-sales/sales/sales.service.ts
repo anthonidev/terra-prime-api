@@ -70,6 +70,8 @@ import { LotDetailResponseDto } from 'src/project/dto/lot.dto';
 import { transformLotToDetail } from 'src/project/helpers/transform-lot-to-detail.helper';
 import { UpdateReservationPeriodResponseDto } from './dto/update-reservation-period.dto';
 import { FinancingInstallmentsService } from '../financing/services/financing-installments.service';
+import { LeadWithParticipantsResponse } from 'src/lead/interfaces/lead-formatted-response.interface';
+import { Lead } from 'src/lead/entities/lead.entity';
 
 // SERVICIO ACTUALIZADO - UN SOLO ENDPOINT PARA VENTA/RESERVA
 
@@ -121,18 +123,19 @@ export class SalesService {
 
       if (isReservation) await this.validateReservationData(reservationAmount, maximumHoldPeriod);
 
+      const client = await this.clientService.isValidClient(clientId);
       // Validaciones comunes
       await Promise.all([
-        this.clientService.isValidClient(clientId),
         (guarantorId) ? this.guarantorService.isValidGuarantor(guarantorId) : null,
         ...secondaryClientsIds.map(id => this.secondaryClientService.isValidSecondaryClient(id)),
       ]);
 
+      const lead = client.lead;
       let sale;
       
       if (createSaleDto.saleType === SaleType.DIRECT_PAYMENT) {
         sale = await this.handleSaleCreation(createSaleDto, userId, async (queryRunner, data) => {
-          return await this.createSale(data, userId, null, queryRunner);
+          return await this.createSale(data, userId, null, lead, queryRunner);
         });
       }
       
@@ -158,7 +161,7 @@ export class SalesService {
           };
           
           const financingSale = await this.financingService.create(financingData, queryRunner);
-          return await this.createSale(data, userId, financingSale.id, queryRunner);
+          return await this.createSale(data, userId, financingSale.id, lead, queryRunner);
         });
       }
       
@@ -212,6 +215,7 @@ export class SalesService {
     createSaleDto: CreateSaleDto,
     userId: string,
     financingId?: string,
+    lead?: Lead,
     queryRunner?: QueryRunner,
   ) {
     const repository = queryRunner 
@@ -228,12 +232,20 @@ export class SalesService {
       contractDate: createSaleDto.contractDate,
       financing: financingId ? { id: financingId } : null,
       metadata: createSaleDto?.metadata || null,
+      notes: createSaleDto?.notes || null,
       // Campos de reserva
       fromReservation: createSaleDto.isReservation,
       reservationAmount: createSaleDto.reservationAmount || null,
       maximumHoldPeriod: createSaleDto.maximumHoldPeriod || null,
       // reservationDate: isReservation ? new Date() : null,
       status: createSaleDto.isReservation ? StatusSale.RESERVATION_PENDING : StatusSale.PENDING,
+      liner: lead?.liner || null,
+      telemarketingSupervisor: lead?.telemarketingSupervisor || null,
+      telemarketingConfirmer: lead?.telemarketingConfirmer || null,
+      telemarketer: lead?.telemarketer || null,
+      fieldManager: lead?.fieldManager || null,
+      fieldSupervisor: lead?.fieldSupervisor || null,
+      fieldSeller: lead?.fieldSeller || null,
     });
     
     return await repository.save(sale);
@@ -617,7 +629,7 @@ export class SalesService {
 
   async findAllLeadsByDay(
     findAllLeadsByDayDto: FindAllLeadsByDayDto,
-  ): Promise<Paginated<LeadsByDayResponse>> {
+  ): Promise<Paginated<LeadWithParticipantsResponse>> {
     const {
       day,
       page = 1,
@@ -627,7 +639,7 @@ export class SalesService {
     const paginationDto = { page, limit, order };
     const leads = await this.leadService.findAllByDay(day? new Date(day) : new Date());
     return PaginationHelper.createPaginatedResponse(
-      leads.map(formatFindAllLedsByDayResponse),
+      leads,
       leads.length,
       paginationDto
     );
@@ -678,10 +690,9 @@ export class SalesService {
 
   async findAllLeadsByUser(
     userId: string,
-  ): Promise<LeadsByDayResponse[]> {
+  ): Promise<LeadWithParticipantsResponse[]> {
     const leads = await this.leadService.findAllByUser(userId);
-    const leadsFormatted = leads.map(formatFindAllLedsByDayResponse);
-    return leadsFormatted.map( lead => {
+    return leads.map( lead => {
       const { vendor, ...rest } = lead;
       return rest;
     });

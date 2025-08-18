@@ -61,6 +61,11 @@ export class CreateSaleDto {
 	@IsOptional()
 	metadata?: Record<string, any>;
 
+	@IsOptional()
+	@IsString()
+	@Transform(({ value }) => value?.trim())
+	notes?: string;
+
   // Financiado
 	@IsOptional()
   initialAmount?: number;

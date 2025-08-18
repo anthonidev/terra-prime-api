@@ -111,6 +111,9 @@ export class Sale extends Timestamped {
   @Column({ type: 'json', nullable: true })
   metadata?: Record<string, any>;
 
+  @Column({ type: 'text', nullable: true })
+  notes?: string;
+
   @OneToOne(() => UrbanDevelopment, (urbanDevelopment) => urbanDevelopment.sale, { nullable: true })
   urbanDevelopment?: UrbanDevelopment;
 

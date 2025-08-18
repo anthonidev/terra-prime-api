@@ -67,8 +67,6 @@ export class ReportsLeadsPdfService {
     doc.fontSize(14)
        .fillColor('#000000')
        .text('BIENVENIDOS A HUERTAS INMOBILIARIA', 50, 90, { align: 'center' })
-      //  .fontSize(12)
-      //  .text('A HUERTAS INMOBILIARIA', 50, 110, { align: 'center' });
 
     // Subtítulo descriptivo
     doc.fontSize(9)
@@ -85,32 +83,34 @@ export class ReportsLeadsPdfService {
     yPosition = this.addTransportSection(doc, yPosition - 5);
 
     // Sección: Ingresos Familiares
-    yPosition = this.addFamilyIncomeSection(doc, yPosition - 5);
+    yPosition = this.addFamilyIncomeSection(doc, lead, yPosition - 5);
 
     // Sección: ¿Esta es su primera visita a Huertas Inmobiliaria?
     yPosition = this.addFirstVisitSection(doc, yPosition - 5);
 
     // Sección: Proyectos
-    yPosition = this.addProjectsSection(doc, yPosition - 5, lightGreen);
+    yPosition = this.addProjectsSection(doc, lead, yPosition - 5, lightGreen);
 
     // Sección: ¿Cómo se enteró de nuestro proyecto?
     yPosition = this.addHowDidYouHearSection(doc, yPosition);
 
-    // Sección: ¿Le interesaría tener información de otro proyecto?
-    yPosition = this.addOtherProjectInterestSection(doc, yPosition);
+    // Sección: Promedio de ingresos familiares
+    yPosition = this.addOtherProjectInterestSection(doc, lead, yPosition);
 
     // Sección: ¿Es usuario de tarjetas de débito?
-    yPosition = this.addDebitCardSection(doc, yPosition);
+    yPosition = this.addDebitCardSection(doc, lead, yPosition);
+
+    // Sección: ¿Es usuario de tarjetas de crédito?
+    yPosition = this.addCreditCardSection(doc, lead, yPosition);
 
     // Sección: Acompañante y DNI
-    yPosition = this.addCompanionSection(doc, yPosition);
+    yPosition = this.addCompanionSection(doc, lead, yPosition);
 
     // Sección: Acepto términos y condiciones
     yPosition = this.addTermsSection(doc, yPosition);
 
     // Sección: USO INTERNO TLMK (en cuadro) - más compacto
-    yPosition = this.addInternalUseSection(doc, yPosition);
-
+    yPosition = this.addInternalUseSection(doc, lead, yPosition);
 
     // NUEVO: Texto de consentimiento
     yPosition = this.addConsentText(doc, yPosition);
@@ -191,31 +191,43 @@ export class ReportsLeadsPdfService {
 
     yPos += 18;
 
-    // Estado Civil
+    // Estado Civil - ACTUALIZADO con datos reales
     doc.text('Estado Civil:', 50, yPos);
     
-    this.drawCheckbox(doc, 130, yPos - 2, false);
+    const estadoCivil = lead.metadata?.['Estado Civil'] || '';
+    
+    this.drawCheckbox(doc, 130, yPos - 2, estadoCivil === 'Casado');
     doc.text('Casado(a)', 145, yPos);
     
-    this.drawCheckbox(doc, 210, yPos - 2, false);
+    this.drawCheckbox(doc, 210, yPos - 2, estadoCivil === 'Conviviente');
     doc.text('Conviviente', 225, yPos);
     
-    this.drawCheckbox(doc, 290, yPos - 2, false);
+    this.drawCheckbox(doc, 290, yPos - 2, estadoCivil === 'Soltero');
     doc.text('Soltero(a)', 305, yPos);
     
-    this.drawCheckbox(doc, 370, yPos - 2, false);
+    this.drawCheckbox(doc, 370, yPos - 2, estadoCivil === 'Divorciado');
     doc.text('Divorciado(a)', 385, yPos);
 
     yPos += 18;
 
-    // Hijos
+    // Hijos - ACTUALIZADO con datos reales
     doc.text('Hijos:', 50, yPos);
+    
+    const cantidadHijos = lead.metadata?.['Hijos'];
+    const tieneHijos = cantidadHijos && cantidadHijos > 0;
+    
     doc.text('Si', 90, yPos);
-    this.drawCheckbox(doc, 105, yPos - 2, false);
+    this.drawCheckbox(doc, 105, yPos - 2, tieneHijos);
     doc.text('¿Cuántos?', 130, yPos);
-    this.drawUnderline(doc, 180, yPos + 10, 50);
+    
+    if (tieneHijos) {
+      doc.text(cantidadHijos.toString(), 185, yPos);
+    } else {
+      this.drawUnderline(doc, 180, yPos + 10, 50);
+    }
+    
     doc.text('No', 250, yPos);
-    this.drawCheckbox(doc, 270, yPos - 2, false);
+    this.drawCheckbox(doc, 270, yPos - 2, !tieneHijos);
     doc.text('¿En qué distrito reside?', 320, yPos);
 
     return yPos + 25;
@@ -246,14 +258,20 @@ export class ReportsLeadsPdfService {
     return yPos + 25;
   }
 
-  private addFamilyIncomeSection(doc: PDFKit.PDFDocument, startY: number): number {
+  private addFamilyIncomeSection(doc: PDFKit.PDFDocument, lead: Lead, startY: number): number {
     let yPos = startY;
 
     doc.fontSize(10)
        .fillColor('#000000')
        .text('Ingresos Familiares:', 50, yPos);
     
-    this.drawUnderline(doc, 150, yPos + 10, 200);
+    // ACTUALIZADO - Mostrar ingreso real si existe
+    const ingresoPromedio = lead.metadata?.['Ingreso promedio'];
+    if (ingresoPromedio) {
+      doc.text(`S/ ${ingresoPromedio}`, 155, yPos);
+    } else {
+      this.drawUnderline(doc, 150, yPos + 10, 200);
+    }
 
     return yPos + 25;
   }
@@ -265,6 +283,7 @@ export class ReportsLeadsPdfService {
        .fillColor('#000000')
        .text('¿Esta es su primera visita a Huertas Inmobiliaria?', 50, yPos);
     
+    // Por ahora dejamos sin marcar, pero podrías agregar este campo al lead si es necesario
     doc.text('Si', 300, yPos);
     this.drawCheckbox(doc, 315, yPos - 2, false);
     
@@ -274,7 +293,7 @@ export class ReportsLeadsPdfService {
     return yPos + 25;
   }
 
-  private addProjectsSection(doc: PDFKit.PDFDocument, startY: number, lightGreen: string): number {
+  private addProjectsSection(doc: PDFKit.PDFDocument, lead: Lead, startY: number, lightGreen: string): number {
     let yPos = startY;
 
     doc.fontSize(10)
@@ -283,10 +302,13 @@ export class ReportsLeadsPdfService {
     
     yPos += 20;
 
+    // ACTUALIZADO - Marcar proyectos de interés reales
+    const interestProjects = lead.interestProjects || [];
+
     // Primera fila: EL OLIVAR y OASIS
     const projects1 = [
-      { name: 'EL OLIVAR', checked: false },
-      { name: 'OASIS', checked: false }
+      { name: 'EL OLIVAR', checked: interestProjects.includes('EL OLIVAR') },
+      { name: 'OASIS', checked: interestProjects.includes('OASIS') }
     ];
 
     projects1.forEach((project, index) => {
@@ -306,8 +328,8 @@ export class ReportsLeadsPdfService {
 
     // Segunda fila: APOLO y MAREA
     const projects2 = [
-      { name: 'APOLO', checked: false },
-      { name: 'MAREA', checked: false }
+      { name: 'APOLO', checked: interestProjects.includes('Apolo') || interestProjects.includes('APOLO') },
+      { name: 'MAREA', checked: interestProjects.includes('MAREA') }
     ];
 
     projects2.forEach((project, index) => {
@@ -335,7 +357,7 @@ export class ReportsLeadsPdfService {
     
     yPos += 15;
 
-    // Primera fila de opciones
+    // Una sola fila de opciones
     doc.text('Facebook', 50, yPos);
     this.drawCheckbox(doc, 100, yPos - 2, false);
 
@@ -348,78 +370,110 @@ export class ReportsLeadsPdfService {
     doc.text('Web Huertas', 310, yPos);
     this.drawCheckbox(doc, 370, yPos - 2, false);
 
-    doc.text('Web Urbania', 410, yPos);
-    this.drawCheckbox(doc, 470, yPos - 2, false);
-
-    yPos += 20;
-
-    // Segunda fila de opciones
-    doc.text('Periódico Digital', 50, yPos);
-    this.drawCheckbox(doc, 130, yPos - 2, false);
-
-    doc.text('Periódico Físico', 170, yPos);
-    this.drawCheckbox(doc, 250, yPos - 2, false);
-
-    doc.text('Tv', 290, yPos);
-    this.drawCheckbox(doc, 305, yPos - 2, false);
-
-    doc.text('Módulo', 340, yPos);
-    this.drawCheckbox(doc, 380, yPos - 2, false);
-
-    doc.text('Otros:', 420, yPos);
-    this.drawUnderline(doc, 450, yPos + 10, 80);
+    doc.text('Otros:', 410, yPos);
+    this.drawUnderline(doc, 440, yPos + 10, 80);
 
     return yPos + 25;
   }
 
-  private addOtherProjectInterestSection(doc: PDFKit.PDFDocument, startY: number): number {
+  private addOtherProjectInterestSection(doc: PDFKit.PDFDocument, lead: Lead, startY: number): number {
     let yPos = startY;
 
     doc.fontSize(10)
        .fillColor('#000000')
-       .text('¿Le interesaría tener información de otro proyecto?', 50, yPos);
+       .text('Por estadísticas, cual es el promedio de ingresos familiares?', 50, yPos);
     
-    doc.text('Si', 300, yPos);
-    this.drawCheckbox(doc, 315, yPos - 2, false);
-    
-    doc.text('No', 340, yPos);
-    this.drawCheckbox(doc, 355, yPos - 2, false);
+    // Mostrar el valor del ingreso promedio desde metadata
+    const ingresoPromedio = lead.metadata?.['Ingreso promedio'];
+    if (ingresoPromedio) {
+      doc.text(`S/ ${ingresoPromedio}`, 350, yPos);
+    } else {
+      this.drawUnderline(doc, 350, yPos + 10, 150);
+    }
 
     return yPos + 20;
   }
 
-  private addDebitCardSection(doc: PDFKit.PDFDocument, startY: number): number {
+  private addDebitCardSection(doc: PDFKit.PDFDocument, lead: Lead, startY: number): number {
     let yPos = startY;
 
     doc.fontSize(10)
        .fillColor('#000000')
        .text('¿Es usuario de tarjetas de débito?', 50, yPos);
     
+    // ACTUALIZADO - Mostrar cantidad real de tarjetas de débito
+    const cantidadTarjetasDebito = lead.metadata?.['Cantidad de tarjetas de debito'];
+    const tieneTarjetasDebito = cantidadTarjetasDebito && cantidadTarjetasDebito > 0;
+    
     doc.text('Si', 250, yPos);
-    this.drawCheckbox(doc, 265, yPos - 2, false);
+    this.drawCheckbox(doc, 265, yPos - 2, tieneTarjetasDebito);
     
     doc.text('¿Cuántas?', 290, yPos);
-    this.drawUnderline(doc, 340, yPos + 10, 60);
+    if (tieneTarjetasDebito) {
+      doc.text(cantidadTarjetasDebito.toString(), 345, yPos);
+    } else {
+      this.drawUnderline(doc, 340, yPos + 10, 60);
+    }
     
     doc.text('No', 420, yPos);
-    this.drawCheckbox(doc, 435, yPos - 2, false);
+    this.drawCheckbox(doc, 435, yPos - 2, !tieneTarjetasDebito);
 
     return yPos + 20;
   }
 
-  private addCompanionSection(doc: PDFKit.PDFDocument, startY: number): number {
+  private addCreditCardSection(doc: PDFKit.PDFDocument, lead: Lead, startY: number): number {
+    let yPos = startY;
+
+    doc.fontSize(10)
+      .fillColor('#000000')
+      .text('¿Es usuario de tarjetas de crédito?', 50, yPos);
+    
+    // ACTUALIZADO - Mostrar cantidad real de tarjetas de crédito
+    const cantidadTarjetasCredito = lead.metadata?.['Cantidad de tarjetas de credito'];
+    const tieneTarjetasCredito = cantidadTarjetasCredito && cantidadTarjetasCredito > 0;
+    
+    doc.text('Si', 250, yPos);
+    this.drawCheckbox(doc, 265, yPos - 2, tieneTarjetasCredito);
+    
+    doc.text('¿Cuántas?', 290, yPos);
+    if (tieneTarjetasCredito) {
+      doc.text(cantidadTarjetasCredito.toString(), 345, yPos);
+    } else {
+      this.drawUnderline(doc, 340, yPos + 10, 60);
+    }
+    
+    doc.text('No', 420, yPos);
+    this.drawCheckbox(doc, 435, yPos - 2, !tieneTarjetasCredito);
+
+    return yPos + 20;
+  }
+
+  private addCompanionSection(doc: PDFKit.PDFDocument, lead: Lead, startY: number): number {
     let yPos = startY;
 
     doc.fontSize(10)
        .fillColor('#000000')
        .text('Acompañante:', 50, yPos);
     
-    this.drawUnderline(doc, 120, yPos + 10, 200);
+    // ACTUALIZADO - Mostrar nombre del acompañante real
+    const companionName = lead.companionFullName;
+    if (companionName) {
+      doc.text(companionName, 125, yPos);
+    } else {
+      this.drawUnderline(doc, 120, yPos + 10, 200);
+    }
     
     doc.text('DNI:', 350, yPos);
-    this.drawUnderline(doc, 380, yPos + 10, 150);
+    
+    // ACTUALIZADO - Mostrar DNI del acompañante real
+    const companionDni = lead.companionDni;
+    if (companionDni) {
+      doc.text(companionDni, 385, yPos);
+    } else {
+      this.drawUnderline(doc, 380, yPos + 10, 150);
+    }
 
-    return yPos + 20; // Reducido de 25 a 20
+    return yPos + 20;
   }
 
   private addTermsSection(doc: PDFKit.PDFDocument, startY: number): number {
@@ -431,7 +485,7 @@ export class ReportsLeadsPdfService {
     
     this.drawCheckbox(doc, 280, yPos - 2, false);
 
-    return yPos + 15; // Reducido de 25 a 15
+    return yPos + 15;
   }
 
   // NUEVA FUNCIÓN: Texto de consentimiento
@@ -440,7 +494,7 @@ export class ReportsLeadsPdfService {
 
     const consentText = `Otorgo mi consentimiento a Inmobiliaria Huertas Grupo Inv. S.R.L. y sus empresas vinculadas domiciliadas en Calle Luis Espejo 1097 Oficina 803 Santa Catalina - La Victoria para recopilar, almacenar y tratar mis datos personales. La recopilación, organización y tratamiento de mis datos personales tiene como finalidad ofrecer productos y servicios a través de SMS, correo electrónico, teléfono, Whatsapp. Mis datos personales serán conservados bajo las medidas de seguridad establecidas por Inmobiliaria Huertas Grupo Inv. S.R.L. y sus empresas vinculadas. Puedo revocar mi consentimiento en cualquier momento. En tal sentido, podré ejercer mis derechos de acceso, rectificación, cancelación y oposición a través del correo electrónico ventas@inmobiliariahuertas.com.`;
 
-    doc.fontSize(7) // Fuente muy pequeña para que quepa
+    doc.fontSize(7)
        .fillColor('#000000')
        .text(consentText, 50, yPos, {
          width: doc.page.width - 100,
@@ -448,80 +502,115 @@ export class ReportsLeadsPdfService {
          lineGap: 1
        });
 
-    return yPos + 80; // Espacio compacto después del texto
+    return yPos + 80;
   }
 
-  private addInternalUseSection(doc: PDFKit.PDFDocument, startY: number): number {
-  let yPos = startY;
+  private addInternalUseSection(doc: PDFKit.PDFDocument, lead: Lead, startY: number): number {
+    let yPos = startY;
 
-  // Título centrado
-  doc.fontSize(9)
-    .fillColor('#666666')
-    .text('USO INTERNO TLMK', 50, yPos, { align: 'center' });
+    // Título centrado
+    doc.fontSize(9)
+      .fillColor('#666666')
+      .text('USO INTERNO TLMK', 50, yPos, { align: 'center' });
 
-  yPos += 10;
+    yPos += 10;
 
-  // Cuadro
-  const boxX = 80;
-  const boxY = yPos;
-  const boxWidth = doc.page.width - 160;
-  const boxHeight = 70;
+    // Cuadro
+    const boxX = 80;
+    const boxY = yPos;
+    const boxWidth = doc.page.width - 160;
+    const boxHeight = 70;
 
-  doc.rect(boxX, boxY, boxWidth, boxHeight)
-    .stroke('#000000');
+    doc.rect(boxX, boxY, boxWidth, boxHeight)
+      .stroke('#000000');
 
-  yPos += 10;
+    yPos += 10;
 
-  doc.fontSize(7)
-    .fillColor('#000000');
+    doc.fontSize(7)
+      .fillColor('#000000');
 
-  // PRIMERA LÍNEA: L: ___ Jefatura: ___ Supervisor: ___
-  doc.text('L:', boxX + 10, yPos);
-  this.drawUnderline(doc, boxX + 20, yPos + 8, 95);
+    // PRIMERA LÍNEA: L: ___ Jefatura: ___ Supervisor: ___
+    doc.text('L:', boxX + 10, yPos);
+    // Mostrar liner si existe
+    const linerName = lead.liner ? `${lead.liner.firstName.split(' ')[0]} ${lead.liner.lastName.split(' ')[0]}` : '';
+    if (linerName) {
+      doc.text(linerName, boxX + 20, yPos);
+    } else {
+      this.drawUnderline(doc, boxX + 20, yPos + 8, 95);
+    }
 
-  doc.text('Jefatura:', boxX + 130, yPos);
-  this.drawUnderline(doc, boxX + 165, yPos + 8, 95);
+    doc.text('Jefatura:', boxX + 130, yPos);
+    // Mostrar fieldManager si existe
+    const fieldManager = lead.fieldManager ? `${lead.fieldManager.firstName.split(' ')[0]} ${lead.fieldManager.lastName.split(' ')[0]}` : '';
+    if (fieldManager) {
+      doc.text(fieldManager, boxX + 165, yPos);
+    } else {
+      this.drawUnderline(doc, boxX + 165, yPos + 8, 95);
+    }
 
-  doc.text('Supervisor:', boxX + 275, yPos);
-  this.drawUnderline(doc, boxX + 320, yPos + 8, 95);
-  
-  yPos += 15;
+    doc.text('Supervisor:', boxX + 275, yPos);
+    // Mostrar telemarketingSupervisor si existe
+    const supervisor = lead.telemarketingSupervisor ? `${lead.telemarketingSupervisor.firstName.split(' ')[0]} ${lead.telemarketingSupervisor.lastName.split(' ')[0]}` : '';
+    if (supervisor) {
+      doc.text(supervisor, boxX + 320, yPos);
+    } else {
+      this.drawUnderline(doc, boxX + 320, yPos + 8, 95);
+    }
+    
+    yPos += 15;
 
-  // SEGUNDA LÍNEA: C: ___ Confirmador: ___ TLMK: ___
-  doc.text('C:', boxX + 10, yPos);
-  this.drawUnderline(doc, boxX + 20, yPos + 8, 95);
+    // SEGUNDA LÍNEA: C: ___ Confirmador: ___ TLMK: ___
+    doc.text('C:', boxX + 10, yPos);
+    // Mostrar vendor/fieldSeller si existe
+    const vendor = lead.fieldSeller ? `${lead.vendor.firstName.split(' ')[0]} ${lead.vendor.lastName.split(' ')[0]}` : '';
+    if (vendor) {
+      doc.text(vendor, boxX + 20, yPos);
+    } else {
+      this.drawUnderline(doc, boxX + 20, yPos + 8, 95);
+    }
 
-  doc.text('Confirmador:', boxX + 130, yPos);
-  this.drawUnderline(doc, boxX + 185, yPos + 8, 75);
+    doc.text('Confirmador:', boxX + 130, yPos);
+    // Mostrar telemarketingConfirmer si existe
+    const confirmer = lead.telemarketingConfirmer ? `${lead.telemarketingConfirmer.firstName.split(' ')[0]} ${lead.telemarketingConfirmer.lastName.split(' ')[0]}` : '';
+    if (confirmer) {
+      doc.text(confirmer, boxX + 185, yPos);
+    } else {
+      this.drawUnderline(doc, boxX + 185, yPos + 8, 75);
+    }
 
-  doc.text('TLMK:', boxX + 275, yPos);
-  this.drawUnderline(doc, boxX + 305, yPos + 8, 110);
-  
-  yPos += 15;
+    doc.text('TLMK:', boxX + 275, yPos);
+    // Mostrar telemarketer si existe
+    const telemarketer = lead.telemarketer ? `${lead.telemarketer.firstName.split(' ')[0]} ${lead.telemarketer.lastName.split(' ')[0]}` : '';
+    if (telemarketer) {
+      doc.text(telemarketer, boxX + 305, yPos);
+    } else {
+      this.drawUnderline(doc, boxX + 305, yPos + 8, 110);
+    }
+    
+    yPos += 15;
 
-  // TERCERA LÍNEA: Deal PROC PEN RES + Hora de ingreso: ___ Hora de salida: ___
-  doc.text('Deal', boxX + 10, yPos);
-  doc.text('PROC', boxX + 35, yPos);
-  doc.text('PEN', boxX + 65, yPos);
-  doc.text('RES', boxX + 90, yPos);
+    doc.text('Deal', boxX + 10, yPos);
+    doc.text('PROC', boxX + 35, yPos);
+    doc.text('PEN', boxX + 65, yPos);
+    doc.text('RES', boxX + 90, yPos);
 
-  doc.text('Hora de ingreso:', boxX + 130, yPos);
-  this.drawUnderline(doc, boxX + 185, yPos + 8, 85);
+    doc.text('Hora de ingreso:', boxX + 130, yPos);
+    this.drawUnderline(doc, boxX + 185, yPos + 8, 85);
 
-  doc.text('Hora de salida:', boxX + 275, yPos);
-  this.drawUnderline(doc, boxX + 330, yPos + 8, 85);
-  
-  yPos += 15;
+    doc.text('Hora de salida:', boxX + 275, yPos);
+    this.drawUnderline(doc, boxX + 330, yPos + 8, 85);
+    
+    yPos += 15;
 
-  // CUARTA LÍNEA: Obs. ________________________
-  doc.text('Obs.', boxX + 10, yPos);
-  this.drawUnderline(doc, boxX + 30, yPos + 8, 385);
+    // CUARTA LÍNEA: Obs. ________________________
+    doc.text('Obs.', boxX + 10, yPos);
+    this.drawUnderline(doc, boxX + 30, yPos + 8, 385);
 
-  return yPos + 20;
-}
+    return yPos + 20;
+  }
 
   private addSignatureSection(doc: PDFKit.PDFDocument, startY: number): number {
-    let yPos = startY + 10; // Reducido de 20 a 10
+    let yPos = startY + 10;
 
     // Calcular posición centrada para la sección completa
     const centerX = doc.page.width / 2;
@@ -535,18 +624,13 @@ export class ReportsLeadsPdfService {
     // Línea para firma
     this.drawUnderline(doc, centerX - (lineWidth / 2), yPos + 2, lineWidth);
 
-    return yPos + 25; // Reducido de 40 a 25
+    return yPos + 25;
   }
 
   private addFooterAtFixedPosition(doc: PDFKit.PDFDocument): void {
-    // Posición fija del footer - más cerca del fondo
-    const footerY = doc.page.height - 60; // Reducido de 90 a 60
+    // Posición fija del footer
+    const footerY = doc.page.height - 60;
     
-    // Footer real exacto como en la imagen - centrado
-    // doc.fontSize(8)
-    //   .fillColor('#4a90e2') // Color azul para el email
-    //   .text('ventas@inmobiliariahuertas.com', 50, footerY, { align: 'center' });
-
     // Información de contacto en una sola línea centrada
     doc.fontSize(8)
       .fillColor('#000000')

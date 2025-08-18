@@ -13,7 +13,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { DocumentType } from '../entities/lead.entity';
+import { DocumentType } from '../enums/document-type.enum';
 
 export class LeadExcelDto {
   @IsNotEmpty({ message: 'El nombre es requerido' })

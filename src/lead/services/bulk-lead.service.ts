@@ -7,13 +7,14 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import * as XLSX from 'xlsx';
-import { Lead, DocumentType } from '../entities/lead.entity';
+import { Lead } from '../entities/lead.entity';
 import { LeadSource } from '../entities/lead-source.entity';
 import { Ubigeo } from '../entities/ubigeo.entity';
 import {
   BulkLeadDto,
   ValidateBulkLeadResponseDto,
 } from '../dto/bulk-lead-upload.dto';
+import { DocumentType } from '../enums/document-type.enum';
 
 interface ExcelLeadRow {
   firstName: string;

@@ -1,6 +1,6 @@
 import { IsString, IsNotEmpty, IsEmail, IsOptional, IsEnum, Length, Matches } from 'class-validator';
 import { ParticipantType } from '../entities/participant.entity';
-import { DocumentType } from 'src/lead/entities/lead.entity';
+import { DocumentType } from 'src/lead/enums/document-type.enum';
 
 export class CreateParticipantDto {
   @IsString({ message: 'El nombre debe ser una cadena de texto' })

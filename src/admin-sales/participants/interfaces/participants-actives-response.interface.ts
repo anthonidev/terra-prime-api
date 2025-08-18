@@ -1,4 +1,4 @@
-import { DocumentType } from 'src/lead/entities/lead.entity';
+import { DocumentType } from 'src/lead/enums/document-type.enum';
 import { ParticipantType } from '../entities/participant.entity';
 
 export interface ParticipantResponse {
