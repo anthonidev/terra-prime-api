@@ -55,7 +55,6 @@ import { CreatePaymentDto } from 'src/admin-payments/payments/dto/create-payment
 import { PaymentResponse } from 'src/admin-payments/payments/interfaces/payment-response.interface';
 import { CreateDetailPaymentDto } from 'src/admin-payments/payments/dto/create-detail-payment.dto';
 import { MethodPayment } from 'src/admin-payments/payments/enums/method-payment.enum';
-import { query } from 'express';
 import { StatusSale } from './enums/status-sale.enum';
 import { CreatePaymentSaleDto } from './dto/create-payment-sale.dto';
 import { Financing } from '../financing/entities/financing.entity';

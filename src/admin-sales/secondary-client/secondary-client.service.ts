@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { SecondaryClient } from './entities/secondary-client.entity';
 import { QueryRunner, Repository } from 'typeorm';
 import { CreateSecondaryClientDto } from './dto/create-secondary-client.dto';
-import { query } from 'express';
 import { SecondaryClientSale } from './entities/secondary-client-sale.entity';
 
 @Injectable()

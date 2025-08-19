@@ -65,22 +65,22 @@ export class CreateUpdateLeadDto {
     message: 'El nombre del acompañante solo debe contener letras y espacios',
   })
   @Transform(({ value }) => value?.trim())
-  @IsNotEmpty({ message: 'El nombre del acompañante es requerido' })
+  @IsOptional()
   companionFullName: string;
 
   @IsString({ message: 'El DNI del acompañante es una cadena de texto' })
   @MaxLength(20, { message: 'El DNI del acompañante no puede tener más de 20 caracteres' })
-  @IsNotEmpty({ message: 'El DNI del acompañante es requerido' })
+  @IsOptional()
   companionDni: string;
 
   @IsString({ message: 'La relación del acompañante es una cadena de texto' })
+  @IsOptional()
   @MaxLength(50, { message: 'El parentesco no puede tener más de 50 caracteres' })
   @Transform(({ value }) => value?.trim())
-  @IsNotEmpty({ message: 'La relación del acompañante es requerida' })
   companionRelationship: string;
 
   @IsObject({ message: 'Los metadatos son un objeto' })
-  @IsNotEmptyObject({}, { message: 'Los metadatos no pueden estar vacíos' })
+  @IsOptional()
   metadata: Record<string, any>;
 
 

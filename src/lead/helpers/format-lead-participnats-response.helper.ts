@@ -62,7 +62,6 @@ export const formatVisits = (visits: LeadVisit[] | null | undefined) => {
 
 export const formatLeadWithParticipants = (lead: Lead) => {
   const {
-    createdAt,
     liner,
     telemarketingSupervisor,
     telemarketingConfirmer,
