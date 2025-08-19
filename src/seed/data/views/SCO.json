@@ -10,6 +10,14 @@
             "parent": null
         },
         {
+            "name": "Pagos",
+            "url": "/cobranza/supervisor",
+            "order": 2,
+            "icon": "cliente",
+            "code": "SCO_CLIENTES_SUP",
+            "parent": null
+        },
+        {
             "name": "Perfil",
             "url": "/perfil",
             "order": 3,

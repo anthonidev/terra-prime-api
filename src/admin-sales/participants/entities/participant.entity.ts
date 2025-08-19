@@ -1,8 +1,8 @@
-import { Sale } from "src/admin-sales/sales/entities/sale.entity";
-import { Timestamped } from "src/common/entities/timestamped.entity";
-import { Lead } from "src/lead/entities/lead.entity";
-import { DocumentType } from "src/lead/enums/document-type.enum";
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
+import { Timestamped } from 'src/common/entities/timestamped.entity';
+import { Lead } from 'src/lead/entities/lead.entity';
+import { DocumentType } from 'src/lead/enums/document-type.enum';
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 
 export enum ParticipantType {
   LINER = 'LINER',
@@ -35,8 +35,7 @@ export class Participant extends Timestamped {
 
   @Column({
     type: 'varchar',
-    length: 70,
-    nullable: true
+    nullable: true,
   })
   email: string;
 
@@ -44,7 +43,7 @@ export class Participant extends Timestamped {
     type: 'varchar',
     length: 12,
     nullable: false,
-    unique: true
+    unique: true,
   })
   document: string;
 
@@ -58,14 +57,14 @@ export class Participant extends Timestamped {
   @Column({
     type: 'varchar',
     length: 20,
-    nullable: false
+    nullable: false,
   })
   phone: string;
 
   @Column({
     type: 'varchar',
     length: 70,
-    nullable: false
+    nullable: false,
   })
   address: string;
 
