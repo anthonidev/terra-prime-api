@@ -7,7 +7,6 @@ import { formatSource, formatUbigeo, formatVendor } from './format-lead-particip
 
 export const formatLeadWithParticipantsSummary = (lead: Lead) => {
   const {
-    createdAt,
     liner,
     telemarketingSupervisor,
     telemarketingConfirmer,
