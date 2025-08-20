@@ -12,6 +12,7 @@ export const formatParticipant = (participant: Participant | null | undefined) =
   return {
     firstName: participant.firstName,
     lastName: participant.lastName,
+    createdAt: participant.createdAt,
   };
 };
 
@@ -22,6 +23,7 @@ export const formatSource = (source: LeadSource | null | undefined) => {
     id: source.id,
     name: source.name,
     isActive: source.isActive,
+    createdAt: source.createdAt,
   };
 };
 
@@ -45,18 +47,18 @@ export const formatVendor = (vendor: User | null | undefined) => {
     document: vendor.document,
     firstName: vendor.firstName,
     lastName: vendor.lastName,
+    createdAt: vendor.createdAt,
   };
 };
 
 export const formatVisit = (visit: LeadVisit) => {
-  const { createdAt, liner, ...visitData } = visit;
+  const { liner, ...visitData } = visit;
   return visitData;
 };
 
 // Helper para formatear array de visitas
 export const formatVisits = (visits: LeadVisit[] | null | undefined) => {
   if (!visits || visits.length === 0) return [];
-  
   return visits.map(visit => formatVisit(visit));
 };
 
