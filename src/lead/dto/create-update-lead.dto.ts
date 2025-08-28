@@ -45,6 +45,7 @@ export class CreateUpdateLeadDto {
   @IsEnum(DocumentType, { message: 'El tipo de documento debe ser DNI o CE' })
   documentType: DocumentType;
 
+  @IsOptional()
   @IsArray({ message: 'Los proyectos de interés es un array' })
   @IsString({ each: true, message: 'each value in interestProjects must be a string' })
   @ArrayMaxSize(10, { message: 'No se pueden agregar más de 10 proyectos de interés' })
@@ -59,7 +60,7 @@ export class CreateUpdateLeadDto {
     }
     return Array.isArray(value) ? value : [];
   })
-  interestProjects: string[];
+  interestProjects?: string[];
 
   // Campos del acompañante - Verdaderamente opcionales
   @ValidateIf((obj) => obj.companionFullName !== undefined && obj.companionFullName !== null && obj.companionFullName !== '')
