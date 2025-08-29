@@ -12,6 +12,10 @@ export enum ParticipantType {
   FIELD_MANAGER = 'FIELD_MANAGER',
   FIELD_SUPERVISOR = 'FIELD_SUPERVISOR',
   FIELD_SELLER = 'FIELD_SELLER',
+  SALES_MANAGER = 'SALES_MANAGER',
+  SALES_GENERAL_MANAGER = 'SALES_GENERAL_MANAGER',
+  POST_SALE = 'POST_SALE',
+  CLOSER = 'CLOSER',
 }
 
 @Entity('participants')
@@ -108,6 +112,22 @@ export class Participant extends Timestamped {
   @OneToMany(() => Sale, (sale) => sale.fieldSeller)
   fieldSeller: Sale[];
 
+  // Ventas como Jefe de Ventas
+  @OneToMany(() => Sale, (sale) => sale.salesManager)
+  salesManager: Sale[];
+
+  // Ventas como Gerente de Ventas
+  @OneToMany(() => Sale, (sale) => sale.salesGeneralManager)
+  salesGeneralManager: Sale[];
+
+  // Ventas como PostVenta
+  @OneToMany(() => Sale, (sale) => sale.postSale)
+  postSale: Sale[];
+
+  // Ventas como Closer
+  @OneToMany(() => Sale, (sale) => sale.closer)
+  closer: Sale[];
+
   // La relación que ya tenías (probablemente como garante/guarantor)
   @OneToMany(() => Sale, (sale) => sale.guarantor)
   sales: Sale[];
@@ -132,4 +152,16 @@ export class Participant extends Timestamped {
 
   @OneToMany(() => Lead, (lead) => lead.fieldSeller)
   leadFieldSeller: Lead[];
+
+  @OneToMany(() => Lead, (lead) => lead.salesManager)
+  leadSalesManager: Lead[];
+
+  @OneToMany(() => Lead, (lead) => lead.salesGeneralManager)
+  leadSalesGeneralManager: Lead[];
+
+  @OneToMany(() => Lead, (lead) => lead.postSale)
+  leadPostSale: Lead[];
+
+  @OneToMany(() => Lead, (lead) => lead.closer)
+  leadCloser: Lead[];
 }

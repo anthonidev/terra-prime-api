@@ -184,4 +184,20 @@ export class Lead {
   @ManyToOne(() => Participant, (participant) => participant.leadFieldSeller, { nullable: true })
   @JoinColumn({ name: 'field_seller_id' })
   fieldSeller?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.leadSalesManager, { nullable: true })
+  @JoinColumn({ name: 'sales_manager_id' })
+  salesManager?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.leadSalesGeneralManager, { nullable: true })
+  @JoinColumn({ name: 'sales_general_manager_id' })
+  salesGeneralManager?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.leadPostSale, { nullable: true })
+  @JoinColumn({ name: 'post_sale_id' })
+  postSale?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.leadCloser, { nullable: true })
+  @JoinColumn({ name: 'closer_id' })
+  closer?: Participant;
 }

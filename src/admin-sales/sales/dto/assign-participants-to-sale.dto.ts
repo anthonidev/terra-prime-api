@@ -38,6 +38,26 @@ export class AssignParticipantsToSaleDto {
   fieldSellerId?: string | null;
 
   @IsOptional()
+  @IsString({ message: 'El ID del Jefe de Ventas debe ser una cadena válida' })
+  @Transform(({ value }) => value === '' ? null : value)
+  salesManagerId?: string | null;
+
+  @IsOptional()
+  @IsString({ message: 'El ID del Gerente de Ventas debe ser una cadena válida' })
+  @Transform(({ value }) => value === '' ? null : value)
+  salesGeneralManagerId?: string | null;
+
+  @IsOptional()
+  @IsString({ message: 'El ID del PostVenta debe ser una cadena válida' })
+  @Transform(({ value }) => value === '' ? null : value)
+  postSaleId?: string | null;
+
+  @IsOptional()
+  @IsString({ message: 'El ID del Closer debe ser una cadena válida' })
+  @Transform(({ value }) => value === '' ? null : value)
+  closerId?: string | null;
+
+  @IsOptional()
   @IsString({ message: 'El ID del Garante debe ser una cadena válida' })
   @Transform(({ value }) => value === '' ? null : value)
   guarantorId?: string | null;
@@ -52,6 +72,10 @@ export class AssignParticipantsToSaleDto {
       dto.fieldManagerId,
       dto.fieldSupervisorId,
       dto.fieldSellerId,
+      dto.salesManagerId,
+      dto.salesGeneralManagerId,
+      dto.postSaleId,
+      dto.closerId,
       dto.guarantorId
     ];
     return !fields.some(field => field !== undefined && field !== null && field !== '');

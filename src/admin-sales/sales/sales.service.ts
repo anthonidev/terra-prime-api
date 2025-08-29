@@ -593,6 +593,10 @@ export class SalesService {
         { id: assignParticipantsDto.fieldManagerId, type: ParticipantType.FIELD_MANAGER, field: 'fieldManager' },
         { id: assignParticipantsDto.fieldSupervisorId, type: ParticipantType.FIELD_SUPERVISOR, field: 'fieldSupervisor' },
         { id: assignParticipantsDto.fieldSellerId, type: ParticipantType.FIELD_SELLER, field: 'fieldSeller' },
+        { id: assignParticipantsDto.salesGeneralManagerId, type: ParticipantType.SALES_GENERAL_MANAGER, field: 'salesGeneralManager' },
+        { id: assignParticipantsDto.salesManagerId, type: ParticipantType.SALES_MANAGER, field: 'salesManager' },
+        { id: assignParticipantsDto.postSaleId, type: ParticipantType.POST_SALE, field: 'postSale' },
+        { id: assignParticipantsDto.closerId, type: ParticipantType.CLOSER, field: 'closer' },
       ];
 
       // Validar participantes que se están asignando

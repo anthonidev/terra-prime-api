@@ -37,6 +37,26 @@ export class AssignParticipantsToLeadDto {
   @Transform(({ value }) => value === '' ? null : value)
   fieldSellerId?: string | null;
 
+  @IsOptional()
+  @IsString({ message: 'El ID del Jefe de Ventas debe ser una cadena válida' })
+  @Transform(({ value }) => value === '' ? null : value)
+  salesManagerId?: string | null;
+
+  @IsOptional()
+  @IsString({ message: 'El ID del Gerente de Ventas debe ser una cadena válida' })
+  @Transform(({ value }) => value === '' ? null : value)
+  salesGeneralManagerId?: string | null;
+
+  @IsOptional()
+  @IsString({ message: 'El ID del PostVenta debe ser una cadena válida' })
+  @Transform(({ value }) => value === '' ? null : value)
+  postSaleId?: string | null;
+
+  @IsOptional()
+  @IsString({ message: 'El ID del Closer debe ser una cadena válida' })
+  @Transform(({ value }) => value === '' ? null : value)
+  closerId?: string | null;
+
   // Validación personalizada: al menos un campo debe estar presente
   @ValidateIf((dto) => {
     const fields = [
@@ -46,7 +66,11 @@ export class AssignParticipantsToLeadDto {
       dto.telemarketerId,
       dto.fieldManagerId,
       dto.fieldSupervisorId,
-      dto.fieldSellerId
+      dto.fieldSellerId,
+      dto.salesManagerId,
+      dto.salesGeneralManagerId,
+      dto.postSaleId,
+      dto.closerId
     ];
     return !fields.some(field => field !== undefined && field !== null && field !== '');
   })
