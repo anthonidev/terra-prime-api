@@ -245,6 +245,10 @@ export class SalesService {
       fieldManager: lead?.fieldManager || null,
       fieldSupervisor: lead?.fieldSupervisor || null,
       fieldSeller: lead?.fieldSeller || null,
+      salesManager: lead?.salesManager || null,
+      salesGeneralManager: lead?.salesGeneralManager || null,
+      postSale: lead?.postSale || null,
+      closer: lead?.closer || null,
     });
     
     return await repository.save(sale);
