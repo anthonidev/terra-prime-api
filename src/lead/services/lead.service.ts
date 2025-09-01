@@ -333,7 +333,11 @@ export class LeadService {
         'telemarketer',
         'fieldManager',
         'fieldSupervisor',
-        'fieldSeller'
+        'fieldSeller',
+        'salesGeneralManager',
+        'salesManager',
+        'postSale',
+        'closer',
       ]
     });
     return leads.map(formatLeadWithParticipants);
@@ -360,7 +364,11 @@ export class LeadService {
         'telemarketer',
         'fieldManager',
         'fieldSupervisor',
-        'fieldSeller'
+        'fieldSeller',
+        'salesGeneralManager',
+        'salesManager',
+        'postSale',
+        'closer',
       ]
     });
     return leads.map(formatLeadWithParticipants);

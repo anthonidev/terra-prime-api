@@ -279,7 +279,11 @@ export class SalesService {
       .leftJoinAndSelect('sale.telemarketer', 'telemarketer')
       .leftJoinAndSelect('sale.fieldManager', 'fieldManager')
       .leftJoinAndSelect('sale.fieldSupervisor', 'fieldSupervisor')
-      .leftJoinAndSelect('sale.fieldSeller', 'fieldSeller');
+      .leftJoinAndSelect('sale.fieldSeller', 'fieldSeller')
+      .leftJoinAndSelect('sale.salesGeneralManager', 'salesGeneralManager')
+      .leftJoinAndSelect('sale.salesManager', 'salesManager')
+      .leftJoinAndSelect('sale.postSale', 'postSale')
+      .leftJoinAndSelect('sale.closer', 'closer');
 
     if (userId) {
       queryBuilder.where('vendor.id = :userId', { userId });

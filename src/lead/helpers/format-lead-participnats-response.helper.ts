@@ -91,5 +91,9 @@ export const formatLeadWithParticipants = (lead: Lead) => {
     fieldManager: formatParticipant(fieldManager),
     fieldSupervisor: formatParticipant(fieldSupervisor),
     fieldSeller: formatParticipant(fieldSeller),
+    salesGeneralManager: formatParticipant(lead.salesGeneralManager),
+    salesManager: formatParticipant(lead.salesManager),
+    postSale: formatParticipant(lead.postSale),
+    closer: formatParticipant(lead.closer),
   };
 };

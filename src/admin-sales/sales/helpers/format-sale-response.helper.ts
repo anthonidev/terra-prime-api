@@ -103,6 +103,22 @@ export function formatSaleResponse(sale: Sale) {
       firstName: sale.fieldSeller.firstName,
       lastName: sale.fieldSeller.lastName,
     } : null,
+    salesGeneralManager: sale.salesGeneralManager ? {
+      firstName: sale.salesGeneralManager.firstName,
+      lastName: sale.salesGeneralManager.lastName,
+    } : null,
+    salesManager: sale.salesManager ? {
+      firstName: sale.salesManager.firstName,
+      lastName: sale.salesManager.lastName,
+    } : null,
+    postSale: sale.postSale ? {
+      firstName: sale.postSale.firstName,
+      lastName: sale.postSale.lastName,
+    } : null,
+    closer: sale.closer ? {
+      firstName: sale.closer.firstName,
+      lastName: sale.closer.lastName,
+    } : null,
     guarantor: sale.guarantor ? {
       firstName: sale.guarantor.firstName,
       lastName: sale.guarantor.lastName,
