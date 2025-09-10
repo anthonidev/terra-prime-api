@@ -1,4 +1,12 @@
-import { BadRequestException, forwardRef, Inject, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  forwardRef,
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Sale } from './entities/sale.entity';
@@ -103,11 +111,11 @@ export class SalesService {
     userId: string,
   ): Promise<SaleResponse> {
     try {
-      const { 
-        clientId, 
-        lotId, 
-        guarantorId, 
-        firstPaymentDateHu, 
+      const {
+        clientId,
+        lotId,
+        guarantorId,
+        firstPaymentDateHu,
         secondaryClientsIds = [],
         // Campos de reserva
         reservationAmount,
@@ -120,50 +128,81 @@ export class SalesService {
       // Validar lote disponible
       await this.lotService.isLotValidForSale(lotId);
 
-      if (isReservation) await this.validateReservationData(reservationAmount, maximumHoldPeriod);
+      if (isReservation)
+        await this.validateReservationData(
+          reservationAmount,
+          maximumHoldPeriod,
+        );
 
       const client = await this.clientService.isValidClient(clientId);
       // Validaciones comunes
       await Promise.all([
-        (guarantorId) ? this.guarantorService.isValidGuarantor(guarantorId) : null,
-        ...secondaryClientsIds.map(id => this.secondaryClientService.isValidSecondaryClient(id)),
+        guarantorId
+          ? this.guarantorService.isValidGuarantor(guarantorId)
+          : null,
+        ...secondaryClientsIds.map((id) =>
+          this.secondaryClientService.isValidSecondaryClient(id),
+        ),
       ]);
 
       const lead = client.lead;
       let sale;
-      
+
       if (createSaleDto.saleType === SaleType.DIRECT_PAYMENT) {
-        sale = await this.handleSaleCreation(createSaleDto, userId, async (queryRunner, data) => {
-          return await this.createSale(data, userId, null, lead, queryRunner);
-        });
+        sale = await this.handleSaleCreation(
+          createSaleDto,
+          userId,
+          async (queryRunner, data) => {
+            return await this.createSale(data, userId, null, lead, queryRunner);
+          },
+        );
       }
-      
+
       if (createSaleDto.saleType === SaleType.FINANCED) {
-        sale = await this.handleSaleCreation(createSaleDto, userId, async (queryRunner, data) => {
-          const { initialAmount, interestRate, quantitySaleCoutes, totalAmount, financingInstallments } = data;
-          
-          this.isValidFinancingDataSale(
-            totalAmount,
-            data.reservationAmount || 0, // Usar reservationAmount del DTO
-            initialAmount,
-            interestRate,
-            quantitySaleCoutes,
-            financingInstallments
-          );
-          
-          const financingData = {
-            financingType: FinancingType.CREDITO,
-            initialAmount,
-            interestRate,
-            quantityCoutes: quantitySaleCoutes,
-            financingInstallments: financingInstallments
-          };
-          
-          const financingSale = await this.financingService.create(financingData, queryRunner);
-          return await this.createSale(data, userId, financingSale.id, lead, queryRunner);
-        });
+        sale = await this.handleSaleCreation(
+          createSaleDto,
+          userId,
+          async (queryRunner, data) => {
+            const {
+              initialAmount,
+              interestRate,
+              quantitySaleCoutes,
+              totalAmount,
+              financingInstallments,
+            } = data;
+
+            this.isValidFinancingDataSale(
+              totalAmount,
+              data.reservationAmount || 0, // Usar reservationAmount del DTO
+              initialAmount,
+              interestRate,
+              quantitySaleCoutes,
+              financingInstallments,
+            );
+
+            const financingData = {
+              financingType: FinancingType.CREDITO,
+              initialAmount,
+              interestRate,
+              quantityCoutes: quantitySaleCoutes,
+              financingInstallments: financingInstallments,
+            };
+
+            const financingSale = await this.financingService.create(
+              financingData,
+              queryRunner,
+            );
+            return await this.createSale(
+              data,
+              userId,
+              financingSale.id,
+              lead,
+              queryRunner,
+            );
+          },
+        );
       }
-      
+
       return await this.findOneById(sale.id);
     } catch (error) {
       throw error;
@@ -173,41 +212,66 @@ export class SalesService {
   private async handleSaleCreation(
     createSaleDto: CreateSaleDto,
     userId: string,
-    saleSpecificLogic: (queryRunner: QueryRunner, createSaleDto: CreateSaleDto) => Promise<Sale>,
+    saleSpecificLogic: (
+      queryRunner: QueryRunner,
+      createSaleDto: CreateSaleDto,
+    ) => Promise<Sale>,
   ) {
-    return await this.transactionService.runInTransaction(async (queryRunner) => {
-      const savedSale = await saleSpecificLogic(queryRunner, createSaleDto);
-      
-      // Agregar clientes secundarios
-      const { secondaryClientsIds } = createSaleDto;
-      if (secondaryClientsIds && secondaryClientsIds.length > 0) {
-        await Promise.all(
-          createSaleDto.secondaryClientsIds.map(async (id) => {
-            const secondaryClientSale = await this.secondaryClientService.createSecondaryClientSale(savedSale.id, id, queryRunner);
-            return secondaryClientSale;
-          }),
+    return await this.transactionService.runInTransaction(
+      async (queryRunner) => {
+        const savedSale = await saleSpecificLogic(queryRunner, createSaleDto);
+
+        // Agregar clientes secundarios
+        const { secondaryClientsIds } = createSaleDto;
+        if (secondaryClientsIds && secondaryClientsIds.length > 0) {
+          await Promise.all(
+            createSaleDto.secondaryClientsIds.map(async (id) => {
+              const secondaryClientSale =
+                await this.secondaryClientService.createSecondaryClientSale(
+                  savedSale.id,
+                  id,
+                  queryRunner,
+                );
+              return secondaryClientSale;
+            }),
+          );
+        }
+
+        // Actualizar estado del lote
+        const lotStatus = savedSale.fromReservation
+          ? LotStatus.RESERVED
+          : LotStatus.SOLD;
+        await this.lotService.updateStatus(
+          savedSale.lot.id,
+          lotStatus,
+          queryRunner,
         );
-      }
-      
-      // Actualizar estado del lote
-      const lotStatus = savedSale.fromReservation ? LotStatus.RESERVED : LotStatus.SOLD;
-      await this.lotService.updateStatus(savedSale.lot.id, lotStatus, queryRunner);
-      
-      // Manejar habilitación urbana si corresponde
-      if (createSaleDto.totalAmountUrbanDevelopment === 0) return savedSale;
-      
-      this.isValidUrbanDevelopmentDataSale(
-        createSaleDto.firstPaymentDateHu,
-        createSaleDto.initialAmountUrbanDevelopment,
-        createSaleDto.quantityHuCuotes,
-      );
-      
-      const financingDataHu = this.calculateAndCreateFinancingHu(createSaleDto);
-      const financingHu = await this.financingService.create(financingDataHu, queryRunner);
-      await this.createUrbanDevelopment(savedSale.id, financingHu.id, createSaleDto, queryRunner);
-      
-      return savedSale;
-    });
+
+        // Manejar habilitación urbana si corresponde
+        if (createSaleDto.totalAmountUrbanDevelopment === 0) return savedSale;
+
+        this.isValidUrbanDevelopmentDataSale(
+          createSaleDto.firstPaymentDateHu,
+          createSaleDto.initialAmountUrbanDevelopment,
+          createSaleDto.quantityHuCuotes,
+        );
+
+        const financingDataHu =
+          this.calculateAndCreateFinancingHu(createSaleDto);
+        const financingHu = await this.financingService.create(
+          financingDataHu,
+          queryRunner,
+        );
+        await this.createUrbanDevelopment(
+          savedSale.id,
+          financingHu.id,
+          createSaleDto,
+          queryRunner,
+        );
+
+        return savedSale;
+      },
+    );
   }
 
   async createSale(
@@ -217,14 +281,16 @@ export class SalesService {
     lead?: Lead,
     queryRunner?: QueryRunner,
   ) {
-    const repository = queryRunner 
-      ? queryRunner.manager.getRepository(Sale) 
+    const repository = queryRunner
+      ? queryRunner.manager.getRepository(Sale)
       : this.saleRepository;
 
     const sale = repository.create({
       lot: { id: createSaleDto.lotId },
       client: { id: createSaleDto.clientId },
-      guarantor: createSaleDto.guarantorId ? { id: createSaleDto.guarantorId } : null,
+      guarantor: createSaleDto.guarantorId
+        ? { id: createSaleDto.guarantorId }
+        : null,
       type: createSaleDto.saleType,
       vendor: { id: userId },
       totalAmount: createSaleDto.totalAmount,
@@ -237,7 +303,9 @@ export class SalesService {
       reservationAmount: createSaleDto.reservationAmount || null,
       maximumHoldPeriod: createSaleDto.maximumHoldPeriod || null,
       // reservationDate: isReservation ? new Date() : null,
-      status: createSaleDto.isReservation ? StatusSale.RESERVATION_PENDING : StatusSale.PENDING,
+      status: createSaleDto.isReservation
+        ? StatusSale.RESERVATION_PENDING
+        : StatusSale.PENDING,
       liner: lead?.liner || null,
       telemarketingSupervisor: lead?.telemarketingSupervisor || null,
       telemarketingConfirmer: lead?.telemarketingConfirmer || null,
@@ -250,16 +318,20 @@ export class SalesService {
       postSale: lead?.postSale || null,
       closer: lead?.closer || null,
     });
-    
+
     return await repository.save(sale);
   }
 
   // ACTUALIZAR QUERIES - ELIMINAR JOINS CON RESERVATION
-  async findAll(paginationDto: PaginationDto, userId?: string): Promise<Paginated<SaleResponse>> {
+  async findAll(
+    paginationDto: PaginationDto,
+    userId?: string,
+  ): Promise<Paginated<SaleResponse>> {
     const { page = 1, limit = 10, order = 'DESC' } = paginationDto;
     const skip = (page - 1) * limit;
 
-    let queryBuilder = this.saleRepository.createQueryBuilder('sale')
+    let queryBuilder = this.saleRepository
+      .createQueryBuilder('sale')
       .leftJoinAndSelect('sale.client', 'client')
       .leftJoinAndSelect('client.lead', 'lead')
       .leftJoinAndSelect('sale.vendor', 'vendor')
@@ -270,12 +342,24 @@ export class SalesService {
       .leftJoinAndSelect('sale.guarantor', 'guarantor')
       // ELIMINAR: .leftJoinAndSelect('sale.reservation', 'reservation')
       .leftJoinAndSelect('sale.financing', 'financing')
-      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
+      .leftJoinAndSelect(
+        'financing.financingInstallments',
+        'financingInstallments',
+      )
       .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
-      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
+      .leftJoinAndSelect(
+        'secondaryClientSales.secondaryClient',
+        'secondaryClient',
+      )
       .leftJoinAndSelect('sale.liner', 'liner')
-      .leftJoinAndSelect('sale.telemarketingSupervisor', 'telemarketingSupervisor')
-      .leftJoinAndSelect('sale.telemarketingConfirmer', 'telemarketingConfirmer')
+      .leftJoinAndSelect(
+        'sale.telemarketingSupervisor',
+        'telemarketingSupervisor',
+      )
+      .leftJoinAndSelect(
+        'sale.telemarketingConfirmer',
+        'telemarketingConfirmer',
+      )
       .leftJoinAndSelect('sale.telemarketer', 'telemarketer')
       .leftJoinAndSelect('sale.fieldManager', 'fieldManager')
       .leftJoinAndSelect('sale.fieldSupervisor', 'fieldSupervisor')
@@ -297,21 +381,27 @@ export class SalesService {
       .getMany();
 
     const formattedSales = sales.map(formatSaleResponse);
-    return PaginationHelper.createPaginatedResponse(formattedSales, totalCount, paginationDto);
+    return PaginationHelper.createPaginatedResponse(
+      formattedSales,
+      totalCount,
+      paginationDto,
+    );
   }
 
   // ACTUALIZAR MÉTODO DE PAGO
   private async isValidDataPaymentSale(
     sale: SaleResponse,
-    paymentDetails: CreateDetailPaymentDto[]
+    paymentDetails: CreateDetailPaymentDto[],
   ): Promise<CreatePaymentDto> {
     let paymentDto: CreatePaymentDto;
 
     // Pago de reserva
     if (sale.status === StatusSale.RESERVATION_PENDING) {
       if (!sale.reservationAmount)
-        throw new BadRequestException('No se encontró monto de reserva para esta venta');
-      
+        throw new BadRequestException(
+          'No se encontró monto de reserva para esta venta',
+        );
+
       paymentDto = {
         methodPayment: MethodPayment.VOUCHER,
         amount: sale.reservationAmount,
@@ -322,70 +412,87 @@ export class SalesService {
           'Fecha de pago': new Date().toISOString(),
           'Monto de pago': sale.reservationAmount,
         },
-        paymentDetails
+        paymentDetails,
       };
     }
     // Pagos de venta (después de reserva aprobada o venta directa)
-    else if (sale.status === StatusSale.RESERVED || sale.status === StatusSale.PENDING) {
-      const reservationAmount = sale.fromReservation && sale.reservationAmount ? sale.reservationAmount : 0;
-      
+    else if (
+      sale.status === StatusSale.RESERVED ||
+      sale.status === StatusSale.PENDING
+    ) {
+      const reservationAmount =
+        sale.fromReservation && sale.reservationAmount
+          ? sale.reservationAmount
+          : 0;
+
       if (sale.type === SaleType.DIRECT_PAYMENT) {
         paymentDto = {
           methodPayment: MethodPayment.VOUCHER,
           amount: sale.totalAmount - reservationAmount,
-          relatedEntityType: 'sale', 
+          relatedEntityType: 'sale',
           relatedEntityId: sale.id,
           metadata: {
             'Concepto de pago': 'Monto total de la venta de lote',
             'Fecha de pago': new Date().toISOString(),
             'Monto de pago': sale.totalAmount - reservationAmount,
           },
-          paymentDetails
+          paymentDetails,
         };
       } else if (sale.type === SaleType.FINANCED) {
         paymentDto = {
           methodPayment: MethodPayment.VOUCHER,
           amount: sale.financing.initialAmount - reservationAmount,
-          relatedEntityType: 'financing', 
+          relatedEntityType: 'financing',
           relatedEntityId: sale.financing.id,
           metadata: {
             'Concepto de pago': 'Monto inicial de la venta de lote',
             'Fecha de pago': new Date().toISOString(),
             'Monto de pago': sale.financing.initialAmount - reservationAmount,
           },
-          paymentDetails
+          paymentDetails,
         };
       }
-    }
-    else if (sale.status === StatusSale.PENDING_APPROVAL) {
-      throw new BadRequestException('No se puede realizar pago porque la venta tiene un pago pendiente de aprobación');
-    }
-    else if (sale.status === StatusSale.RESERVATION_PENDING_APPROVAL) {
-      throw new BadRequestException('No se puede realizar pago porque la reserva tiene un pago pendiente de aprobación');
-    }
-    else if (sale.status === StatusSale.IN_PAYMENT_PROCESS) {
-      throw new BadRequestException('No se puede realizar pago directo desde la venta porque la venta está en proceso de pago de cuotas');
-    }
-    else if (sale.status === StatusSale.COMPLETED) {
-      throw new BadRequestException('No se puede realizar pago directo desde la venta porque la venta ya se ha completado');
-    }
-    else if (sale.status === StatusSale.REJECTED) {
-      throw new BadRequestException('No se puede realizar pago directo desde la venta porque la venta ha sido rechazada');
+    } else if (sale.status === StatusSale.PENDING_APPROVAL) {
+      throw new BadRequestException(
+        'No se puede realizar pago porque la venta tiene un pago pendiente de aprobación',
+      );
+    } else if (sale.status === StatusSale.RESERVATION_PENDING_APPROVAL) {
+      throw new BadRequestException(
+        'No se puede realizar pago porque la reserva tiene un pago pendiente de aprobación',
+      );
+    } else if (sale.status === StatusSale.IN_PAYMENT_PROCESS) {
+      throw new BadRequestException(
+        'No se puede realizar pago directo desde la venta porque la venta está en proceso de pago de cuotas',
+      );
+    } else if (sale.status === StatusSale.COMPLETED) {
+      throw new BadRequestException(
+        'No se puede realizar pago directo desde la venta porque la venta ya se ha completado',
+      );
+    } else if (sale.status === StatusSale.REJECTED) {
+      throw new BadRequestException(
+        'No se puede realizar pago directo desde la venta porque la venta ha sido rechazada',
+      );
     }
     // Estados que no permiten pagos
     else {
-      throw new BadRequestException(`No se puede realizar pago en el estado actual: ${sale.status}`);
+      throw new BadRequestException(
+        `No se puede realizar pago en el estado actual: ${sale.status}`,
+      );
     }
-    
+
     return paymentDto;
   }
 
   // ACTUALIZAR MÉTODO getPaymentsSummaryForSale
   private async getPaymentsSummaryForSale(saleId: string): Promise<any[]> {
     // Obtener la venta (sin reservation join)
-    const sale = await this.saleRepository.createQueryBuilder('sale')
+    const sale = await this.saleRepository
+      .createQueryBuilder('sale')
       .leftJoinAndSelect('sale.financing', 'financing')
-      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
+      .leftJoinAndSelect(
+        'financing.financingInstallments',
+        'financingInstallments',
+      )
       .where('sale.id = :saleId', { saleId })
       .getOne();
 
@@ -393,39 +500,55 @@ export class SalesService {
       throw new NotFoundException(`Venta con ID ${saleId} no encontrada`);
 
     // 1. Pagos directos a la venta
-    const salePayments = await this.paymentsService.findPaymentsByRelatedEntity('sale', saleId);
-    
+    const salePayments = await this.paymentsService.findPaymentsByRelatedEntity(
+      'sale',
+      saleId,
+    );
+
     // 2. Pagos de financiación (si existe)
     let financingPayments = [];
     if (sale.financing) {
-      financingPayments = await this.paymentsService.findPaymentsByRelatedEntity('financing', sale.financing.id);
+      financingPayments =
+        await this.paymentsService.findPaymentsByRelatedEntity(
+          'financing',
+          sale.financing.id,
+        );
     }
-    
+
     // 3. Si es una reserva, incluir pagos de reserva
     let reservationPayments = [];
     if (sale.fromReservation) {
       // Los pagos de reserva ahora están asociados directamente a la venta
       // Usando un campo relatedEntityType específico para reservas
-      reservationPayments = await this.paymentsService.findPaymentsByRelatedEntity('reservation', saleId);
+      reservationPayments =
+        await this.paymentsService.findPaymentsByRelatedEntity(
+          'reservation',
+          saleId,
+        );
     }
-    
+
     // Combinar todos los pagos
     const allPayments = [
       ...salePayments,
       ...financingPayments,
-      ...reservationPayments
-    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    
-    return allPayments.map(payment => ({
+      ...reservationPayments,
+    ].sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+
+    return allPayments.map((payment) => ({
       id: payment.id,
       amount: payment.amount,
       status: payment.status,
       createdAt: payment.createdAt,
       reviewedAt: payment.reviewedAt,
-      reviewBy: payment.reviewedBy ? { 
-        id: payment.reviewedBy.id,
-        email: payment.reviewedBy.email 
-      } : null,
+      reviewBy: payment.reviewedBy
+        ? {
+            id: payment.reviewedBy.id,
+            email: payment.reviewedBy.email,
+          }
+        : null,
       codeOperation: payment.codeOperation,
       banckName: payment.banckName,
       dateOperation: payment.dateOperation,
@@ -437,7 +560,8 @@ export class SalesService {
 
   // ACTUALIZAR TODOS LOS MÉTODOS findOne* PARA ELIMINAR RESERVATION JOINS
   async findOneById(id: string): Promise<SaleResponse> {
-    const sale = await this.saleRepository.createQueryBuilder('sale')
+    const sale = await this.saleRepository
+      .createQueryBuilder('sale')
       .leftJoinAndSelect('sale.client', 'client')
       .leftJoinAndSelect('client.lead', 'lead')
       .leftJoinAndSelect('sale.vendor', 'vendor')
@@ -448,12 +572,24 @@ export class SalesService {
       .leftJoinAndSelect('sale.guarantor', 'guarantor')
       // ELIMINAR: .leftJoinAndSelect('sale.reservation', 'reservation')
       .leftJoinAndSelect('sale.financing', 'financing')
-      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
+      .leftJoinAndSelect(
+        'financing.financingInstallments',
+        'financingInstallments',
+      )
       .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
-      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
+      .leftJoinAndSelect(
+        'secondaryClientSales.secondaryClient',
+        'secondaryClient',
+      )
       .leftJoinAndSelect('sale.liner', 'liner')
-      .leftJoinAndSelect('sale.telemarketingSupervisor', 'telemarketingSupervisor')
-      .leftJoinAndSelect('sale.telemarketingConfirmer', 'telemarketingConfirmer')
+      .leftJoinAndSelect(
+        'sale.telemarketingSupervisor',
+        'telemarketingSupervisor',
+      )
+      .leftJoinAndSelect(
+        'sale.telemarketingConfirmer',
+        'telemarketingConfirmer',
+      )
       .leftJoinAndSelect('sale.telemarketer', 'telemarketer')
       .leftJoinAndSelect('sale.fieldManager', 'fieldManager')
       .leftJoinAndSelect('sale.fieldSupervisor', 'fieldSupervisor')
@@ -462,27 +598,35 @@ export class SalesService {
       .getOne();
 
     if (!sale)
-      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrada`);
+      throw new NotFoundException(
+        `La venta con ID ${id} no se encuentra registrada`,
+      );
 
     // Obtener resumen de pagos
     const paymentsSummary = await this.getPaymentsSummaryForSale(id);
     let installmentsWithPayments = [];
     if (sale.financing)
-      installmentsWithPayments = await this.financingInstallmentsService.getInstallmentsWithPayments(sale.financing.id);
+      installmentsWithPayments =
+        await this.financingInstallmentsService.getInstallmentsWithPayments(
+          sale.financing.id,
+        );
     const formattedSale = formatSaleResponse(sale);
 
     return {
       ...formattedSale,
       paymentsSummary,
-      financing: sale.financing ? {
-      ...formattedSale.financing,
-      financingInstallments: installmentsWithPayments // Reemplazar cuotas simples con cuotas + pagos
-    } : undefined
+      financing: sale.financing
+        ? {
+            ...formattedSale.financing,
+            financingInstallments: installmentsWithPayments, // Reemplazar cuotas simples con cuotas + pagos
+          }
+        : undefined,
     };
   }
 
   async findOneByIdWithCollections(id: string): Promise<SaleResponse> {
-    const sale = await this.saleRepository.createQueryBuilder('sale')
+    const sale = await this.saleRepository
+      .createQueryBuilder('sale')
       .leftJoinAndSelect('sale.client', 'client')
       .leftJoinAndSelect('client.lead', 'lead')
       .leftJoinAndSelect('sale.vendor', 'vendor')
@@ -492,31 +636,45 @@ export class SalesService {
       .leftJoinAndSelect('stage.project', 'project')
       .leftJoinAndSelect('sale.guarantor', 'guarantor')
       .leftJoinAndSelect('sale.financing', 'financing')
-      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
+      .leftJoinAndSelect(
+        'financing.financingInstallments',
+        'financingInstallments',
+      )
       .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
-      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
+      .leftJoinAndSelect(
+        'secondaryClientSales.secondaryClient',
+        'secondaryClient',
+      )
       .where('sale.id = :id', { id })
       .getOne();
 
     if (!sale)
-      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrada`);
+      throw new NotFoundException(
+        `La venta con ID ${id} no se encuentra registrada`,
+      );
 
     let installmentsWithPayments = [];
     if (sale.financing)
-      installmentsWithPayments = await this.financingInstallmentsService.getInstallmentsWithPayments(sale.financing.id);
+      installmentsWithPayments =
+        await this.financingInstallmentsService.getInstallmentsWithPayments(
+          sale.financing.id,
+        );
     const formattedSale = formatSaleResponse(sale);
 
     return {
       ...formattedSale,
-      financing: sale.financing ? {
-      ...formattedSale.financing,
-      financingInstallments: installmentsWithPayments // Reemplazar cuotas simples con cuotas + pagos
-    } : undefined
+      financing: sale.financing
+        ? {
+            ...formattedSale.financing,
+            financingInstallments: installmentsWithPayments, // Reemplazar cuotas simples con cuotas + pagos
+          }
+        : undefined,
     };
   }
 
   async findAllByClient(clientId: number): Promise<SaleResponse[]> {
-    const sales = await this.saleRepository.createQueryBuilder('sale')
+    const sales = await this.saleRepository
+      .createQueryBuilder('sale')
       .leftJoinAndSelect('sale.client', 'client')
       .leftJoinAndSelect('client.lead', 'lead')
       .leftJoinAndSelect('sale.vendor', 'vendor')
@@ -526,12 +684,20 @@ export class SalesService {
       .leftJoinAndSelect('stage.project', 'project')
       .leftJoinAndSelect('sale.guarantor', 'guarantor')
       .leftJoinAndSelect('sale.financing', 'financing')
-      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
+      .leftJoinAndSelect(
+        'financing.financingInstallments',
+        'financingInstallments',
+      )
       .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
-      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
+      .leftJoinAndSelect(
+        'secondaryClientSales.secondaryClient',
+        'secondaryClient',
+      )
       .where('client.id = :clientId', { clientId })
       .andWhere('sale.type = :type', { type: SaleType.FINANCED })
-      .andWhere('sale.status = :status', { status: StatusSale.IN_PAYMENT_PROCESS })
+      .andWhere('sale.status = :status', {
+        status: StatusSale.IN_PAYMENT_PROCESS,
+      })
       .orderBy('sale.createdAt', 'DESC')
       .getMany();
     return sales.map(formatSaleResponse);
@@ -542,12 +708,14 @@ export class SalesService {
     status: StatusSale,
     queryRunner: QueryRunner,
   ): Promise<void> {
-    const repository = queryRunner 
-      ? queryRunner.manager.getRepository(Sale) 
+    const repository = queryRunner
+      ? queryRunner.manager.getRepository(Sale)
       : this.saleRepository;
     const sale = await repository.update({ id: id }, { status: status });
     if (sale.affected === 0)
-      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrada`);
+      throw new NotFoundException(
+        `La venta con ID ${id} no se encuentra registrada`,
+      );
   }
 
   async findOneByIdFinancing(id: string): Promise<Sale> {
@@ -556,31 +724,39 @@ export class SalesService {
       relations: ['lot'],
     });
     if (!sale)
-      throw new NotFoundException(`La venta no tiene un financiamiento con ID ${id}`);
+      throw new NotFoundException(
+        `La venta no tiene un financiamiento con ID ${id}`,
+      );
     return sale;
   }
 
   async findOneSaleWithPayments(id: string): Promise<Sale> {
     return await this.saleRepository.findOne({
-        where: { id },
-        relations: [
-          'client',
-          'lot',
-          'lot.block',
-          'lot.block.stage',
-          'lot.block.stage.project'
-        ],
-      });
+      where: { id },
+      relations: [
+        'client',
+        'lot',
+        'lot.block',
+        'lot.block.stage',
+        'lot.block.stage.project',
+      ],
+    });
   }
 
   async isValidSaleForWithdrawal(saleId: string) {
     const sale = await this.findOneById(saleId);
     if (!sale)
-      throw new NotFoundException(`La venta con ID ${saleId} no se encuentra registrada`);
+      throw new NotFoundException(
+        `La venta con ID ${saleId} no se encuentra registrada`,
+      );
     if (sale.status == StatusSale.COMPLETED)
-        throw new BadRequestException(`La venta con ID ${saleId} no se puede desistir porque ya fue completada`);
+      throw new BadRequestException(
+        `La venta con ID ${saleId} no se puede desistir porque ya fue completada`,
+      );
     if (sale.status == StatusSale.REJECTED)
-        throw new BadRequestException(`La venta con ID ${saleId} no se puede desistir porque ya fue cancelada`);
+      throw new BadRequestException(
+        `La venta con ID ${saleId} no se puede desistir porque ya fue cancelada`,
+      );
   }
 
   async assignParticipantsToSale(
@@ -590,27 +766,75 @@ export class SalesService {
     try {
       // Mapeo de campos DTO a validaciones de tipo
       const participantValidations = [
-        { id: assignParticipantsDto.linerId, type: ParticipantType.LINER, field: 'liner' },
-        { id: assignParticipantsDto.telemarketingSupervisorId, type: ParticipantType.TELEMARKETING_SUPERVISOR, field: 'telemarketingSupervisor' },
-        { id: assignParticipantsDto.telemarketingConfirmerId, type: ParticipantType.TELEMARKETING_CONFIRMER, field: 'telemarketingConfirmer' },
-        { id: assignParticipantsDto.telemarketerId, type: ParticipantType.TELEMARKETER, field: 'telemarketer' },
-        { id: assignParticipantsDto.fieldManagerId, type: ParticipantType.FIELD_MANAGER, field: 'fieldManager' },
-        { id: assignParticipantsDto.fieldSupervisorId, type: ParticipantType.FIELD_SUPERVISOR, field: 'fieldSupervisor' },
-        { id: assignParticipantsDto.fieldSellerId, type: ParticipantType.FIELD_SELLER, field: 'fieldSeller' },
-        { id: assignParticipantsDto.salesGeneralManagerId, type: ParticipantType.SALES_GENERAL_MANAGER, field: 'salesGeneralManager' },
-        { id: assignParticipantsDto.salesManagerId, type: ParticipantType.SALES_MANAGER, field: 'salesManager' },
-        { id: assignParticipantsDto.postSaleId, type: ParticipantType.POST_SALE, field: 'postSale' },
-        { id: assignParticipantsDto.closerId, type: ParticipantType.CLOSER, field: 'closer' },
+        {
+          id: assignParticipantsDto.linerId,
+          type: ParticipantType.LINER,
+          field: 'liner',
+        },
+        {
+          id: assignParticipantsDto.telemarketingSupervisorId,
+          type: ParticipantType.TELEMARKETING_SUPERVISOR,
+          field: 'telemarketingSupervisor',
+        },
+        {
+          id: assignParticipantsDto.telemarketingConfirmerId,
+          type: ParticipantType.TELEMARKETING_CONFIRMER,
+          field: 'telemarketingConfirmer',
+        },
+        {
+          id: assignParticipantsDto.telemarketerId,
+          type: ParticipantType.TELEMARKETER,
+          field: 'telemarketer',
+        },
+        {
+          id: assignParticipantsDto.fieldManagerId,
+          type: ParticipantType.FIELD_MANAGER,
+          field: 'fieldManager',
+        },
+        {
+          id: assignParticipantsDto.fieldSupervisorId,
+          type: ParticipantType.FIELD_SUPERVISOR,
+          field: 'fieldSupervisor',
+        },
+        {
+          id: assignParticipantsDto.fieldSellerId,
+          type: ParticipantType.FIELD_SELLER,
+          field: 'fieldSeller',
+        },
+        {
+          id: assignParticipantsDto.salesGeneralManagerId,
+          type: ParticipantType.SALES_GENERAL_MANAGER,
+          field: 'salesGeneralManager',
+        },
+        {
+          id: assignParticipantsDto.salesManagerId,
+          type: ParticipantType.SALES_MANAGER,
+          field: 'salesManager',
+        },
+        {
+          id: assignParticipantsDto.postSaleId,
+          type: ParticipantType.POST_SALE,
+          field: 'postSale',
+        },
+        {
+          id: assignParticipantsDto.closerId,
+          type: ParticipantType.CLOSER,
+          field: 'closer',
+        },
       ];
 
       // Validar participantes que se están asignando
-      await Promise.all(participantValidations
-        .filter(({ id }) => id !== undefined && id !== null)
-        .map(({ id, type }) => this.participantsService.validateParticipantByType(id, type)));
+      await Promise.all(
+        participantValidations
+          .filter(({ id }) => id !== undefined && id !== null)
+          .map(({ id, type }) =>
+            this.participantsService.validateParticipantByType(id, type),
+          ),
+      );
 
       // Preparar datos para preload
       const updateData: any = { id: saleId };
-      
+
       participantValidations.forEach(({ id, field }) => {
         if (id !== undefined) {
           updateData[field] = id ? { id } : null;
@@ -619,36 +843,39 @@ export class SalesService {
 
       // Usar preload para actualizar
       const saleToUpdate = await this.saleRepository.preload(updateData);
-      
+
       if (!saleToUpdate)
-        throw new NotFoundException(`La venta con ID ${saleId} no se encuentra registrada`);
+        throw new NotFoundException(
+          `La venta con ID ${saleId} no se encuentra registrada`,
+        );
 
       await this.saleRepository.save(saleToUpdate);
       return await this.findOneById(saleId);
-
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
-      throw new BadRequestException(`Error al asignar participantes a la venta: ${error.message}`);
+      throw new BadRequestException(
+        `Error al asignar participantes a la venta: ${error.message}`,
+      );
     }
   }
 
   async findAllLeadsByDay(
     findAllLeadsByDayDto: FindAllLeadsByDayDto,
   ): Promise<Paginated<LeadWithParticipantsResponse>> {
-    const {
-      day,
-      page = 1,
-      limit = 10,
-      order = 'DESC',
-    } = findAllLeadsByDayDto;
+    const { day, page = 1, limit = 10, order = 'DESC' } = findAllLeadsByDayDto;
     const paginationDto = { page, limit, order };
-    const leads = await this.leadService.findAllByDay(day? new Date(day) : new Date());
+    const leads = await this.leadService.findAllByDay(
+      day ? new Date(day) : new Date(),
+    );
     return PaginationHelper.createPaginatedResponse(
       leads,
       leads.length,
-      paginationDto
+      paginationDto,
     );
   }
 
@@ -670,9 +897,7 @@ export class SalesService {
     return projects.map(formatAllActiveProjects);
   }
 
-  async findAllStagesByProjectId(
-    projectId: string,
-  ): Promise<StageResponse[]> {
+  async findAllStagesByProjectId(projectId: string): Promise<StageResponse[]> {
     return await this.stageService.findAllByProjectId(projectId);
   }
 
@@ -699,13 +924,13 @@ export class SalesService {
     userId: string,
   ): Promise<LeadWithParticipantsResponse[]> {
     const leads = await this.leadService.findAllByUser(userId);
-    return leads.map( lead => {
+    return leads.map((lead) => {
       const { vendor, ...rest } = lead;
       return rest;
     });
   }
 
-  async findOneGuarantorById(id: number): Promise<Guarantor> { 
+  async findOneGuarantorById(id: number): Promise<Guarantor> {
     return await this.guarantorService.findOneById(id);
   }
 
@@ -718,29 +943,54 @@ export class SalesService {
   }
 
   async createClientAndGuarantor(data: {
-    createClient: CreateClientDto,
-    createGuarantor?: CreateGuarantorDto,
-    createSecondaryClient?: CreateSecondaryClientDto[],
-    document: string,
-    userId: string
+    createClient: CreateClientDto;
+    createGuarantor?: CreateGuarantorDto;
+    createSecondaryClient?: CreateSecondaryClientDto[];
+    document: string;
+    userId: string;
   }): Promise<ClientAndGuarantorResponse> {
-    return await this.transactionService.runInTransaction(async (queryRunner) => {
-      const { createClient, createGuarantor, createSecondaryClient = [], userId } = data;
-      const  client = await this.clientService.createOrUpdate(createClient, userId, queryRunner);
-      const guarantor = createGuarantor ? await this.guarantorService.createOrUpdate(createGuarantor, queryRunner) : null;
-      let secondaryClientIds: number[] = [];
-
-      if (createSecondaryClient && createSecondaryClient.length > 0) {
-        const createdSecondaryClients = await Promise.all(
-          createSecondaryClient.map(async (dto) => {
-            const secondaryClient = await this.secondaryClientService.createOrUpdate(dto, userId, queryRunner);
-            return secondaryClient.id;
-          }),
+    return await this.transactionService.runInTransaction(
+      async (queryRunner) => {
+        const {
+          createClient,
+          createGuarantor,
+          createSecondaryClient = [],
+          userId,
+        } = data;
+        const client = await this.clientService.createOrUpdate(
+          createClient,
+          userId,
+          queryRunner,
         );
-        secondaryClientIds = createdSecondaryClients;
-      }
-      return formatClientAndGuarantorResponse(client, guarantor, secondaryClientIds);
-    });
+        const guarantor = createGuarantor
+          ? await this.guarantorService.createOrUpdate(
+              createGuarantor,
+              queryRunner,
+            )
+          : null;
+        let secondaryClientIds: number[] = [];
+
+        if (createSecondaryClient && createSecondaryClient.length > 0) {
+          const createdSecondaryClients = await Promise.all(
+            createSecondaryClient.map(async (dto) => {
+              const secondaryClient =
+                await this.secondaryClientService.createOrUpdate(
+                  dto,
+                  userId,
+                  queryRunner,
+                );
+              return secondaryClient.id;
+            }),
+          );
+          secondaryClientIds = createdSecondaryClients;
+        }
+        return formatClientAndGuarantorResponse(
+          client,
+          guarantor,
+          secondaryClientIds,
+        );
+      },
+    );
   }
 
   calculateAmortization(
@@ -755,7 +1005,10 @@ export class SalesService {
       calculateAmortizationDto.firstPaymentDate,
       calculateAmortizationDto.includeDecimals,
     );
-    const totalCouteAmountSum = installments.reduce((sum, installment) => sum + installment.couteAmount, 0);
+    const totalCouteAmountSum = installments.reduce(
+      (sum, installment) => sum + installment.couteAmount,
+      0,
+    );
     return {
       installments: installments.map((installment) => {
         const { couteAmount, expectedPaymentDate } = installment;
@@ -765,8 +1018,8 @@ export class SalesService {
         };
       }),
       meta: {
-        totalCouteAmountSum
-      }
+        totalCouteAmountSum,
+      },
     };
   }
 
@@ -782,15 +1035,24 @@ export class SalesService {
       if (!sale)
         throw new NotFoundException(`Venta con ID ${saleId} no encontrada`);
       const paymentDto = await this.isValidDataPaymentSale(sale, payments);
-      return await this.transactionService.runInTransaction(async (queryRunner) => {
-        const paymentResult = await this.paymentsService.create(paymentDto, files, userId, queryRunner);
-        return paymentResult;
-      });
+      return await this.transactionService.runInTransaction(
+        async (queryRunner) => {
+          const paymentResult = await this.paymentsService.create(
+            paymentDto,
+            files,
+            userId,
+            queryRunner,
+          );
+          return paymentResult;
+        },
+      );
     } catch (error) {
       if (error instanceof NotFoundException) {
-          throw error;
+        throw error;
       }
-      throw new BadRequestException(`Error al crear pago para venta: ${error.message}`);
+      throw new BadRequestException(
+        `Error al crear pago para venta: ${error.message}`,
+      );
     }
   }
 
@@ -800,18 +1062,31 @@ export class SalesService {
     quantityHuCuotes: number,
   ): void {
     if (!datePayment)
-      throw new BadRequestException('La fecha de pago inicial de la habilitación urbana es requerida');
+      throw new BadRequestException(
+        'La fecha de pago inicial de la habilitación urbana es requerida',
+      );
     if (!initialAmount)
-      throw new BadRequestException('El monto inicial de la habilitación urbana es requerido');
+      throw new BadRequestException(
+        'El monto inicial de la habilitación urbana es requerido',
+      );
     if (!quantityHuCuotes)
-      throw new BadRequestException('El número de cuotas de la habilitación urbana es requerida');
+      throw new BadRequestException(
+        'El número de cuotas de la habilitación urbana es requerida',
+      );
   }
 
-  private async validateReservationData(reservationAmount: number, maximumHoldPeriod: number) {
+  private async validateReservationData(
+    reservationAmount: number,
+    maximumHoldPeriod: number,
+  ) {
     if (!reservationAmount || reservationAmount <= 0)
-      throw new BadRequestException('El monto de reserva es requerido y debe ser mayor a cero');
+      throw new BadRequestException(
+        'El monto de reserva es requerido y debe ser mayor a cero',
+      );
     if (!maximumHoldPeriod || maximumHoldPeriod <= 0)
-      throw new BadRequestException('El periodo de reserva es requerido y debe ser mayor a cero');
+      throw new BadRequestException(
+        'El periodo de reserva es requerido y debe ser mayor a cero',
+      );
   }
 
   private calculateAndCreateFinancingHu(createSaleDto: CreateSaleDto) {
@@ -820,10 +1095,10 @@ export class SalesService {
       initialAmount: createSaleDto.initialAmountUrbanDevelopment,
       reservationAmount: 0,
       interestRate: 0,
-      numberOfPayments:createSaleDto.quantityHuCuotes,
+      numberOfPayments: createSaleDto.quantityHuCuotes,
       firstPaymentDate: createSaleDto.firstPaymentDateHu,
     });
-      
+
     return {
       financingType: FinancingType.CREDITO,
       initialAmount: createSaleDto.initialAmountUrbanDevelopment,
@@ -831,7 +1106,7 @@ export class SalesService {
       quantityCoutes: createSaleDto.quantityHuCuotes,
       initialPaymentDate: createSaleDto.firstPaymentDateHu,
       financingInstallments: financingInstallmentsHu.installments,
-    }
+    };
   }
 
   private async createUrbanDevelopment(
@@ -840,12 +1115,15 @@ export class SalesService {
     createSaleDto: CreateSaleDto,
     queryRunner: QueryRunner,
   ) {
-      await this.urbanDevelopmentService.create({
-          saleId: savedSaleId,
-          financingId: financingHuId,
-          amount: createSaleDto.totalAmountUrbanDevelopment,
-          initialAmount: createSaleDto.initialAmountUrbanDevelopment,
-      }, queryRunner);
+    await this.urbanDevelopmentService.create(
+      {
+        saleId: savedSaleId,
+        financingId: financingHuId,
+        amount: createSaleDto.totalAmountUrbanDevelopment,
+        initialAmount: createSaleDto.initialAmountUrbanDevelopment,
+      },
+      queryRunner,
+    );
   }
 
   private isValidFinancingDataSale(
@@ -856,8 +1134,8 @@ export class SalesService {
     quantitySaleCoutes: number,
     financingInstallments: CreateFinancingInstallmentsDto[],
   ): void {
-    if (!initialAmount)
-      throw new BadRequestException('El monto inicial de la financiación es requerido');
+    // if (!initialAmount)
+    //   throw new BadRequestException('El monto inicial de la financiación es requerido');
     if (!interestRate)
       throw new BadRequestException('El porcentaje de interés es requerido');
     if (!quantitySaleCoutes)
@@ -866,31 +1144,38 @@ export class SalesService {
       throw new BadRequestException('Las cuotas de financiación es requerida');
     if (financingInstallments.length !== quantitySaleCoutes)
       throw new BadRequestException(
-        `El número de cuotas enviadas (${financingInstallments.length}) no coincide con la cantidad de cuotas esperada (${quantitySaleCoutes}).`
+        `El número de cuotas enviadas (${financingInstallments.length}) no coincide con la cantidad de cuotas esperada (${quantitySaleCoutes}).`,
       );
 
-    const sumOfInstallmentAmounts = financingInstallments.reduce((sum, installment) => sum + installment.couteAmount, 0);
-    const calculatedAmortization = this.financingService.generateAmortizationTable(
-      totalAmount,
-      initialAmount,
-      reservationAmount,
-      interestRate,
-      quantitySaleCoutes,
-      financingInstallments[0]?.expectedPaymentDate.toString(),
-      true
+    const sumOfInstallmentAmounts = financingInstallments.reduce(
+      (sum, installment) => sum + installment.couteAmount,
+      0,
     );
+    const calculatedAmortization =
+      this.financingService.generateAmortizationTable(
+        totalAmount,
+        initialAmount,
+        reservationAmount,
+        interestRate,
+        quantitySaleCoutes,
+        financingInstallments[0]?.expectedPaymentDate.toString(),
+        true,
+      );
 
-    const expectedTotalAmortizedAmount = calculatedAmortization.reduce((sum, inst) => sum + inst.couteAmount, 0);
+    const expectedTotalAmortizedAmount = calculatedAmortization.reduce(
+      (sum, inst) => sum + inst.couteAmount,
+      0,
+    );
 
     if (Math.abs(sumOfInstallmentAmounts - expectedTotalAmortizedAmount) > 0.01)
       throw new BadRequestException(
-        `La suma de los montos de las cuotas enviadas (${sumOfInstallmentAmounts.toFixed(2)}) no coincide con el monto total esperado según la amortización (${expectedTotalAmortizedAmount.toFixed(2)}).`
+        `La suma de los montos de las cuotas enviadas (${sumOfInstallmentAmounts.toFixed(2)}) no coincide con el monto total esperado según la amortización (${expectedTotalAmortizedAmount.toFixed(2)}).`,
       );
   }
 
   async updateReservationPeriod(
     saleId: string,
-    additionalDays: number
+    additionalDays: number,
   ): Promise<UpdateReservationPeriodResponseDto> {
     try {
       // Buscar la venta
@@ -904,13 +1189,13 @@ export class SalesService {
       // Validar que esté en estado RESERVATION_PENDING
       if (sale.status !== StatusSale.RESERVATION_PENDING)
         throw new BadRequestException(
-          `Solo se puede actualizar el período de reservas en estado RESERVATION_PENDING. Estado actual: ${sale.status}`
+          `Solo se puede actualizar el período de reservas en estado RESERVATION_PENDING. Estado actual: ${sale.status}`,
         );
 
       // Validar que tenga un período máximo configurado
       if (!sale.maximumHoldPeriod)
         throw new BadRequestException(
-          'Esta venta no tiene un período máximo de reserva configurado'
+          'Esta venta no tiene un período máximo de reserva configurado',
         );
       // Calcular nuevo período
       const previousPeriod = sale.maximumHoldPeriod;
@@ -919,12 +1204,12 @@ export class SalesService {
       // Calcular nueva fecha de expiración
       const createdAt = new Date(sale.createdAt);
       const newExpirationDate = new Date(
-        createdAt.getTime() + (newPeriod * 24 * 60 * 60 * 1000)
+        createdAt.getTime() + newPeriod * 24 * 60 * 60 * 1000,
       );
 
       // Actualizar en base de datos
       await this.saleRepository.update(saleId, {
-        maximumHoldPeriod: newPeriod
+        maximumHoldPeriod: newPeriod,
       });
 
       return {
@@ -932,14 +1217,16 @@ export class SalesService {
         previousPeriod,
         newPeriod,
         newExpirationDate: newExpirationDate.toISOString().split('T')[0], // Solo la fecha
-        message: `Período extendido ${additionalDays} días. Nuevo total: ${newPeriod} días.`
+        message: `Período extendido ${additionalDays} días. Nuevo total: ${newPeriod} días.`,
       };
-
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof BadRequestException)
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      )
         throw error;
       throw new InternalServerErrorException(
-        'Error al actualizar el período de reserva'
+        'Error al actualizar el período de reserva',
       );
     }
   }
@@ -957,38 +1244,49 @@ export class SalesService {
     let failed = 0;
     try {
       const currentDate = new Date();
-      
+
       // Buscar todas las ventas en estado RESERVATION_PENDING
       const pendingReservations = await this.saleRepository
         .createQueryBuilder('sale')
-        .where('sale.status = :status', { status: StatusSale.RESERVATION_PENDING })
+        .where('sale.status = :status', {
+          status: StatusSale.RESERVATION_PENDING,
+        })
         .andWhere('sale.maximumHoldPeriod IS NOT NULL')
         .andWhere('sale.createdAt IS NOT NULL')
         .getMany();
 
-      logger.log(`Encontradas ${pendingReservations.length} reservas pendientes para evaluar`);
+      logger.log(
+        `Encontradas ${pendingReservations.length} reservas pendientes para evaluar`,
+      );
 
       for (const sale of pendingReservations) {
         processed++;
-        
+
         try {
           // Calcular la fecha límite para la reserva
           const createdAt = new Date(sale.createdAt);
-          const expirationDate = new Date(createdAt.getTime() + (sale.maximumHoldPeriod * 24 * 60 * 60 * 1000));
-          
+          const expirationDate = new Date(
+            createdAt.getTime() + sale.maximumHoldPeriod * 24 * 60 * 60 * 1000,
+          );
+
           // Verificar si la reserva ha expirado
           if (currentDate > expirationDate) {
             // Actualizar el estado de la venta a REJECTED y agregar el motivo
             await this.saleRepository.update(sale.id, {
               status: StatusSale.REJECTED,
-              cancellationReason: `Reserva expirada automáticamente. Período máximo de retención: ${sale.maximumHoldPeriod} días. Fecha de expiración: ${expirationDate.toISOString().split('T')[0]}`
+              cancellationReason: `Reserva expirada automáticamente. Período máximo de retención: ${sale.maximumHoldPeriod} días. Fecha de expiración: ${expirationDate.toISOString().split('T')[0]}`,
             });
 
-            logger.log(`Venta ${sale.id} marcada como REJECTED por expiración de reserva`);
+            logger.log(
+              `Venta ${sale.id} marcada como REJECTED por expiración de reserva`,
+            );
             successful++;
           }
         } catch (error) {
-          logger.error(`Error procesando venta ${sale.id}: ${error.message}`, error.stack);
+          logger.error(
+            `Error procesando venta ${sale.id}: ${error.message}`,
+            error.stack,
+          );
           failed++;
         }
       }
@@ -997,14 +1295,18 @@ export class SalesService {
         processed,
         successful,
         failed,
-        totalPoints: pendingReservations.length
+        totalPoints: pendingReservations.length,
       };
 
-      logger.log(`Procesamiento completado: ${successful}/${processed} reservas procesadas exitosamente`);
+      logger.log(
+        `Procesamiento completado: ${successful}/${processed} reservas procesadas exitosamente`,
+      );
       return result;
-
     } catch (error) {
-      logger.error(`Error general en processExpiredReservations: ${error.message}`, error.stack);
+      logger.error(
+        `Error general en processExpiredReservations: ${error.message}`,
+        error.stack,
+      );
       throw error;
     }
   }
