@@ -13,6 +13,7 @@ import { FinancingInstallmentsService } from 'src/admin-sales/financing/services
 import { FinancingModule } from 'src/admin-sales/financing/financing.module';
 import { ProjectModule } from 'src/project/project.module';
 import { ReservationsModule } from 'src/admin-sales/reservations/reservations.module';
+import { ExternalApiModule } from 'src/external-api/external-api.module';
 
 @Module({
   imports: [
@@ -22,7 +23,8 @@ import { ReservationsModule } from 'src/admin-sales/reservations/reservations.mo
     forwardRef(() => SalesModule),
     forwardRef(() => FinancingModule),
     ProjectModule,
-    ReservationsModule
+    ReservationsModule,
+    forwardRef(() => ExternalApiModule),
   ],
   controllers: [PaymentsController],
   providers: [PaymentsService, PaymentsDetailService],

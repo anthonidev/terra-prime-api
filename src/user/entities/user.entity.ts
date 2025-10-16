@@ -74,7 +74,7 @@ export class User {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @Column('text', { nullable: true })
+  @Column('timestamp', { nullable: true })
   lastLoginAt: Date;
 
   @BeforeInsert()

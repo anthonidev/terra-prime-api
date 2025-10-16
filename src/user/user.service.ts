@@ -308,6 +308,22 @@ export class UsersService {
     }
   }
 
+  
+  async updateLastLogin(userId: string): Promise<void> {
+    try {
+      await this.userRepository.update(
+        { id: userId },
+        { lastLoginAt: new Date() },
+      );
+      this.logger.log(`Last login updated for user ${userId}`);
+    } catch (error) {
+      this.logger.error(
+        `Error updating last login for user ${userId}: ${error.message}`,
+      );
+      // No lanzamos error para no interrumpir el flujo de login
+    }
+  }
+
   async isValidSalesManager(id: string): Promise<User> {
     try {
       const user = await this.findOne(id);

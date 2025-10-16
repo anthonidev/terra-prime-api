@@ -27,6 +27,8 @@ interface Envvars {
   NATS_SERVERS: string;
 
   API_KEY_EXTERNAL: string;
+  NEXUS_UNILEVEL_API_URL: string;
+  NEXUS_UNILEVEL_API_KEY: string;
 }
 const envVarsSchema = joi
   .object({
@@ -55,6 +57,8 @@ const envVarsSchema = joi
       .default('nats://localhost:4222')
       .description('NATS server URI'),
     API_KEY_EXTERNAL: joi.string().required(),
+    NEXUS_UNILEVEL_API_URL: joi.string().required(),
+    NEXUS_UNILEVEL_API_KEY: joi.string().required(),
   })
   .unknown(true);
 const { error, value } = envVarsSchema.validate({
@@ -89,4 +93,6 @@ export const envs = {
   natsServers: envVars.NATS_SERVERS,
 
   apiKeyExternal: envVars.API_KEY_EXTERNAL,
+  nexusUnilevelApiUrl: envVars.NEXUS_UNILEVEL_API_URL,
+  nexusUnilevelApiKey: envVars.NEXUS_UNILEVEL_API_KEY,
 };

@@ -1,4 +1,4 @@
-import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, forwardRef, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { QueryRunner, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Payment } from '../entities/payment.entity';
@@ -24,9 +24,12 @@ import { FinancingService } from 'src/admin-sales/financing/services/financing.s
 import { PaymentAllResponse } from '../interfaces/payment-all-response.interface';
 import { Paginated } from 'src/common/interfaces/paginated.interface';
 import { CompletePaymentDto } from '../dto/complete-payment.dto';
+import { NexusApiService } from 'src/external-api/nexus-api.service';
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
+
   constructor(
     @InjectRepository(Payment)
     private readonly paymentRepository: Repository<Payment>,
@@ -39,6 +42,7 @@ export class PaymentsService {
     private readonly financingService: FinancingService,
     private readonly reservationService: ReservationsService,
     private readonly lotService: LotService,
+    private readonly nexusApiService: NexusApiService,
   ){}
   // Methods for endpoints
   async create(
@@ -133,6 +137,11 @@ export class PaymentsService {
       };
       const approvedPayment = await queryRunner.manager.save(payment);
       await this.updateStatusApprovedPayment(payment, queryRunner);
+
+      // Notificar a Nexus si el pago tiene bankName === 'NEXUS' en el primer item
+      if (payment.details && payment.details.length > 0 && payment.details[0].bankName === 'NEXUS') {
+        await this.notifyNexusPaymentApproved(payment, reviewedById);
+      }
 
       return {
         ...formatPaymentsResponse(approvedPayment),
@@ -670,5 +679,71 @@ export class PaymentsService {
           queryRunner,
         );
       }
+  }
+
+  private async notifyNexusPaymentApproved(payment: Payment, reviewedById: string): Promise<void> {
+    try {
+      // Obtener información del usuario que aprobó el pago
+      const reviewer = await this.paymentRepository.manager.findOne('User', {
+        where: { id: reviewedById },
+        select: ['firstName', 'lastName', 'email']
+      } as any);
+
+      const saleId = await this.extractSaleId(payment);
+      if (!saleId) {
+        this.logger.warn(
+          `No se pudo determinar el saleId para notificar a Nexus. Payment ID: ${payment.id}`,
+        );
+        return;
+      }
+
+      const reviewerName = reviewer
+        ? `${reviewer.firstName} ${reviewer.lastName}`
+        : 'Usuario desconocido';
+      const reviewerEmail = reviewer?.email || 'No disponible';
+
+      const metadata = {
+        'Aprobación realizada por': `${reviewerName} (${reviewerEmail})`,
+        'Fecha': new Date().toLocaleString('es-PE', { timeZone: 'America/Lima' }),
+        'Monto del pago': payment.amount,
+      };
+
+      await this.nexusApiService.notifyPaymentApproved({
+        saleId,
+        metadata,
+      });
+
+      this.logger.log(
+        `Notificación a Nexus exitosa para Payment ID: ${payment.id}, Sale ID: ${saleId}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error al notificar a Nexus sobre aprobación de pago. Payment ID: ${payment.id}. Error: ${error.message}`,
+        error.stack,
+      );
+      // No lanzamos el error para no afectar el flujo principal de aprobación
+    }
+  }
+
+  private async extractSaleId(payment: Payment): Promise<string | null> {
+    if (payment.relatedEntityType === 'sale' && payment.relatedEntityId) {
+      return payment.relatedEntityId;
+    }
+
+    if (payment.relatedEntityType === 'reservation' && payment.relatedEntityId) {
+      return payment.relatedEntityId;
+    }
+
+    if (payment.relatedEntityType === 'financing' && payment.relatedEntityId) {
+      const sale = await this.salesService.findOneByIdFinancing(payment.relatedEntityId);
+      return sale?.id || null;
+    }
+
+    if (payment.relatedEntityType === 'financingInstallments' && payment.relatedEntityId) {
+      const installment = await this.financingInstallmentsService.findOneWithPayments(payment.relatedEntityId);
+      return installment?.financing?.sale?.id || null;
+    }
+
+    return null;
   }
 }

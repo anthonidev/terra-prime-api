@@ -112,6 +112,9 @@ export class AuthService {
       role: cleanRole,
     };
 
+    // Actualizar lastLoginAt
+    await this.usersService.updateLastLogin(user.id);
+
     return {
       user: {
         id: user.id,

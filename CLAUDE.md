@@ -59,13 +59,13 @@ This project uses `pnpm` as the package manager.
 
 #### Authentication
 Uses JWT strategy with role-based guards:
-- `@IsPublic()` decorator for public endpoints
+- `@Public()` decorator for public endpoints
 - `@Roles()` decorator for role restrictions
 - `@GetUser()` decorator to access current user
 
 #### Database
 - TypeORM with automatic entity loading
-- `TimestampedEntity` base class for created/updated timestamps
+- Entities use `@CreateDateColumn()` and `@UpdateDateColumn()` for timestamps
 - PostgreSQL as primary database
 
 #### Validation
@@ -79,7 +79,7 @@ Environment variables validated with Joi schema in `src/config/envs.ts`.
 ### Environment Setup
 Copy `.env.example` to `.env` and configure required variables including:
 - Database connection
-- JWT secrets  
+- JWT secrets
 - AWS credentials
 - NATS server URL
 - Frontend URL
