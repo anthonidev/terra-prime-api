@@ -114,6 +114,9 @@ export class Sale extends Timestamped {
   @Column({ type: 'text', nullable: true })
   notes?: string;
 
+  @Column({ type: 'boolean', default: true })
+  applyLateFee: boolean;
+
   @OneToOne(() => UrbanDevelopment, (urbanDevelopment) => urbanDevelopment.sale, { nullable: true })
   urbanDevelopment?: UrbanDevelopment;
 

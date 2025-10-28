@@ -40,4 +40,21 @@ export class ScheduledTasksService {
       );
     }
   }
+
+  @Cron('0 1 * * *', {
+    name: 'daily-late-fee-increase',
+    timeZone: 'America/Lima',
+  })
+  async handleLateFeeIncrease() {
+    this.logger.log('Iniciando tarea programada: Corte diario de aumento de mora');
+    try {
+      await this.cutsService.executeCut('DAILY_LATE_FEE_INCREASE');
+      this.logger.log('Tarea programada completada: Corte diario de aumento de mora');
+    } catch (error) {
+      this.logger.error(
+        `Error en tarea programada de aumento de mora: ${error.message}`,
+        error.stack,
+      );
+    }
+  }
 }

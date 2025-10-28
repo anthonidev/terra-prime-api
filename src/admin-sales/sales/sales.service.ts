@@ -298,6 +298,7 @@ export class SalesService {
       financing: financingId ? { id: financingId } : null,
       metadata: createSaleDto?.metadata || null,
       notes: createSaleDto?.notes || null,
+      applyLateFee: createSaleDto?.applyLateFee ?? true,
       // Campos de reserva
       fromReservation: createSaleDto.isReservation,
       reservationAmount: createSaleDto.reservationAmount || null,

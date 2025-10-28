@@ -1,4 +1,4 @@
-import { IsArray, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsObject, IsOptional, IsString, IsUUID, Min, ValidateNested } from "class-validator";
+import { IsArray, IsBoolean, IsDateString, IsEnum, IsInt, IsNotEmpty, IsNumber, IsObject, IsOptional, IsString, IsUUID, Min, ValidateNested } from "class-validator";
 import { SaleType } from "../enums/sale-type.enum";
 import { plainToInstance, Transform, Type } from "class-transformer";
 import { MethodPayment } from "src/admin-payments/payments/enums/method-payment.enum";
@@ -65,6 +65,11 @@ export class CreateSaleDto {
 	@IsString()
 	@Transform(({ value }) => value?.trim())
 	notes?: string;
+
+	@IsOptional()
+	@IsBoolean({ message: 'El campo de aplicación de mora debe ser un valor booleano' })
+	@Type(() => Boolean)
+	applyLateFee?: boolean = true;
 
   // Financiado
 	@IsOptional()

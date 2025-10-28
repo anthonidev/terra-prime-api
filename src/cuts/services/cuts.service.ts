@@ -16,6 +16,7 @@ import {
 } from '../entities/cut_execution_logs.entity';
 import { LeadService } from 'src/lead/services/lead.service';
 import { SalesService } from '../../admin-sales/sales/sales.service';
+import { FinancingInstallmentsService } from 'src/admin-sales/financing/services/financing-installments.service';
 
 @Injectable()
 export class CutsService {
@@ -30,6 +31,7 @@ export class CutsService {
     private readonly cutExecutionLogRepository: Repository<CutExecutionLog>,
     private readonly leadService: LeadService,
     private readonly salesService: SalesService,
+    private readonly financingInstallmentsService: FinancingInstallmentsService,
   ) {}
 
   async executeCut(configCode: string): Promise<CutExecution> {
@@ -84,6 +86,9 @@ export class CutsService {
           break;
         case 'DAILY_EXPIRED_RESERVATIONS':
           result = await this.salesService.processExpiredReservations();
+          break;
+        case 'DAILY_LATE_FEE_INCREASE':
+          result = await this.financingInstallmentsService.increaseLateFeesForOverdueInstallments();
           break;
         // Otros tipos de cortes
         default:

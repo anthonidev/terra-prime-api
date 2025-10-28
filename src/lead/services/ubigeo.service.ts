@@ -54,4 +54,20 @@ export class UbigeoService {
       };
     }
   }
+
+  async findByParentId(parentId?: number): Promise<Ubigeo[]> {
+    const queryBuilder = this.ubigeoRepository
+      .createQueryBuilder('ubigeo')
+      .orderBy('ubigeo.name', 'ASC');
+
+    if (parentId === undefined || parentId === null) {
+      // Si no hay parentId, devolver regiones (parentId IS NULL)
+      queryBuilder.where('ubigeo.parentId IS NULL');
+    } else {
+      // Si hay parentId, devolver hijos de ese ubigeo
+      queryBuilder.where('ubigeo.parentId = :parentId', { parentId });
+    }
+
+    return await queryBuilder.getMany();
+  }
 }

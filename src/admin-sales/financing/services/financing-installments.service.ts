@@ -343,4 +343,61 @@ export class FinancingInstallmentsService {
       }
     }
   }
+
+  async increaseLateFeesForOverdueInstallments(): Promise<{
+    processed: number;
+    successful: number;
+    failed: number;
+    totalPoints?: number;
+  }> {
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    threeDaysAgo.setHours(23, 59, 59, 999); // Fin del día hace 3 días
+
+    // Buscar cuotas vencidas con período de gracia expirado
+    const overdueInstallments = await this.financingInstallmentsRepository
+      .createQueryBuilder('installment')
+      .leftJoinAndSelect('installment.financing', 'financing')
+      .leftJoin('financing.sale', 'sale')
+      .leftJoin('financing.urbanDevelopment', 'urbanDevelopment')
+      .leftJoin('urbanDevelopment.sale', 'urbanDevSale')
+      .where('installment.status IN (:...statuses)', {
+        statuses: [StatusFinancingInstallments.PENDING, StatusFinancingInstallments.EXPIRED]
+      })
+      .andWhere('installment.expectedPaymentDate < :threeDaysAgo', { threeDaysAgo })
+      .andWhere('(sale.applyLateFee = true OR urbanDevSale.applyLateFee = true)')
+      .getMany();
+
+    let successful = 0;
+    let failed = 0;
+
+    for (const installment of overdueInstallments) {
+      try {
+        // Aumentar el monto de mora en 5
+        const currentLateFeeAmount = Number(installment.lateFeeAmount) || 0;
+        const currentLateFeeAmountPending = Number(installment.lateFeeAmountPending) || 0;
+
+        installment.lateFeeAmount = Number((currentLateFeeAmount + 5).toFixed(2));
+        installment.lateFeeAmountPending = Number((currentLateFeeAmountPending + 5).toFixed(2));
+
+        // Actualizar estado a EXPIRED si aún está PENDING
+        if (installment.status === StatusFinancingInstallments.PENDING) {
+          installment.status = StatusFinancingInstallments.EXPIRED;
+        }
+
+        await this.financingInstallmentsRepository.save(installment);
+        successful++;
+      } catch (error) {
+        console.error(`Error al aumentar mora para cuota ${installment.id}:`, error.message);
+        failed++;
+      }
+    }
+
+    return {
+      processed: overdueInstallments.length,
+      successful,
+      failed,
+      totalPoints: overdueInstallments.length,
+    };
+  }
 }

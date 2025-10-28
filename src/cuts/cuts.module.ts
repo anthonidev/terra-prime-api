@@ -7,6 +7,7 @@ import { CutConfiguration } from './entities/cut_configurations.entity';
 import { CutExecution } from './entities/cut_executions.entity';
 import { CutExecutionLog } from './entities/cut_execution_logs.entity';
 import { SalesModule } from 'src/admin-sales/sales/sales.module';
+import { FinancingModule } from 'src/admin-sales/financing/financing.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { SalesModule } from 'src/admin-sales/sales/sales.module';
     ]),
     LeadModule,
     SalesModule,
+    FinancingModule,
   ],
   providers: [
     CutsService,

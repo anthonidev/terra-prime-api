@@ -137,8 +137,10 @@ export class ClientsService {
     return client;
   }
 
-  async findAllClientsWithCollection(): Promise<Client[]> {
-    const clients = await this.clientRepository
+  async findAllClientsWithCollection(
+    ubigeoId?: number,
+  ): Promise<Client[]> {
+    const queryBuilder = this.clientRepository
       .createQueryBuilder('client')
       .leftJoinAndSelect('client.lead', 'lead')
       .leftJoinAndSelect('lead.source', 'source')
@@ -149,8 +151,14 @@ export class ClientsService {
         'sales',
         'sales.type = :type AND sales.status = :status',
         { type: SaleType.FINANCED, status: StatusSale.IN_PAYMENT_PROCESS }
-      ).getMany();
-    return clients;
+      );
+
+    // Aplicar filtro de ubigeo si se proporciona
+    if (ubigeoId) {
+      queryBuilder.andWhere('ubigeo.id = :ubigeoId', { ubigeoId });
+    }
+
+    return await queryBuilder.getMany();
   }
 
   async findOneClientByIdWithCollections(id: number): Promise<Client> {
@@ -189,15 +197,24 @@ export class ClientsService {
     return await this.clientRepository.save(updatedClients);
   }
 
-  async findAllByUser(userId: string): Promise<Client[]> {
-    const clients = await this.clientRepository.createQueryBuilder('client')
+  async findAllByUser(
+    userId: string,
+    ubigeoId?: number,
+  ): Promise<Client[]> {
+    const queryBuilder = this.clientRepository.createQueryBuilder('client')
       .leftJoinAndSelect('client.lead', 'lead')
       .leftJoinAndSelect('lead.source', 'source')
       .leftJoinAndSelect('lead.ubigeo', 'ubigeo')
       .leftJoinAndSelect('client.collector', 'collector')
-      .where('collector.id = :userId', { userId })
-      .orderBy('client.createdAt', 'DESC')
-      .getMany();
-    return clients;
+      .where('collector.id = :userId', { userId });
+
+    // Aplicar filtro de ubigeo si se proporciona
+    if (ubigeoId) {
+      queryBuilder.andWhere('ubigeo.id = :ubigeoId', { ubigeoId });
+    }
+
+    queryBuilder.orderBy('client.createdAt', 'DESC');
+
+    return await queryBuilder.getMany();
   }
 }

@@ -25,4 +25,16 @@ export const cutConfigurationsData = [
     hour: 0,
     minute: 10,
   },
+  {
+    code: 'DAILY_LATE_FEE_INCREASE',
+    name: 'Corte diario de aumento de mora',
+    description: 'Aumenta en 5 el monto de mora de las cuotas que no se han pagado y exceden el período de gracia de 3 días después de la fecha esperada de pago',
+    frequency: CutFrequency.DAILY,
+    isActive: true,
+    cronExpression: '00 1 * * *', // Ejecutar a las 01:00 todos los días
+    dayOfMonth: 0,
+    dayOfWeek: 0,
+    hour: 1,
+    minute: 0,
+  },
 ];

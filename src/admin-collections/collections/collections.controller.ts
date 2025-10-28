@@ -1,7 +1,5 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, UseInterceptors, ValidationPipe, UsePipes, UploadedFiles, ParseFilePipeBuilder, HttpStatus } from '@nestjs/common';
 import { CollectionsService } from './collections.service';
-import { CreateCollectionDto } from './dto/create-collection.dto';
-import { UpdateCollectionDto } from './dto/update-collection.dto';
 import { AssignClientsToCollectorDto } from 'src/admin-sales/clients/dto/assign-clients-to-collector.dto';
 import { PaginationDto } from 'src/common/dto/paginationDto';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -12,6 +10,8 @@ import { User } from 'src/user/entities/user.entity';
 import { PaidInstallmentsDto } from './dto/paid-installments.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { FindPaymentsDto } from 'src/admin-payments/payments/dto/find-payments.dto';
+import { CollectorStatisticsFiltersDto } from './dto/collector-statistics-filters.dto';
+import { ClientFiltersDto } from './dto/client-filters.dto';
 
 @Controller('collections')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -37,17 +37,18 @@ export class CollectionsController {
   @Get('clients/list')
   @Roles('SCO')
   findAllClientsWithCollection(
-    @Query() paginationDto: PaginationDto,
+    @Query() filters: ClientFiltersDto,
   ) {
-    return this.collectionsService.findAllClientsWithCollection(paginationDto);
+    return this.collectionsService.findAllClientsWithCollection(filters);
   }
 
   @Get('clients/list-by-user')
   @Roles('COB')
   findAllClientsByUser(
     @GetUser() user: User,
+    @Query() filters: ClientFiltersDto,
   ) {
-    return this.collectionsService.findAllClientsByUser(user.id);
+    return this.collectionsService.findAllClientsByUser(user.id, filters);
   }
 
   @Get('sales/list-by-client/:clientId')
@@ -121,5 +122,13 @@ export class CollectionsController {
       files,
       user.id
     );
+  }
+
+  @Get('collectors/statistics')
+  @Roles('SCO')
+  getCollectorStatistics(
+    @Query() filters: CollectorStatisticsFiltersDto,
+  ) {
+    return this.collectionsService.getCollectorStatistics(filters);
   }
 }
