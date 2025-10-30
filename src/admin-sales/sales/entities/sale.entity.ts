@@ -11,6 +11,7 @@ import { Guarantor } from "src/admin-sales/guarantors/entities/guarantor.entity"
 import { SecondaryClientSale } from "src/admin-sales/secondary-client/entities/secondary-client-sale.entity";
 import { SaleWithdrawal } from "src/admin-sales/sales-withdrawal/entities/sale-withdrawal.entity";
 import { Participant } from "src/admin-sales/participants/entities/participant.entity";
+import { LeadVisit } from "src/lead/entities/lead-visit.entity";
 
 @Entity('sales')
 export class Sale extends Timestamped {
@@ -19,6 +20,10 @@ export class Sale extends Timestamped {
 
   @ManyToOne(() => Client, (client) => client.sales)
   client: Client;
+
+  @ManyToOne(() => LeadVisit, { nullable: true })
+  @JoinColumn({ name: 'lead_visit_id' })
+  leadVisit?: LeadVisit;
 
   @ManyToOne(() => Guarantor, (guarantor) => guarantor.sales, { nullable: true })
   guarantor?: Guarantor;

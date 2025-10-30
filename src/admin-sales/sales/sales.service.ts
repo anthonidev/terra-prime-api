@@ -12,6 +12,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Sale } from './entities/sale.entity';
 import { MoreThanOrEqual, QueryRunner, Repository } from 'typeorm';
 import { LeadService } from 'src/lead/services/lead.service';
+import { LeadVisit } from 'src/lead/entities/lead-visit.entity';
 import { FindAllLeadsByDayDto } from './dto/find-all-leads-by-day.dto';
 import { formatFindAllLedsByDayResponse } from './helpers/format-find-all-leds-by-day-response.helper';
 import { PaginationHelper } from 'src/common/helpers/pagination.helper';
@@ -146,6 +147,8 @@ export class SalesService {
       ]);
 
       const lead = client.lead;
+      // Obtener la última visita del lead para los participantes
+      const lastVisit = await this.leadService.findLastVisitByLeadId(lead.id);
       let sale;
 
       if (createSaleDto.saleType === SaleType.DIRECT_PAYMENT) {
@@ -153,7 +156,7 @@ export class SalesService {
           createSaleDto,
           userId,
           async (queryRunner, data) => {
-            return await this.createSale(data, userId, null, lead, queryRunner);
+            return await this.createSale(data, userId, null, lastVisit, queryRunner);
           },
         );
       }
@@ -196,7 +199,7 @@ export class SalesService {
               data,
               userId,
               financingSale.id,
-              lead,
+              lastVisit,
               queryRunner,
             );
           },
@@ -278,7 +281,7 @@ export class SalesService {
     createSaleDto: CreateSaleDto,
     userId: string,
     financingId?: string,
-    lead?: Lead,
+    leadVisit?: LeadVisit,
     queryRunner?: QueryRunner,
   ) {
     const repository = queryRunner
@@ -307,17 +310,20 @@ export class SalesService {
       status: createSaleDto.isReservation
         ? StatusSale.RESERVATION_PENDING
         : StatusSale.PENDING,
-      liner: lead?.liner || null,
-      telemarketingSupervisor: lead?.telemarketingSupervisor || null,
-      telemarketingConfirmer: lead?.telemarketingConfirmer || null,
-      telemarketer: lead?.telemarketer || null,
-      fieldManager: lead?.fieldManager || null,
-      fieldSupervisor: lead?.fieldSupervisor || null,
-      fieldSeller: lead?.fieldSeller || null,
-      salesManager: lead?.salesManager || null,
-      salesGeneralManager: lead?.salesGeneralManager || null,
-      postSale: lead?.postSale || null,
-      closer: lead?.closer || null,
+      // Asignar leadVisit si existe
+      leadVisit: leadVisit ? { id: leadVisit.id } : null,
+      // Participantes desde la última visita
+      liner: leadVisit?.linerParticipant || null,
+      telemarketingSupervisor: leadVisit?.telemarketingSupervisor || null,
+      telemarketingConfirmer: leadVisit?.telemarketingConfirmer || null,
+      telemarketer: leadVisit?.telemarketer || null,
+      fieldManager: leadVisit?.fieldManager || null,
+      fieldSupervisor: leadVisit?.fieldSupervisor || null,
+      fieldSeller: leadVisit?.fieldSeller || null,
+      salesManager: leadVisit?.salesManager || null,
+      salesGeneralManager: leadVisit?.salesGeneralManager || null,
+      postSale: leadVisit?.postSale || null,
+      closer: leadVisit?.closer || null,
     });
 
     return await repository.save(sale);
@@ -951,7 +957,6 @@ export class SalesService {
     createClient: CreateClientDto;
     createGuarantor?: CreateGuarantorDto;
     createSecondaryClient?: CreateSecondaryClientDto[];
-    document: string;
     userId: string;
   }): Promise<ClientAndGuarantorResponse> {
     return await this.transactionService.runInTransaction(

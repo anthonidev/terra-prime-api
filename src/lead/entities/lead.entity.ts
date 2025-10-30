@@ -28,7 +28,6 @@ import { LeadVisit } from './lead-visit.entity';
 import { Ubigeo } from './ubigeo.entity';
 import { Client } from 'src/admin-sales/clients/entities/client.entity';
 import { User } from 'src/user/entities/user.entity';
-import { Participant } from 'src/admin-sales/participants/entities/participant.entity';
 import { DocumentType } from '../enums/document-type.enum';
 @Entity('leads')
 export class Lead {
@@ -149,55 +148,4 @@ export class Lead {
     nullable: true,
   })
   metadata?: Record<string, any>;
-
-  @Column({
-    type: 'varchar',
-    length: 500,
-    nullable: true,
-  })
-  reportPdfUrl?: string;
-
-  @ManyToOne(() => Participant, (participant) => participant.leadLiner, { nullable: true })
-  @JoinColumn({ name: 'liner_id' })
-  liner?: Participant;
-
-  @ManyToOne(() => Participant, (participant) => participant.leadTelemarketingSupervisor, { nullable: true })
-  @JoinColumn({ name: 'telemarketing_supervisor_id' })
-  telemarketingSupervisor?: Participant;
-
-  @ManyToOne(() => Participant, (participant) => participant.leadTelemarketingConfirmer, { nullable: true })
-  @JoinColumn({ name: 'telemarketing_confirmer_id' })
-  telemarketingConfirmer?: Participant;
-
-  @ManyToOne(() => Participant, (participant) => participant.leadTelemarketer, { nullable: true })
-  @JoinColumn({ name: 'telemarketer_id' })
-  telemarketer?: Participant;
-
-  @ManyToOne(() => Participant, (participant) => participant.leadFieldManager, { nullable: true })
-  @JoinColumn({ name: 'field_manager_id' })
-  fieldManager?: Participant;
-
-  @ManyToOne(() => Participant, (participant) => participant.leadFieldSupervisor, { nullable: true })
-  @JoinColumn({ name: 'field_supervisor_id' })
-  fieldSupervisor?: Participant;
-
-  @ManyToOne(() => Participant, (participant) => participant.leadFieldSeller, { nullable: true })
-  @JoinColumn({ name: 'field_seller_id' })
-  fieldSeller?: Participant;
-
-  @ManyToOne(() => Participant, (participant) => participant.leadSalesManager, { nullable: true })
-  @JoinColumn({ name: 'sales_manager_id' })
-  salesManager?: Participant;
-
-  @ManyToOne(() => Participant, (participant) => participant.leadSalesGeneralManager, { nullable: true })
-  @JoinColumn({ name: 'sales_general_manager_id' })
-  salesGeneralManager?: Participant;
-
-  @ManyToOne(() => Participant, (participant) => participant.leadPostSale, { nullable: true })
-  @JoinColumn({ name: 'post_sale_id' })
-  postSale?: Participant;
-
-  @ManyToOne(() => Participant, (participant) => participant.leadCloser, { nullable: true })
-  @JoinColumn({ name: 'closer_id' })
-  closer?: Participant;
 }

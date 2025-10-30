@@ -22,6 +22,7 @@ import { UsersService } from 'src/user/user.service';
 import { TransactionService } from 'src/common/services/transaction.service';
 import { CutsResponse } from 'src/cuts/interfaces/cuts-response.interface';
 import { AssignParticipantsToLeadDto } from '../dto/assign-participants-to-lead.dto';
+import { AssignParticipantsToLeadVisitDto } from '../dto/assign-participants-to-lead-visit.dto';
 import { ParticipantType } from 'src/admin-sales/participants/entities/participant.entity';
 import { ParticipantsService } from 'src/admin-sales/participants/participants.service';
 import { formatLeadWithParticipants } from '../helpers/format-lead-participnats-response.helper';
@@ -260,18 +261,22 @@ export class LeadService {
         },
       },
       relations: [
-        'source', 
-        'ubigeo', 
+        'source',
+        'ubigeo',
         'vendor',
         'visits',
         'visits.liner',
-        'liner',
-        'telemarketingSupervisor',
-        'telemarketingConfirmer', 
-        'telemarketer',
-        'fieldManager',
-        'fieldSupervisor',
-        'fieldSeller'
+        'visits.linerParticipant',
+        'visits.telemarketingSupervisor',
+        'visits.telemarketingConfirmer',
+        'visits.telemarketer',
+        'visits.fieldManager',
+        'visits.fieldSupervisor',
+        'visits.fieldSeller',
+        'visits.salesManager',
+        'visits.salesGeneralManager',
+        'visits.postSale',
+        'visits.closer',
       ]
     });
     if (!lead) {
@@ -320,24 +325,27 @@ export class LeadService {
       },
       order: {
         createdAt: 'DESC',
+        visits: {
+          createdAt: 'DESC',
+        },
       },
       relations: [
-        'source', 
-        'ubigeo', 
+        'source',
+        'ubigeo',
         'vendor',
         'visits',
         'visits.liner',
-        'liner',
-        'telemarketingSupervisor',
-        'telemarketingConfirmer', 
-        'telemarketer',
-        'fieldManager',
-        'fieldSupervisor',
-        'fieldSeller',
-        'salesGeneralManager',
-        'salesManager',
-        'postSale',
-        'closer',
+        'visits.linerParticipant',
+        'visits.telemarketingSupervisor',
+        'visits.telemarketingConfirmer',
+        'visits.telemarketer',
+        'visits.fieldManager',
+        'visits.fieldSupervisor',
+        'visits.fieldSeller',
+        'visits.salesGeneralManager',
+        'visits.salesManager',
+        'visits.postSale',
+        'visits.closer',
       ]
     });
     return leads.map(formatLeadWithParticipants);
@@ -351,24 +359,27 @@ export class LeadService {
         vendor: { id: user.id }, },
       order: {
         createdAt: 'DESC',
+        visits: {
+          createdAt: 'DESC',
+        },
       },
       relations: [
-        'source', 
-        'ubigeo', 
+        'source',
+        'ubigeo',
         'vendor',
         'visits',
         'visits.liner',
-        'liner',
-        'telemarketingSupervisor',
-        'telemarketingConfirmer', 
-        'telemarketer',
-        'fieldManager',
-        'fieldSupervisor',
-        'fieldSeller',
-        'salesGeneralManager',
-        'salesManager',
-        'postSale',
-        'closer',
+        'visits.linerParticipant',
+        'visits.telemarketingSupervisor',
+        'visits.telemarketingConfirmer',
+        'visits.telemarketer',
+        'visits.fieldManager',
+        'visits.fieldSupervisor',
+        'visits.fieldSeller',
+        'visits.salesGeneralManager',
+        'visits.salesManager',
+        'visits.postSale',
+        'visits.closer',
       ]
     });
     return leads.map(formatLeadWithParticipants);
@@ -403,14 +414,14 @@ export class LeadService {
     return lead;
   }
 
-  async assignParticipantsToLead(
-    leadId: string,
-    assignParticipantsDto: AssignParticipantsToLeadDto,
+  async assignParticipantsToLeadVisit(
+    leadVisitId: string,
+    assignParticipantsDto: AssignParticipantsToLeadVisitDto,
   ) {
     try {
       // Mapeo de campos DTO a validaciones de tipo
       const participantValidations = [
-        { id: assignParticipantsDto.linerId, type: ParticipantType.LINER, field: 'liner' },
+        { id: assignParticipantsDto.linerParticipantId, type: ParticipantType.LINER, field: 'linerParticipant' },
         { id: assignParticipantsDto.telemarketingSupervisorId, type: ParticipantType.TELEMARKETING_SUPERVISOR, field: 'telemarketingSupervisor' },
         { id: assignParticipantsDto.telemarketingConfirmerId, type: ParticipantType.TELEMARKETING_CONFIRMER, field: 'telemarketingConfirmer' },
         { id: assignParticipantsDto.telemarketerId, type: ParticipantType.TELEMARKETER, field: 'telemarketer' },
@@ -429,8 +440,8 @@ export class LeadService {
         .map(({ id, type }) => this.participantsService.validateParticipantByType(id, type)));
 
       // Preparar datos para preload
-      const updateData: any = { id: leadId };
-      
+      const updateData: any = { id: leadVisitId };
+
       participantValidations.forEach(({ id, field }) => {
         if (id !== undefined) {
           updateData[field] = id ? { id } : null;
@@ -438,45 +449,75 @@ export class LeadService {
       });
 
       // Usar preload para actualizar
-      const leadToUpdate = await this.leadRepository.preload(updateData);
-      
-      if (!leadToUpdate)
-        throw new NotFoundException(`El lead con ID ${leadId} no se encuentra registrado`);
+      const leadVisitToUpdate = await this.leadVisitRepository.preload(updateData);
 
-      await this.leadRepository.save(leadToUpdate);
-      
-      // Retornar el lead actualizado con sus relaciones
-      const lead = await this.findOneById(leadId);
-      return formatLeadWithParticipants(lead);
+      if (!leadVisitToUpdate)
+        throw new NotFoundException(`La visita con ID ${leadVisitId} no se encuentra registrada`);
+
+      await this.leadVisitRepository.save(leadVisitToUpdate);
+
+      // Retornar la visita actualizada con sus relaciones
+      const leadVisit = await this.leadVisitRepository.findOne({
+        where: { id: leadVisitId },
+        relations: [
+          'lead',
+          'linerParticipant',
+          'telemarketingSupervisor',
+          'telemarketingConfirmer',
+          'telemarketer',
+          'fieldManager',
+          'fieldSupervisor',
+          'fieldSeller',
+          'salesManager',
+          'salesGeneralManager',
+          'postSale',
+          'closer',
+        ]
+      });
+
+      return leadVisit;
 
     } catch (error) {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
-      throw new BadRequestException(`Error al asignar participantes al lead: ${error.message}`);
+      throw new BadRequestException(`Error al asignar participantes a la visita: ${error.message}`);
     }
+  }
+
+  async findLastVisitByLeadId(leadId: string): Promise<LeadVisit | null> {
+    return await this.leadVisitRepository.findOne({
+      where: { lead: { id: leadId } },
+      order: { createdAt: 'DESC' },
+      relations: [
+        'linerParticipant',
+        'telemarketingSupervisor',
+        'telemarketingConfirmer',
+        'telemarketer',
+        'fieldManager',
+        'fieldSupervisor',
+        'fieldSeller',
+        'salesManager',
+        'salesGeneralManager',
+        'postSale',
+        'closer',
+      ]
+    });
   }
 
   async findOneById(id: string): Promise<Lead> {
     const lead = await this.leadRepository.findOne({
       where: { id },
       relations: [
-        'source', 
-        'ubigeo', 
-        'vendor',
-        'liner',
-        'telemarketingSupervisor',
-        'telemarketingConfirmer', 
-        'telemarketer',
-        'fieldManager',
-        'fieldSupervisor',
-        'fieldSeller'
+        'source',
+        'ubigeo',
+        'vendor'
       ]
     });
-    
+
     if (!lead)
       throw new NotFoundException(`Lead con ID ${id} no encontrado`);
-      
+
     return lead;
   }
 

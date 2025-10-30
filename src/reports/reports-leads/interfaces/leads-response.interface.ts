@@ -1,4 +1,5 @@
 import { Lead } from "src/lead/entities/lead.entity";
+import { LeadVisit } from "src/lead/entities/lead-visit.entity";
 
 export interface LeadReportDocumentResponse {
   leadId: string;
@@ -20,6 +21,7 @@ export interface LeadReportGenerationResponse extends LeadReportDocumentResponse
 // Interface para los datos del PDF del reporte de leads
 export interface LeadReportPdfData {
   lead: Lead;
+  leadVisit: LeadVisit;
   additionalInfo?: {
     // Información adicional si es necesaria
     departmentName?: string;

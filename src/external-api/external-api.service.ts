@@ -91,7 +91,7 @@ export class ExternalApiService {
     createClient: CreateClientDto,
     createGuarantor?: CreateGuarantorDto,
     createSecondaryClient?: CreateSecondaryClientDto[],
-    document: string,
+    // document: string,
     userId: string
   }): Promise<ClientAndGuarantorResponse> {
     return await this.salesService.createClientAndGuarantor(data);

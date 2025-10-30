@@ -7,13 +7,6 @@ import { formatSource, formatUbigeo, formatVendor } from './format-lead-particip
 
 export const formatLeadWithParticipantsSummary = (lead: Lead) => {
   const {
-    liner,
-    telemarketingSupervisor,
-    telemarketingConfirmer,
-    telemarketer,
-    fieldManager,
-    fieldSupervisor,
-    fieldSeller,
     source,
     ubigeo,
     vendor,
@@ -26,10 +19,14 @@ export const formatLeadWithParticipantsSummary = (lead: Lead) => {
     ...leadData
   } = lead;
 
+  // Get reportPdfUrl from last visit
+  const lastVisit = visits && visits.length > 0 ? visits[0] : null;
+
   return {
     ...leadData,
     source: formatSource(source),
     ubigeo: formatUbigeo(ubigeo),
     vendor: formatVendor(vendor),
+    reportPdfUrl: lastVisit?.reportPdfUrl || null,
   };
 };

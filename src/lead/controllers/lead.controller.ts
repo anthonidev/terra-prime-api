@@ -215,7 +215,7 @@ export class LeadController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     try {
-      const lead = await this.leadService.assignParticipantsToLead(
+      const lead = await this.leadService.assignParticipantsToLeadVisit(
         id,
         assignParticipantsDto,
       );

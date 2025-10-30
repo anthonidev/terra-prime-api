@@ -18,7 +18,10 @@ export function formatSaleCollectionResponse(sale: Sale) {
       firstName: sale.client?.lead?.firstName,
       lastName: sale.client?.lead?.lastName,
       phone: sale.client?.lead?.phone,
-      reportPdfUrl: sale.client?.lead?.reportPdfUrl,
+      reportPdfUrl: sale.leadVisit?.reportPdfUrl ||
+                     (sale.client?.lead?.visits && sale.client.lead.visits.length > 0
+                       ? sale.client.lead.visits[0].reportPdfUrl
+                       : null),
     },
     secondaryClients: secondaryClientSales.length > 0 ?
       sale.secondaryClientSales.map((secondaryClientSale) => {

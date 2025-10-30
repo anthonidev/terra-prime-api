@@ -73,7 +73,7 @@ export class ExternalApiController {
       createClient: clientGuarantorDto.createClient,
       createGuarantor: clientGuarantorDto.createGuarantor,
       createSecondaryClient: clientGuarantorDto.createSecondaryClient,
-      document: clientGuarantorDto.document,
+      // document: clientGuarantorDto.document,
       userId: this.EXTERNAL_USER_ID,
     });
   }

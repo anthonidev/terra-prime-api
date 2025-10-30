@@ -64,13 +64,6 @@ export const formatVisits = (visits: LeadVisit[] | null | undefined) => {
 
 export const formatLeadWithParticipants = (lead: Lead) => {
   const {
-    liner,
-    telemarketingSupervisor,
-    telemarketingConfirmer,
-    telemarketer,
-    fieldManager,
-    fieldSupervisor,
-    fieldSeller,
     source,
     ubigeo,
     vendor,
@@ -78,22 +71,27 @@ export const formatLeadWithParticipants = (lead: Lead) => {
     ...leadData
   } = lead;
 
+  // Obtener participantes de la última visita
+  const lastVisit = visits && visits.length > 0 ? visits[0] : null;
+
   return {
     ...leadData,
     visits: formatVisits(visits),
     source: formatSource(source),
     ubigeo: formatUbigeo(ubigeo),
     vendor: formatVendor(vendor),
-    liner: formatParticipant(liner),
-    telemarketingSupervisor: formatParticipant(telemarketingSupervisor),
-    telemarketingConfirmer: formatParticipant(telemarketingConfirmer),
-    telemarketer: formatParticipant(telemarketer),
-    fieldManager: formatParticipant(fieldManager),
-    fieldSupervisor: formatParticipant(fieldSupervisor),
-    fieldSeller: formatParticipant(fieldSeller),
-    salesGeneralManager: formatParticipant(lead.salesGeneralManager),
-    salesManager: formatParticipant(lead.salesManager),
-    postSale: formatParticipant(lead.postSale),
-    closer: formatParticipant(lead.closer),
+    // Participantes desde la última visita
+    liner: formatParticipant(lastVisit?.linerParticipant),
+    telemarketingSupervisor: formatParticipant(lastVisit?.telemarketingSupervisor),
+    telemarketingConfirmer: formatParticipant(lastVisit?.telemarketingConfirmer),
+    telemarketer: formatParticipant(lastVisit?.telemarketer),
+    fieldManager: formatParticipant(lastVisit?.fieldManager),
+    fieldSupervisor: formatParticipant(lastVisit?.fieldSupervisor),
+    fieldSeller: formatParticipant(lastVisit?.fieldSeller),
+    salesGeneralManager: formatParticipant(lastVisit?.salesGeneralManager),
+    salesManager: formatParticipant(lastVisit?.salesManager),
+    postSale: formatParticipant(lastVisit?.postSale),
+    closer: formatParticipant(lastVisit?.closer),
+    reportPdfUrl: lastVisit?.reportPdfUrl || null,
   };
 };

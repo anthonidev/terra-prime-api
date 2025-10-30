@@ -1,6 +1,6 @@
 import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
 import { Timestamped } from 'src/common/entities/timestamped.entity';
-import { Lead } from 'src/lead/entities/lead.entity';
+import { LeadVisit } from 'src/lead/entities/lead-visit.entity';
 import { DocumentType } from 'src/lead/enums/document-type.enum';
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 
@@ -132,36 +132,38 @@ export class Participant extends Timestamped {
   @OneToMany(() => Sale, (sale) => sale.guarantor)
   sales: Sale[];
 
-  @OneToMany(() => Lead, (lead) => lead.liner)
-  leadLiner: Lead[];
+  // ========== LEAD VISIT RELATIONS ==========
 
-  @OneToMany(() => Lead, (lead) => lead.telemarketingSupervisor)
-  leadTelemarketingSupervisor: Lead[];
+  @OneToMany(() => LeadVisit, (leadVisit) => leadVisit.linerParticipant)
+  leadVisitLiner: LeadVisit[];
 
-  @OneToMany(() => Lead, (lead) => lead.telemarketingConfirmer)
-  leadTelemarketingConfirmer: Lead[];
+  @OneToMany(() => LeadVisit, (leadVisit) => leadVisit.telemarketingSupervisor)
+  leadVisitTelemarketingSupervisor: LeadVisit[];
 
-  @OneToMany(() => Lead, (lead) => lead.telemarketer)
-  leadTelemarketer: Lead[];
+  @OneToMany(() => LeadVisit, (leadVisit) => leadVisit.telemarketingConfirmer)
+  leadVisitTelemarketingConfirmer: LeadVisit[];
 
-  @OneToMany(() => Lead, (lead) => lead.fieldManager)
-  leadFieldManager: Lead[];
+  @OneToMany(() => LeadVisit, (leadVisit) => leadVisit.telemarketer)
+  leadVisitTelemarketer: LeadVisit[];
 
-  @OneToMany(() => Lead, (lead) => lead.fieldSupervisor)
-  leadFieldSupervisor: Lead[];
+  @OneToMany(() => LeadVisit, (leadVisit) => leadVisit.fieldManager)
+  leadVisitFieldManager: LeadVisit[];
 
-  @OneToMany(() => Lead, (lead) => lead.fieldSeller)
-  leadFieldSeller: Lead[];
+  @OneToMany(() => LeadVisit, (leadVisit) => leadVisit.fieldSupervisor)
+  leadVisitFieldSupervisor: LeadVisit[];
 
-  @OneToMany(() => Lead, (lead) => lead.salesManager)
-  leadSalesManager: Lead[];
+  @OneToMany(() => LeadVisit, (leadVisit) => leadVisit.fieldSeller)
+  leadVisitFieldSeller: LeadVisit[];
 
-  @OneToMany(() => Lead, (lead) => lead.salesGeneralManager)
-  leadSalesGeneralManager: Lead[];
+  @OneToMany(() => LeadVisit, (leadVisit) => leadVisit.salesManager)
+  leadVisitSalesManager: LeadVisit[];
 
-  @OneToMany(() => Lead, (lead) => lead.postSale)
-  leadPostSale: Lead[];
+  @OneToMany(() => LeadVisit, (leadVisit) => leadVisit.salesGeneralManager)
+  leadVisitSalesGeneralManager: LeadVisit[];
 
-  @OneToMany(() => Lead, (lead) => lead.closer)
-  leadCloser: Lead[];
+  @OneToMany(() => LeadVisit, (leadVisit) => leadVisit.postSale)
+  leadVisitPostSale: LeadVisit[];
+
+  @OneToMany(() => LeadVisit, (leadVisit) => leadVisit.closer)
+  leadVisitCloser: LeadVisit[];
 }

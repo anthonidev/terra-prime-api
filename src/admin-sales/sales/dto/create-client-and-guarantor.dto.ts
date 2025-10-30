@@ -21,8 +21,4 @@ export class CreateClientAndGuarantorDto {
   @ValidateNested({ each: true })
   @Type(() => CreateSecondaryClientDto)
   createSecondaryClient: CreateSecondaryClientDto[];
-
-  @IsString({ message: 'El documento es una cadena de caracteres' })
-  @IsNotEmpty({ message: 'El documento es requerido' })
-  document: string;
 }
