@@ -203,7 +203,13 @@ export class ReportsLeadsPdfService {
       .text('DNI:', 50, yPos)
       .text(lead.document, 90, yPos)
       .text('Ocupación:', 300, yPos);
-    this.drawUnderline(doc, 360, yPos + 10, 120);
+
+    const ocupacion = lead.metadata?.['Ocupacion'];
+    if (ocupacion) {
+      doc.text(ocupacion, 360, yPos);
+    } else {
+      this.drawUnderline(doc, 360, yPos + 10, 120);
+    }
 
     yPos += 20; // Aumentado de 18 a 20
 

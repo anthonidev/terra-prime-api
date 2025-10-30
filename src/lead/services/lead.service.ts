@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, IsNull, Not, QueryRunner, Raw, Repository } from 'typeorm';
+import { IsNull, Not, QueryRunner, Repository } from 'typeorm';
 import { Lead } from '../entities/lead.entity';
 import { Ubigeo } from '../entities/ubigeo.entity';
 import { LeadSource } from '../entities/lead-source.entity';
@@ -21,7 +21,6 @@ import {
 import { UsersService } from 'src/user/user.service';
 import { TransactionService } from 'src/common/services/transaction.service';
 import { CutsResponse } from 'src/cuts/interfaces/cuts-response.interface';
-import { AssignParticipantsToLeadDto } from '../dto/assign-participants-to-lead.dto';
 import { AssignParticipantsToLeadVisitDto } from '../dto/assign-participants-to-lead-visit.dto';
 import { ParticipantType } from 'src/admin-sales/participants/entities/participant.entity';
 import { ParticipantsService } from 'src/admin-sales/participants/participants.service';
