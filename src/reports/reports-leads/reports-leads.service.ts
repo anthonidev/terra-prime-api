@@ -1,4 +1,9 @@
-import { Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PdfService } from 'src/common/services/pdf.service';
 import { AwsS3Service } from 'src/files/aws-s3.service';
@@ -6,7 +11,11 @@ import { Lead } from 'src/lead/entities/lead.entity';
 import { LeadVisit } from 'src/lead/entities/lead-visit.entity';
 import { Ubigeo } from 'src/lead/entities/ubigeo.entity';
 import { Repository } from 'typeorm';
-import { LeadReportDocumentResponse, LeadReportGenerationResponse, LeadReportPdfData } from './interfaces/leads-response.interface';
+import {
+  LeadReportDocumentResponse,
+  LeadReportGenerationResponse,
+  LeadReportPdfData,
+} from './interfaces/leads-response.interface';
 import { ReportsLeadsPdfService } from './reports-leads.pdf.service';
 
 @Injectable()
@@ -24,14 +33,19 @@ export class ReportsLeadsService {
     private readonly awsS3Service: AwsS3Service,
   ) {}
 
-  async generateLeadVisitReportPdf(leadVisitId: string): Promise<LeadReportGenerationResponse> {
+  async generateLeadVisitReportPdf(
+    leadVisitId: string,
+  ): Promise<LeadReportGenerationResponse> {
     try {
       // Verificar si ya existe un PDF
-      const existingLeadVisit = await this.getLeadVisitWithRelations(leadVisitId);
+      const existingLeadVisit =
+        await this.getLeadVisitWithRelations(leadVisitId);
 
       if (existingLeadVisit.reportPdfUrl) {
         // Verificar si el archivo aún existe en S3
-        const fileExists = await this.awsS3Service.fileExistsByUrl(existingLeadVisit.reportPdfUrl);
+        const fileExists = await this.awsS3Service.fileExistsByUrl(
+          existingLeadVisit.reportPdfUrl,
+        );
 
         if (fileExists) {
           return {
@@ -49,7 +63,9 @@ export class ReportsLeadsService {
           };
         } else {
           // El archivo no existe en S3, generar uno nuevo
-          this.logger.warn(`PDF file not found in S3 for lead visit ${leadVisitId}, generating new one`);
+          this.logger.warn(
+            `PDF file not found in S3 for lead visit ${leadVisitId}, generating new one`,
+          );
         }
       }
 
@@ -59,23 +75,36 @@ export class ReportsLeadsService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`Error generating lead visit report PDF for visit ${leadVisitId}:`, error);
-      throw new InternalServerErrorException('Error al generar el PDF del reporte de visita');
+      this.logger.error(
+        `Error generating lead visit report PDF for visit ${leadVisitId}:`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Error al generar el PDF del reporte de visita',
+      );
     }
   }
 
-  async getLeadVisitReportDocument(leadVisitId: string): Promise<LeadReportDocumentResponse> {
+  async getLeadVisitReportDocument(
+    leadVisitId: string,
+  ): Promise<LeadReportDocumentResponse> {
     try {
       const leadVisit = await this.getLeadVisitWithRelations(leadVisitId);
 
       if (!leadVisit.reportPdfUrl) {
-        throw new NotFoundException('No se ha generado un reporte para esta visita');
+        throw new NotFoundException(
+          'No se ha generado un reporte para esta visita',
+        );
       }
 
       // Verificar que el archivo existe en S3
-      const fileExists = await this.awsS3Service.fileExistsByUrl(leadVisit.reportPdfUrl);
+      const fileExists = await this.awsS3Service.fileExistsByUrl(
+        leadVisit.reportPdfUrl,
+      );
       if (!fileExists) {
-        throw new NotFoundException('El documento del reporte de visita no se encuentra disponible');
+        throw new NotFoundException(
+          'El documento del reporte de visita no se encuentra disponible',
+        );
       }
 
       return {
@@ -94,12 +123,19 @@ export class ReportsLeadsService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`Error getting lead visit report document for visit ${leadVisitId}:`, error);
-      throw new InternalServerErrorException('Error al obtener el documento del reporte de visita');
+      this.logger.error(
+        `Error getting lead visit report document for visit ${leadVisitId}:`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Error al obtener el documento del reporte de visita',
+      );
     }
   }
 
-  async regenerateLeadVisitReportPdf(leadVisitId: string): Promise<LeadReportGenerationResponse> {
+  async regenerateLeadVisitReportPdf(
+    leadVisitId: string,
+  ): Promise<LeadReportGenerationResponse> {
     try {
       const leadVisit = await this.getLeadVisitWithRelations(leadVisitId);
 
@@ -107,9 +143,14 @@ export class ReportsLeadsService {
       if (leadVisit.reportPdfUrl) {
         try {
           await this.awsS3Service.deleteFileByUrl(leadVisit.reportPdfUrl);
-          this.logger.log(`Previous lead visit report PDF deleted for visit ${leadVisitId}`);
+          this.logger.log(
+            `Previous lead visit report PDF deleted for visit ${leadVisitId}`,
+          );
         } catch (error) {
-          this.logger.warn(`Failed to delete previous PDF for visit ${leadVisitId}:`, error);
+          this.logger.warn(
+            `Failed to delete previous PDF for visit ${leadVisitId}:`,
+            error,
+          );
         }
       }
 
@@ -119,12 +160,19 @@ export class ReportsLeadsService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`Error regenerating lead visit report PDF for visit ${leadVisitId}:`, error);
-      throw new InternalServerErrorException('Error al regenerar el PDF del reporte de visita');
+      this.logger.error(
+        `Error regenerating lead visit report PDF for visit ${leadVisitId}:`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Error al regenerar el PDF del reporte de visita',
+      );
     }
   }
 
-  private async getLeadVisitWithRelations(leadVisitId: string): Promise<LeadVisit> {
+  private async getLeadVisitWithRelations(
+    leadVisitId: string,
+  ): Promise<LeadVisit> {
     const leadVisit = await this.leadVisitRepository.findOne({
       where: { id: leadVisitId },
       relations: [
@@ -154,7 +202,9 @@ export class ReportsLeadsService {
     return leadVisit;
   }
 
-  private async createNewLeadVisitReportPdf(leadVisit: LeadVisit): Promise<LeadReportGenerationResponse> {
+  private async createNewLeadVisitReportPdf(
+    leadVisit: LeadVisit,
+  ): Promise<LeadReportGenerationResponse> {
     try {
       // Obtener información geográfica completa
       let additionalInfo = null;
@@ -186,14 +236,17 @@ export class ReportsLeadsService {
         additionalInfo,
       };
 
-      const pdfUrl = await this.reportsLeadsPdfService.generateLeadReportPdf(pdfData);
+      const pdfUrl =
+        await this.reportsLeadsPdfService.generateLeadReportPdf(pdfData);
 
       // Actualizar la visita con la URL del PDF
       await this.leadVisitRepository.update(leadVisit.id, {
         reportPdfUrl: pdfUrl,
       });
 
-      this.logger.log(`Lead visit report PDF generated successfully for visit ${leadVisit.id}`);
+      this.logger.log(
+        `Lead visit report PDF generated successfully for visit ${leadVisit.id}`,
+      );
 
       return {
         leadId: leadVisit.lead.id,
@@ -209,8 +262,13 @@ export class ReportsLeadsService {
         isNewDocument: true,
       };
     } catch (error) {
-      this.logger.error(`Error creating new lead visit report PDF for visit ${leadVisit.id}:`, error);
-      throw new InternalServerErrorException('Error al crear el PDF del reporte de visita');
+      this.logger.error(
+        `Error creating new lead visit report PDF for visit ${leadVisit.id}:`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Error al crear el PDF del reporte de visita',
+      );
     }
   }
 }

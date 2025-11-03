@@ -12,3 +12,14 @@ export interface ParticipantResponse {
   address: string;
   participantType: ParticipantType;
 }
+
+export interface ParticipantResponseActive {
+  id: string;
+  firstName: string;
+  lastName: string;
+  document: string;
+  documentType: DocumentType;
+  phone: string;
+  participantType: ParticipantType;
+}
+[];

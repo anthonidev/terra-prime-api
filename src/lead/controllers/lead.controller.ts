@@ -20,10 +20,11 @@ import { FindLeadByDocumentDto } from '../dto/find-by-document.dto';
 import { LeadService } from '../services/lead.service';
 import { FindLeadsDto } from '../dto/find-leads.dto';
 import { AssignParticipantsToLeadDto } from '../dto/assign-participants-to-lead.dto';
+import { AssignParticipantsToLeadVisitDto } from '../dto/assign-participants-to-lead-visit.dto';
 @Controller('leads')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class LeadController {
-  constructor(private readonly leadService: LeadService) { }
+  constructor(private readonly leadService: LeadService) {}
   @Post('find-by-document')
   @Roles('SYS', 'REC', 'VEN')
   async findByDocument(@Body() findDto: FindLeadByDocumentDto) {
@@ -211,7 +212,7 @@ export class LeadController {
   @Post('assign/participants/:id')
   @Roles('SYS', 'REC', 'JVE')
   async assignParticipantsToLead(
-    @Body() assignParticipantsDto: AssignParticipantsToLeadDto,
+    @Body() assignParticipantsDto: AssignParticipantsToLeadVisitDto,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     try {

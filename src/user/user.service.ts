@@ -20,6 +20,17 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { Role } from './entities/role.entity';
 import { User } from './entities/user.entity';
 import { View } from './entities/view.entity';
+
+export interface CleanView {
+  id: number;
+  code: string;
+  name: string;
+  icon?: string | null;
+  url?: string | null;
+  order: number;
+  metadata?: any | null;
+  children: CleanView[];
+}
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -32,6 +43,42 @@ export class UsersService {
     @InjectRepository(View)
     private readonly viewRepository: Repository<View>,
   ) {}
+
+  private cleanView(view: View): CleanView {
+    const {
+      id,
+      code,
+      name,
+      icon,
+      url,
+      order,
+      metadata,
+      children: rawChildren,
+    } = view;
+    const children =
+      rawChildren
+        ?.filter((child) => child.isActive)
+        .map((child) => this.cleanView(child))
+        .sort((a, b) => (a.order || 0) - (b.order || 0)) || [];
+    return {
+      id,
+      code,
+      name,
+      icon,
+      url,
+      order: order || 0,
+      metadata,
+      children,
+    };
+  }
+
+  private async buildViewTree(views: View[]): Promise<CleanView[]> {
+    const parentViews = views
+      .filter((view) => !view.parent && view.isActive)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    return parentViews.map((view) => this.cleanView(view));
+  }
+
   private async findOneOrFail(
     criteria: FindOptionsWhere<User>,
     relations: string[] = [],
@@ -227,7 +274,6 @@ export class UsersService {
       if (dto.password) {
         dto.password = await this.hashPassword(dto.password);
       }
-      
 
       const updatedUser = await this.userRepository.save({
         ...user,
@@ -308,7 +354,6 @@ export class UsersService {
     }
   }
 
-  
   async updateLastLogin(userId: string): Promise<void> {
     try {
       await this.userRepository.update(
@@ -493,5 +538,56 @@ export class UsersService {
     }
 
     return codes;
+  }
+
+  async getUserViews(userId: string): Promise<{ views: CleanView[] }> {
+    try {
+      const user = await this.findOne(userId);
+
+      if (!user.role.isActive) {
+        throw new ForbiddenException('El rol asociado está inactivo');
+      }
+
+      // Obtener solo las vistas que pertenecen al rol del usuario
+      const roleViews = await this.viewRepository
+        .createQueryBuilder('view')
+        .leftJoin('view.roles', 'role')
+        .where('role.id = :roleId', { roleId: user.role.id })
+        .getMany();
+
+      // Obtener los IDs de las vistas permitidas
+      const allowedViewIds = roleViews.map((view) => view.id);
+
+      if (allowedViewIds.length === 0) {
+        return { views: [] };
+      }
+
+      // Obtener la estructura completa de las vistas permitidas
+      const viewsWithRelations = await this.viewRepository
+        .createQueryBuilder('view')
+        .leftJoinAndSelect('view.parent', 'parent')
+        .leftJoinAndSelect(
+          'view.children',
+          'children',
+          'children.id IN (:...allowedIds)',
+          { allowedIds: allowedViewIds },
+        )
+        .where('view.id IN (:...allowedIds)', { allowedIds: allowedViewIds })
+        .getMany();
+
+      const viewTree = await this.buildViewTree(viewsWithRelations);
+
+      return { views: viewTree };
+    } catch (error) {
+      this.logger.error(
+        `Error fetching user views for user ${userId}: ${error.message}`,
+      );
+      throw error instanceof NotFoundException ||
+        error instanceof ForbiddenException
+        ? error
+        : new InternalServerErrorException(
+            'Error al obtener las vistas del usuario',
+          );
+    }
   }
 }

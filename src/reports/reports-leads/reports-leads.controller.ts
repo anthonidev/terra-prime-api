@@ -1,4 +1,12 @@
-import { Controller, Get, HttpException, HttpStatus, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpException,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+} from '@nestjs/common';
 import { ReportsLeadsService } from './reports-leads.service';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 
@@ -9,7 +17,8 @@ export class ReportsLeadsController {
   @Roles('FAC', 'REC')
   async generateLeadReportPdf(@Param('id', ParseUUIDPipe) leadId: string) {
     try {
-      const result = await this.reportsLeadsService.generateLeadVisitReportPdf(leadId);
+      const result =
+        await this.reportsLeadsService.generateLeadVisitReportPdf(leadId);
       return {
         success: true,
         message: 'PDF del reporte de lead generado exitosamente',
@@ -34,7 +43,8 @@ export class ReportsLeadsController {
   @Roles('FAC', 'REC')
   async getLeadReportDocument(@Param('id', ParseUUIDPipe) leadId: string) {
     try {
-      const result = await this.reportsLeadsService.getLeadVisitReportDocument(leadId);
+      const result =
+        await this.reportsLeadsService.getLeadVisitReportDocument(leadId);
       return {
         success: true,
         data: result,
@@ -56,13 +66,16 @@ export class ReportsLeadsController {
 
   @Post('regenerate/:leadId')
   @Roles('FAC', 'REC')
-  async regenerateLeadReportPdf(@Param('leadId', ParseUUIDPipe) leadId: string) {
+  async regenerateLeadReportPdf(
+    @Param('leadId', ParseUUIDPipe) leadId: string,
+  ) {
     try {
-      const result = await this.reportsLeadsService.regenerateLeadVisitReportPdf(leadId);
+      const result =
+        await this.reportsLeadsService.regenerateLeadVisitReportPdf(leadId);
       return {
         success: true,
         message: 'PDF del reporte de lead regenerado exitosamente',
-        data: result, 
+        data: result,
       };
     } catch (error) {
       if (error instanceof HttpException) {

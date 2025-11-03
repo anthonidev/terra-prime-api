@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ParticipantsService } from './participants.service';
 import { CreateParticipantDto } from './dto/create-participant.dto';
 import { UpdateParticipantDto } from './dto/update-participant.dto';
@@ -6,7 +16,6 @@ import { FindParticipantsActivesDto } from './dto/find-participants-actives.dto'
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
-
 
 @Controller('participants')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -20,7 +29,7 @@ export class ParticipantsController {
   }
 
   @Get()
-  @Roles('JVE', 'SYS')
+  @Roles('JVE', 'SYS', 'REC')
   findAll() {
     return this.participantsService.findAll();
   }
@@ -33,7 +42,10 @@ export class ParticipantsController {
 
   @Patch(':id')
   @Roles('JVE', 'SYS')
-  update(@Param('id') id: string, @Body() updateParticipantDto: UpdateParticipantDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateParticipantDto: UpdateParticipantDto,
+  ) {
     return this.participantsService.update(id, updateParticipantDto);
   }
 
@@ -48,6 +60,8 @@ export class ParticipantsController {
   async findAllParticipants(
     @Query() findParticipantsDto: FindParticipantsActivesDto,
   ) {
-    return await this.participantsService.findAllParticipantsActives(findParticipantsDto);
+    return await this.participantsService.findAllParticipantsActives(
+      findParticipantsDto,
+    );
   }
 }

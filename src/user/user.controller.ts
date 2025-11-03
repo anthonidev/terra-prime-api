@@ -48,6 +48,11 @@ export class UsersController {
     return this.usersService.allRoles();
   }
 
+  @Get('menu')
+  async getUserMenu(@GetUser() user: User) {
+    return this.usersService.getUserViews(user.id);
+  }
+
   @Get('views/delete')
   @Roles('SYS')
   deleteAllViews() {

@@ -1,4 +1,4 @@
-import { Participant } from "../entities/participant.entity";
+import { Participant } from '../entities/participant.entity';
 
 export const formatParticipantResponse = (participant: Participant) => {
   return {
@@ -10,6 +10,21 @@ export const formatParticipantResponse = (participant: Participant) => {
     documentType: participant.documentType,
     phone: participant.phone,
     address: participant.address,
+    participantType: participant.participantType,
+    isActive: participant.isActive,
+    createdAt: participant.createdAt,
+    updatedAt: participant.updatedAt,
+  };
+};
+
+export const formatParticipantResponseActive = (participant: Participant) => {
+  return {
+    id: participant.id,
+    firstName: participant.firstName,
+    lastName: participant.lastName,
+    document: participant.document,
+    documentType: participant.documentType,
+    phone: participant.phone,
     participantType: participant.participantType,
   };
 };
