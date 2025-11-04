@@ -14,7 +14,7 @@ import { Exclude, Transform } from 'class-transformer';
 import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
 import { Reservation } from 'src/admin-sales/reservations/entities/reservation.entity';
 import { Lead } from 'src/lead/entities/lead.entity';
-import { UpdatePriceToken } from 'src/project/entities/update-price-token.entity';
+import { AdminToken } from 'src/project/entities/admin-token.entity';
 import { SaleWithdrawal } from 'src/admin-sales/sales-withdrawal/entities/sale-withdrawal.entity';
 
 @Entity()
@@ -91,10 +91,10 @@ export class User {
   sales: Sale[];
 
   @OneToMany(
-    () => UpdatePriceToken,
-    (updatePriceToken) => updatePriceToken.generatedBy,
+    () => AdminToken,
+    (adminToken) => adminToken.generatedBy,
   )
-  generatedPriceTokens: UpdatePriceToken[];
+  generatedAdminTokens: AdminToken[];
 
   @OneToMany(() => Reservation, (reservation) => reservation.vendor)
   reservations: User[];

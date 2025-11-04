@@ -219,6 +219,7 @@ export class LeadService {
     } = filters;
     const queryBuilder = this.leadRepository.createQueryBuilder('lead');
     queryBuilder
+      .addSelect('lead.updatedAt')
       .leftJoinAndSelect('lead.source', 'source')
       .leftJoinAndSelect('lead.ubigeo', 'ubigeo');
     if (search) {
@@ -244,7 +245,10 @@ export class LeadService {
         endDate: new Date(endDate),
       });
     }
-    queryBuilder.orderBy('lead.createdAt', order);
+    queryBuilder
+      .orderBy('lead.isInOffice', 'DESC')
+      .addOrderBy('lead.updatedAt', 'DESC')
+      .addOrderBy('lead.createdAt', 'DESC');
     queryBuilder.skip((page - 1) * limit).take(limit);
     const [items, totalItems] = await queryBuilder.getManyAndCount();
     const formattedLeads = items.map(formatLeadWithParticipantsSummary);
@@ -554,11 +558,18 @@ export class LeadService {
     const repository = queryRunner
       ? queryRunner.manager.getRepository(Lead)
       : this.leadRepository;
-    
+    const leadVisitRepository = queryRunner
+      ? queryRunner.manager.getRepository(LeadVisit)
+      : this.leadVisitRepository;
     const leadsIsInOffice = await repository.find({
       where: { isInOffice: true },
+      relations: ['visits'],
+      order: {
+        visits: {
+          createdAt: 'DESC',
+        },
+      },
     });
-    
     if (leadsIsInOffice.length === 0) {
       this.logger.log('No hay leads con isOffice en true para actualizar.');
       return {
@@ -568,16 +579,30 @@ export class LeadService {
         totalPoints: 0
       };
     }
-
     const updatedLeads = leadsIsInOffice.map(lead => {
       lead.isInOffice = false;
       return lead;
     });
-
     try {
+      // Actualizar los leads
       await repository.save(updatedLeads);
+      // Actualizar el departureTime del último visit de cada lead
+      const currentDate = new Date();
+      const visitsToUpdate: LeadVisit[] = [];
+      for (const lead of leadsIsInOffice) {
+        if (lead.visits && lead.visits.length > 0) {
+          const lastVisit = lead.visits[0]; // Ya está ordenado DESC
+          if (!lastVisit.departureTime) {
+            lastVisit.departureTime = currentDate;
+            visitsToUpdate.push(lastVisit);
+          }
+        }
+      }
+      if (visitsToUpdate.length > 0) {
+        await leadVisitRepository.save(visitsToUpdate);
+        this.logger.log(`Se actualizaron ${visitsToUpdate.length} visitas con departureTime.`);
+      }
       this.logger.log(`Se actualizaron ${updatedLeads.length} leads: isOffice cambió a false.`);
-      
       return {
         processed: updatedLeads.length,
         successful: updatedLeads.length,
@@ -586,7 +611,6 @@ export class LeadService {
       };
     } catch (error) {
       this.logger.error(`Error al actualizar isOffice: ${error.message}`);
-      
       return {
         processed: updatedLeads.length,
         successful: 0,

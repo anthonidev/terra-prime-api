@@ -1,31 +1,18 @@
-// src/modules/lot/services/update-price-token.service.ts
+// src/modules/lot/services/admin-token.service.ts
 import {
-  BadRequestException,
   ConflictException,
-  forwardRef,
-  Inject,
   Injectable,
-  InternalServerErrorException,
-  Logger,
-  NotFoundException,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MoreThan, Repository } from 'typeorm';
-import { UpdatePriceToken } from '../entities/update-price-token.entity';
-import * as bcrypt from 'bcryptjs'; // Importa bcrypt
-import { LotService } from './lot.service';
-import { UsersService } from 'src/user/user.service';
+import { AdminToken } from '../entities/admin-token.entity';
 
 @Injectable()
-export class UpdatePriceTokenService {
+export class AdminTokenService {
 
   constructor(
-    @InjectRepository(UpdatePriceToken)
-    private readonly updatePriceTokenRepository: Repository<UpdatePriceToken>,
-    @Inject(forwardRef(() => LotService))
-    private readonly lotService: LotService,
-    private readonly userService: UsersService,
+    @InjectRepository(AdminToken)
+    private readonly adminTokenRepository: Repository<AdminToken>,
   ) {}
 
   private generateCode(): string {
@@ -34,7 +21,7 @@ export class UpdatePriceTokenService {
 
   async getActiveTokenInfo(): Promise<{ pin: string | null; expiresAt?: Date }> {
     const now = new Date();
-    const token = await this.updatePriceTokenRepository.findOne({
+    const token = await this.adminTokenRepository.findOne({
       where: { expiresAt: MoreThan(now) },
     });
 
@@ -46,7 +33,7 @@ export class UpdatePriceTokenService {
     userId: string,
   ): Promise<{ pin: string, expiresAt: Date }> {
     const now = new Date();
-    const existingToken = await this.updatePriceTokenRepository.findOne({
+    const existingToken = await this.adminTokenRepository.findOne({
       where: {
         expiresAt: MoreThan(now),
       },
@@ -57,28 +44,25 @@ export class UpdatePriceTokenService {
     const expiration = new Date(now.getTime() + 15 * 60 * 1000);
     const pin = this.generateCode();
 
-    const newToken = this.updatePriceTokenRepository.create({
+    const newToken = this.adminTokenRepository.create({
       generatedBy: { id: userId },
       codeHash: pin,
       expiresAt: expiration,
     });
 
-    await this.updatePriceTokenRepository.save(newToken);
+    await this.adminTokenRepository.save(newToken);
     return { pin, expiresAt: expiration };
   }
 
   async validateToken(token: string): Promise<boolean> {
-    const tokenFound = await this.updatePriceTokenRepository.findOne({
+    const tokenFound = await this.adminTokenRepository.findOne({
       where: { codeHash: token },
     });
-
     if (!tokenFound)
       throw new ConflictException('El token ingresado no es válido.');
-
     const now = new Date();
     if (tokenFound.expiresAt <= now)
       throw new ConflictException('El token ha expirado.');
-
     return true;
   }
 }

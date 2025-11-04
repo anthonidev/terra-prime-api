@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Participant } from './entities/participant.entity';
 import { FindParticipantsActivesDto } from './dto/find-participants-actives.dto';
+import { FindParticipantsDto } from './dto/find-participants.dto';
 import {
   ParticipantResponse,
   ParticipantResponseActive,
@@ -17,6 +18,10 @@ import {
   formatParticipantResponse,
   formatParticipantResponseActive,
 } from './helpers/format-participants-actives-response.helper';
+import {
+  PaginatedResult,
+  PaginationHelper,
+} from 'src/common/helpers/pagination.helper';
 
 @Injectable()
 export class ParticipantsService {
@@ -41,12 +46,32 @@ export class ParticipantsService {
     return formatParticipantResponse(savedParticipant);
   }
 
-  async findAll(): Promise<ParticipantResponse[]> {
-    const participants = await this.participantRepository.find({
-      // where: { isActive: true },
-      order: { createdAt: 'DESC' },
-    });
-    return participants.map(formatParticipantResponse);
+  async findAll(
+    filters: FindParticipantsDto,
+  ): Promise<PaginatedResult<ParticipantResponse>> {
+    const { page = 1, limit = 10, search, type, order = 'DESC' } = filters;
+    const queryBuilder =
+      this.participantRepository.createQueryBuilder('participant');
+    // Filtro por búsqueda (nombre, apellido o documento)
+    if (search)
+      queryBuilder.andWhere(
+        '(participant.firstName ILIKE :search OR participant.lastName ILIKE :search OR participant.document ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    // Filtro por tipo de participante
+    if (type)
+      queryBuilder.andWhere('participant.participantType = :type', { type });
+    // Ordenamiento
+    queryBuilder.orderBy('participant.createdAt', order);
+    // Paginación
+    queryBuilder.skip((page - 1) * limit).take(limit);
+    const [items, totalItems] = await queryBuilder.getManyAndCount();
+    const formattedParticipants = items.map(formatParticipantResponse);
+    return PaginationHelper.createPaginatedResponse(
+      formattedParticipants,
+      totalItems,
+      filters,
+    );
   }
 
   async findOne(id: string): Promise<ParticipantResponse> {

@@ -8,6 +8,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { CreateSaleDto } from './dto/create-sale.dto';
+import { UpdateSaleDto } from './dto/update-sale.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Sale } from './entities/sale.entity';
 import { MoreThanOrEqual, QueryRunner, Repository } from 'typeorm';
@@ -80,6 +81,7 @@ import { UpdateReservationPeriodResponseDto } from './dto/update-reservation-per
 import { FinancingInstallmentsService } from '../financing/services/financing-installments.service';
 import { LeadWithParticipantsResponse } from 'src/lead/interfaces/lead-formatted-response.interface';
 import { Lead } from 'src/lead/entities/lead.entity';
+import { AdminTokenService } from 'src/project/services/admin-token.service';
 
 // SERVICIO ACTUALIZADO - UN SOLO ENDPOINT PARA VENTA/RESERVA
 
@@ -105,6 +107,7 @@ export class SalesService {
     private readonly paymentsService: PaymentsService,
     private readonly secondaryClientService: SecondaryClientService,
     private readonly participantsService: ParticipantsService,
+    private readonly adminTokenService: AdminTokenService,
   ) {}
 
   async create(
@@ -1099,22 +1102,22 @@ export class SalesService {
       );
   }
 
-  private calculateAndCreateFinancingHu(createSaleDto: CreateSaleDto) {
+  private calculateAndCreateFinancingHu(saleDto: CreateSaleDto | UpdateSaleDto) {
     const financingInstallmentsHu = this.calculateAmortization({
-      totalAmount: createSaleDto.totalAmountUrbanDevelopment,
-      initialAmount: createSaleDto.initialAmountUrbanDevelopment,
+      totalAmount: saleDto.totalAmountUrbanDevelopment,
+      initialAmount: saleDto.initialAmountUrbanDevelopment,
       reservationAmount: 0,
       interestRate: 0,
-      numberOfPayments: createSaleDto.quantityHuCuotes,
-      firstPaymentDate: createSaleDto.firstPaymentDateHu,
+      numberOfPayments: saleDto.quantityHuCuotes,
+      firstPaymentDate: saleDto.firstPaymentDateHu,
     });
 
     return {
       financingType: FinancingType.CREDITO,
-      initialAmount: createSaleDto.initialAmountUrbanDevelopment,
+      initialAmount: saleDto.initialAmountUrbanDevelopment,
       interestRate: 0,
-      quantityCoutes: createSaleDto.quantityHuCuotes,
-      initialPaymentDate: createSaleDto.firstPaymentDateHu,
+      quantityCoutes: saleDto.quantityHuCuotes,
+      initialPaymentDate: saleDto.firstPaymentDateHu,
       financingInstallments: financingInstallmentsHu.installments,
     };
   }
@@ -1122,15 +1125,15 @@ export class SalesService {
   private async createUrbanDevelopment(
     savedSaleId: string,
     financingHuId: string,
-    createSaleDto: CreateSaleDto,
+    saleDto: CreateSaleDto | UpdateSaleDto,
     queryRunner: QueryRunner,
   ) {
     await this.urbanDevelopmentService.create(
       {
         saleId: savedSaleId,
         financingId: financingHuId,
-        amount: createSaleDto.totalAmountUrbanDevelopment,
-        initialAmount: createSaleDto.initialAmountUrbanDevelopment,
+        amount: saleDto.totalAmountUrbanDevelopment,
+        initialAmount: saleDto.initialAmountUrbanDevelopment,
       },
       queryRunner,
     );
@@ -1317,6 +1320,337 @@ export class SalesService {
         `Error general en processExpiredReservations: ${error.message}`,
         error.stack,
       );
+      throw error;
+    }
+  }
+
+  async updateSale(
+    id: string,
+    updateSaleDto: UpdateSaleDto,
+    userId: string,
+  ): Promise<SaleResponse> {
+    try {
+      // Buscar la venta existente con todas sus relaciones
+      const existingSale = await this.saleRepository.findOne({
+        where: { id },
+        relations: [
+          'financing',
+          'financing.financingInstallments',
+          'urbanDevelopment',
+          'urbanDevelopment.financing',
+          'urbanDevelopment.financing.financingInstallments',
+          'lot',
+          'client',
+          'secondaryClientSales',
+        ],
+      });
+      if (!existingSale)
+        throw new NotFoundException(
+          `La venta con ID ${id} no se encuentra registrada`,
+        );
+      // Validar que el estado permita edición
+      if (
+        existingSale.status !== StatusSale.PENDING &&
+        existingSale.status !== StatusSale.RESERVATION_PENDING
+      )
+        throw new BadRequestException(
+          `Solo se pueden editar ventas en estado PENDING o RESERVATION_PENDING. Estado actual: ${existingSale.status}`,
+        );
+      // Validar fechas si se proporcionan
+      if (updateSaleDto.firstPaymentDateHu)
+        validateSaleDates({ firstPaymentDateHu: updateSaleDto.firstPaymentDateHu });
+      // Validar lote si ha cambiado
+      if (updateSaleDto.lotId && updateSaleDto.lotId !== existingSale.lot.id)
+        await this.lotService.isLotValidForSale(updateSaleDto.lotId);
+      // Validar datos de reserva si se proporcionan
+      if (updateSaleDto.isReservation !== undefined && updateSaleDto.isReservation)
+        await this.validateReservationData(
+          updateSaleDto.reservationAmount,
+          updateSaleDto.maximumHoldPeriod,
+        );
+      // Validar cliente si ha cambiado
+      if (updateSaleDto.clientId && updateSaleDto.clientId !== existingSale.client.id)
+        await this.clientService.isValidClient(updateSaleDto.clientId);
+      // Validar garante si se proporciona
+      if (updateSaleDto.guarantorId)
+        await this.guarantorService.isValidGuarantor(updateSaleDto.guarantorId);
+      // Validar clientes secundarios si se proporcionan
+      if (updateSaleDto.secondaryClientsIds && updateSaleDto.secondaryClientsIds.length > 0)
+        await Promise.all(
+          updateSaleDto.secondaryClientsIds.map((id) =>
+            this.secondaryClientService.isValidSecondaryClient(id),
+          ),
+        );
+      // Ejecutar actualización en una transacción
+      await this.transactionService.runInTransaction(
+        async (queryRunner) => {
+          const saleRepository = queryRunner.manager.getRepository(Sale);
+          // Determinar el nuevo estado según los cambios
+          let newStatus = existingSale.status;
+          const wasReservation = existingSale.fromReservation;
+          const willBeReservation = updateSaleDto.isReservation !== undefined
+            ? updateSaleDto.isReservation
+            : wasReservation;
+          // Si cambia de venta a reserva
+          if (!wasReservation && willBeReservation && existingSale.status === StatusSale.PENDING)
+            newStatus = StatusSale.RESERVATION_PENDING;
+          // Manejar cambio de tipo de venta (DIRECT_PAYMENT <-> FINANCED)
+          const oldType = existingSale.type;
+          const newType = updateSaleDto.saleType || oldType;
+          let financingId = existingSale.financing?.id || null;
+          // Si cambia de DIRECT_PAYMENT a FINANCED
+          if (oldType === SaleType.DIRECT_PAYMENT && newType === SaleType.FINANCED) {
+            // Validar datos de financiamiento
+            this.isValidFinancingDataSale(
+              updateSaleDto.totalAmount || existingSale.totalAmount,
+              updateSaleDto.reservationAmount || existingSale.reservationAmount || 0,
+              updateSaleDto.initialAmount,
+              updateSaleDto.interestRate,
+              updateSaleDto.quantitySaleCoutes,
+              updateSaleDto.financingInstallments,
+            );
+            // Crear nuevo financiamiento
+            const financingData = {
+              financingType: FinancingType.CREDITO,
+              initialAmount: updateSaleDto.initialAmount,
+              interestRate: updateSaleDto.interestRate,
+              quantityCoutes: updateSaleDto.quantitySaleCoutes,
+              financingInstallments: updateSaleDto.financingInstallments,
+            };
+            const newFinancing = await this.financingService.create(
+              financingData,
+              queryRunner,
+            );
+            financingId = newFinancing.id;
+          }
+          // Si cambia de FINANCED a DIRECT_PAYMENT
+          if (oldType === SaleType.FINANCED && newType === SaleType.DIRECT_PAYMENT) {
+            // Eliminar financiamiento existente si existe
+            if (existingSale.financing) {
+              await this.financingService.remove(existingSale.financing.id, queryRunner);
+              financingId = null;
+            }
+          }
+          // Si sigue siendo FINANCED y se actualizan datos de financiamiento
+          if (
+            oldType === SaleType.FINANCED &&
+            newType === SaleType.FINANCED &&
+            (updateSaleDto.initialAmount !== undefined ||
+              updateSaleDto.interestRate !== undefined ||
+              updateSaleDto.quantitySaleCoutes !== undefined ||
+              updateSaleDto.financingInstallments !== undefined)
+          ) {
+            // Validar datos de financiamiento
+            this.isValidFinancingDataSale(
+              updateSaleDto.totalAmount || existingSale.totalAmount,
+              updateSaleDto.reservationAmount || existingSale.reservationAmount || 0,
+              updateSaleDto.initialAmount,
+              updateSaleDto.interestRate,
+              updateSaleDto.quantitySaleCoutes,
+              updateSaleDto.financingInstallments,
+            );
+            if (existingSale.financing) {
+              // Actualizar financiamiento existente
+              await this.financingService.update(
+                existingSale.financing.id,
+                {
+                  initialAmount: updateSaleDto.initialAmount,
+                  interestRate: updateSaleDto.interestRate,
+                  quantityCoutes: updateSaleDto.quantitySaleCoutes,
+                  financingInstallments: updateSaleDto.financingInstallments,
+                },
+                queryRunner,
+              );
+            } else {
+              // Crear nuevo financiamiento si no existe
+              const financingData = {
+                financingType: FinancingType.CREDITO,
+                initialAmount: updateSaleDto.initialAmount,
+                interestRate: updateSaleDto.interestRate,
+                quantityCoutes: updateSaleDto.quantitySaleCoutes,
+                financingInstallments: updateSaleDto.financingInstallments,
+              };
+              const newFinancing = await this.financingService.create(
+                financingData,
+                queryRunner,
+              );
+              financingId = newFinancing.id;
+            }
+          }
+          // Actualizar la venta principal
+          await saleRepository.update(id, {
+            lot: updateSaleDto.lotId ? { id: updateSaleDto.lotId } : existingSale.lot,
+            client: updateSaleDto.clientId ? { id: updateSaleDto.clientId } : existingSale.client,
+            guarantor: updateSaleDto.guarantorId !== undefined
+              ? updateSaleDto.guarantorId ? { id: updateSaleDto.guarantorId } : null
+              : existingSale.guarantor,
+            type: newType,
+            totalAmount: updateSaleDto.totalAmount || existingSale.totalAmount,
+            contractDate: updateSaleDto.contractDate || existingSale.contractDate,
+            financing: financingId ? { id: financingId } : null,
+            metadata: updateSaleDto.metadata !== undefined ? updateSaleDto.metadata : existingSale.metadata,
+            notes: updateSaleDto.notes !== undefined ? updateSaleDto.notes : existingSale.notes,
+            applyLateFee: updateSaleDto.applyLateFee !== undefined ? updateSaleDto.applyLateFee : existingSale.applyLateFee,
+            fromReservation: willBeReservation,
+            reservationAmount: updateSaleDto.reservationAmount !== undefined
+              ? updateSaleDto.reservationAmount
+              : existingSale.reservationAmount,
+            maximumHoldPeriod: updateSaleDto.maximumHoldPeriod !== undefined
+              ? updateSaleDto.maximumHoldPeriod
+              : existingSale.maximumHoldPeriod,
+            status: newStatus,
+          });
+          // Manejar clientes secundarios
+          if (updateSaleDto.secondaryClientsIds !== undefined) {
+            // Eliminar clientes secundarios existentes
+            for (const secondaryClientSale of existingSale.secondaryClientSales) {
+              await this.secondaryClientService.removeSecondaryClientSale(
+                secondaryClientSale.id,
+                queryRunner,
+              );
+            }
+            // Agregar nuevos clientes secundarios
+            if (updateSaleDto.secondaryClientsIds.length > 0)
+              await Promise.all(
+                updateSaleDto.secondaryClientsIds.map(async (secondaryClientId) => {
+                  return await this.secondaryClientService.createSecondaryClientSale(
+                    id,
+                    secondaryClientId,
+                    queryRunner,
+                  );
+                }),
+              );
+          }
+          // Manejar habilitación urbana
+          if (updateSaleDto.totalAmountUrbanDevelopment !== undefined) {
+            if (updateSaleDto.totalAmountUrbanDevelopment === 0) {
+              // Eliminar habilitación urbana si existe
+              if (existingSale.urbanDevelopment)
+                await this.urbanDevelopmentService.remove(
+                  existingSale.urbanDevelopment.id,
+                  queryRunner,
+                );
+            } else {
+              // Validar datos de habilitación urbana
+              this.isValidUrbanDevelopmentDataSale(
+                updateSaleDto.firstPaymentDateHu,
+                updateSaleDto.initialAmountUrbanDevelopment,
+                updateSaleDto.quantityHuCuotes,
+              );
+              const financingDataHu = this.calculateAndCreateFinancingHu(updateSaleDto);
+              if (existingSale.urbanDevelopment) {
+                // Actualizar habilitación urbana existente
+                await this.financingService.update(
+                  existingSale.urbanDevelopment.financing.id,
+                  financingDataHu,
+                  queryRunner,
+                );
+              } else {
+                // Crear nueva habilitación urbana
+                const financingHu = await this.financingService.create(
+                  financingDataHu,
+                  queryRunner,
+                );
+                await this.createUrbanDevelopment(
+                  id,
+                  financingHu.id,
+                  updateSaleDto,
+                  queryRunner,
+                );
+              }
+            }
+          }
+          // Actualizar estado del lote si cambió
+          if (updateSaleDto.lotId && updateSaleDto.lotId !== existingSale.lot.id) {
+            // Liberar lote anterior
+            await this.lotService.updateStatus(
+              existingSale.lot.id,
+              LotStatus.ACTIVE,
+              queryRunner,
+            );
+            // Marcar nuevo lote
+            const lotStatus = willBeReservation
+              ? LotStatus.RESERVED
+              : LotStatus.SOLD;
+            await this.lotService.updateStatus(
+              updateSaleDto.lotId,
+              lotStatus,
+              queryRunner,
+            );
+          }
+        },
+      );
+
+      // Retornar la venta actualizada DESPUÉS de que la transacción se complete
+      return await this.findOneById(id);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async deleteSale(saleId: string, token: string): Promise<{ message: string }> {
+    try {
+      // 1. Validar el token
+      await this.adminTokenService.validateToken(token);
+      // 2. Buscar la venta con todas sus relaciones
+      const sale = await this.saleRepository.findOne({
+        where: { id: saleId },
+        relations: [
+          'lot',
+          'financing',
+          'financing.financingInstallments',
+          'urbanDevelopment',
+          'urbanDevelopment.financing',
+          'secondaryClientSales',
+        ],
+      });
+      if (!sale)
+        throw new NotFoundException(`La venta con ID ${saleId} no existe`);
+      // 3. Validar que la venta esté en estado PENDING o RESERVATION_PENDING
+      if (
+        sale.status !== StatusSale.PENDING &&
+        sale.status !== StatusSale.RESERVATION_PENDING
+      )
+        throw new BadRequestException(
+          'Solo se pueden eliminar ventas en estado PENDING o RESERVATION_PENDING',
+        );
+      // 4. Eliminar la venta y todas sus relaciones en una transacción
+      await this.transactionService.runInTransaction(
+        async (queryRunner: QueryRunner) => {
+          // Eliminar urban development si existe
+          if (sale.urbanDevelopment)
+            await this.urbanDevelopmentService.remove(
+              sale.urbanDevelopment.id,
+              queryRunner,
+            );
+          // Eliminar financing si existe
+          if (sale.financing)
+            await this.financingService.remove(sale.financing.id, queryRunner);
+          // Eliminar secondary clients sale relations
+          if (sale.secondaryClientSales && sale.secondaryClientSales.length > 0)
+            for (const secondaryClientSale of sale.secondaryClientSales) {
+              await this.secondaryClientService.removeSecondaryClientSale(
+                secondaryClientSale.id,
+                queryRunner,
+              );
+            }
+          // Liberar el lote (cambiar estado a ACTIVE)
+          if (sale.lot) {
+            await this.lotService.updateStatus(
+              sale.lot.id,
+              LotStatus.ACTIVE,
+              queryRunner,
+            );
+          }
+          // Finalmente, eliminar la venta
+          const saleRepository = queryRunner.manager.getRepository(Sale);
+          await saleRepository.remove(sale);
+        },
+      );
+      return {
+        message: `La venta con ID ${saleId} ha sido eliminada exitosamente`,
+      };
+    } catch (error) {
       throw error;
     }
   }

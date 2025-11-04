@@ -24,8 +24,7 @@ import { Lot } from '../entities/lot.entity';
 import { Project } from '../entities/project.entity';
 import { formatLotResponse } from '../helpers/format-lot-response.helper';
 import { LotResponse } from '../interfaces/lot-response.interface';
-import { UpdatePriceTokenService } from './update-price-token.service';
-import { UpdatePriceByVendorDto } from '../dto/update-price-by-vendor.dto';
+import { AdminTokenService } from './admin-token.service';
 import { transformLotToDetail } from '../helpers/transform-lot-to-detail.helper';
 import { FindAllLotsDto } from 'src/admin-sales/sales/dto/find-all-lots.dto';
 import { Paginated } from 'src/common/interfaces/paginated.interface';
@@ -39,7 +38,7 @@ export class LotService {
     private readonly lotRepository: Repository<Lot>,
     @InjectRepository(Block)
     private readonly blockRepository: Repository<Block>,
-    private readonly updatePriceTokenService: UpdatePriceTokenService,
+    private readonly adminTokenService: AdminTokenService,
   ) {}
   async findProjectLots(
     projectId: string,
@@ -373,16 +372,16 @@ export class LotService {
   }
 
   async getActiveTokenInfo(): Promise<{ pin: string | null; expiresAt?: Date }> {
-    return await this.updatePriceTokenService.getActiveTokenInfo();
+    return await this.adminTokenService.getActiveTokenInfo();
   }
 
   async createPinBySalesManager(
     userId: string,
   ): Promise<{ pin: string }> {
-    return await this.updatePriceTokenService.createPin(userId);
+    return await this.adminTokenService.createPin(userId);
   }
 
   async validateToken(token: string): Promise<boolean> {
-    return await this.updatePriceTokenService.validateToken(token);
+    return await this.adminTokenService.validateToken(token);
   }
 }

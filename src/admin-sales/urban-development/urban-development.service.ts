@@ -44,4 +44,20 @@ export class UrbanDevelopmentService {
       relations: ['sale', 'financing', 'financing.financingInstallments'],
     });
   }
+
+  async remove(id: number, queryRunner?: QueryRunner): Promise<void> {
+    const repository = queryRunner
+      ? queryRunner.manager.getRepository(UrbanDevelopment)
+      : this.urbanDevelopmentRepository;
+    const urbanDevelopment = await repository.findOne({
+      where: { id },
+      relations: ['financing'],
+    });
+    if (!urbanDevelopment) return;
+    // Primero eliminar el financiamiento asociado
+    if (urbanDevelopment.financing)
+      await this.financingService.remove(urbanDevelopment.financing.id, queryRunner);
+    // Luego eliminar la habilitación urbana
+    await repository.remove(urbanDevelopment);
+  }
 }

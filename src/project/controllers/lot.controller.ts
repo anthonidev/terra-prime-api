@@ -35,21 +35,21 @@ export class LotController {
     return this.lotService.findLotById(id);
   }
 
-  @Get('update-price-token/active')
-  @Roles('ADM')
+  @Get('admin-token/active')
+  @Roles('ADM', 'JVE')
   async getActiveTokenInfo() {
     return this.lotService.getActiveTokenInfo();
   }
 
-  @Post('update-price-token/create')
-  @Roles('ADM')
+  @Post('admin-token/create')
+  @Roles('ADM', 'JVE')
   async createPricePin(
     @GetUser() user: User,
   ) {
     return this.lotService.createPinBySalesManager(user.id);
   }
 
-  @Get('update-price-token/validate/:token')
+  @Get('admin-token/validate/:token')
   @Roles('SYS', 'JVE', 'VEN')
   async validateToken(
     @Param('token') token: string,

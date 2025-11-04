@@ -67,4 +67,23 @@ export class SecondaryClientService {
       throw new BadRequestException(`El cliente secundario con ID ${id} no existe`);
     return exists;
   }
+
+  async removeSecondaryClientSale(
+    id: number,
+    queryRunner?: QueryRunner,
+  ): Promise<void> {
+    const repository = queryRunner
+      ? queryRunner.manager.getRepository(SecondaryClientSale)
+      : this.secondaryClientSaleRepository;
+
+    const secondaryClientSale = await repository.findOne({ where: { id } });
+
+    if (!secondaryClientSale) {
+      throw new BadRequestException(
+        `La relación cliente secundario-venta con ID ${id} no existe`,
+      );
+    }
+
+    await repository.remove(secondaryClientSale);
+  }
 }

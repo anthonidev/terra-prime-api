@@ -13,6 +13,7 @@ import { ParticipantsService } from './participants.service';
 import { CreateParticipantDto } from './dto/create-participant.dto';
 import { UpdateParticipantDto } from './dto/update-participant.dto';
 import { FindParticipantsActivesDto } from './dto/find-participants-actives.dto';
+import { FindParticipantsDto } from './dto/find-participants.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -30,8 +31,8 @@ export class ParticipantsController {
 
   @Get()
   @Roles('JVE', 'SYS', 'REC')
-  findAll() {
-    return this.participantsService.findAll();
+  async findAll(@Query() filters: FindParticipantsDto) {
+    return await this.participantsService.findAll(filters);
   }
 
   @Get(':id')

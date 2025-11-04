@@ -1,4 +1,4 @@
-// src/modules/lot/entities/update-price-token.entity.ts
+// src/modules/lot/entities/admin-token.entity.ts
 import {
   Column,
   CreateDateColumn,
@@ -7,30 +7,22 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
-  BeforeInsert, // Importar BeforeInsert
-  BeforeUpdate, // Importar BeforeUpdate
 } from 'typeorm';
-import { Lot } from './lot.entity';
 import { User } from 'src/user/entities/user.entity';
 
-// No agregamos bcrypt aquí, solo definimos el campo para el hash
-@Entity('update_price_tokens')
-export class UpdatePriceToken {
+@Entity('admin_tokens')
+export class AdminToken {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ length: 60 }) // bcrypt genera hashes de 60 caracteres
-  codeHash: string; // Cambiado de 'code' a 'codeHash'
+  codeHash: string;
 
-  @ManyToOne(() => User, (user) => user.generatedPriceTokens, {
+  @ManyToOne(() => User, (user) => user.generatedAdminTokens, {
     nullable: true,
   })
   @JoinColumn({ name: 'generated_by_user_id' })
   generatedBy: User;
-
-  @ManyToOne(() => Lot, (lot) => lot.updatePriceTokens, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'lot_id' })
-  lot: Lot;
 
   @Column({ type: 'timestamp' })
   expiresAt: Date;

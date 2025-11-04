@@ -19,6 +19,7 @@ import {
 } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
+import { UpdateSaleDto } from './dto/update-sale.dto';
 import { FindAllLeadsByDayDto } from './dto/find-all-leads-by-day.dto';
 import { AssignLeadsToVendorDto } from './dto/assign-leads-to-vendor.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -47,6 +48,16 @@ export class SalesController {
   @Roles('JVE', 'VEN')
   create(@Body() createSaleDto: CreateSaleDto, @GetUser() user: User) {
     return this.salesService.create(createSaleDto, user.id);
+  }
+
+  @Patch(':id')
+  @Roles('JVE', 'VEN')
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateSaleDto: UpdateSaleDto,
+    @GetUser() user: User,
+  ) {
+    return this.salesService.updateSale(id, updateSaleDto, user.id);
   }
 
   @Post('assign/participants/:id')
@@ -216,5 +227,14 @@ export class SalesController {
       saleId,
       updatePeriodDto.additionalDays,
     );
+  }
+
+  @Delete(':id')
+  @Roles('JVE', 'ADM')
+  async deleteSale(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body('token') token: string,
+  ) {
+    return this.salesService.deleteSale(id, token);
   }
 }

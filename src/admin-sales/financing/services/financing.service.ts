@@ -160,4 +160,78 @@ export class FinancingService {
       ],
     });
   }
+
+  async update(
+    id: string,
+    updateData: Partial<CreateFinancingDto>,
+    queryRunner?: QueryRunner,
+  ): Promise<Financing> {
+    const repository = queryRunner
+      ? queryRunner.manager.getRepository(Financing)
+      : this.financingRepository;
+
+    const financing = await repository.findOne({
+      where: { id },
+      relations: ['financingInstallments'],
+    });
+
+    if (!financing) {
+      throw new NotFoundException(
+        `El financiamiento con ID ${id} no se encuentra registrado`,
+      );
+    }
+
+    const { financingInstallments, ...restData } = updateData;
+
+    // Actualizar campos básicos del financiamiento
+    if (Object.keys(restData).length > 0) {
+      await repository.update(id, restData);
+    }
+
+    // Si se proporcionan nuevas cuotas, eliminar las antiguas y crear las nuevas
+    if (financingInstallments && financingInstallments.length > 0) {
+      const installmentsRepository = queryRunner
+        ? queryRunner.manager.getRepository('FinancingInstallments')
+        : this.financingRepository.manager.getRepository('FinancingInstallments');
+
+      // Eliminar cuotas existentes
+      if (financing.financingInstallments && financing.financingInstallments.length > 0) {
+        await installmentsRepository.delete({
+          financing: { id },
+        });
+      }
+
+      // Crear nuevas cuotas
+      const newInstallments = financingInstallments.map((installment) => ({
+        ...installment,
+        coutePending: installment.couteAmount,
+        coutePaid: 0,
+        financing: { id },
+      }));
+
+      await installmentsRepository.save(newInstallments);
+    }
+
+    // Retornar el financiamiento actualizado
+    return await repository.findOne({
+      where: { id },
+      relations: ['financingInstallments'],
+    });
+  }
+
+  async remove(id: string, queryRunner?: QueryRunner): Promise<void> {
+    const repository = queryRunner
+      ? queryRunner.manager.getRepository(Financing)
+      : this.financingRepository;
+    const financing = await repository.findOne({
+      where: { id },
+      relations: ['financingInstallments'],
+    });
+    if (!financing)
+      throw new NotFoundException(
+        `El financiamiento con ID ${id} no se encuentra registrado`,
+      );
+    // Las cuotas se eliminarán automáticamente por cascade
+    await repository.remove(financing);
+  }
 }
