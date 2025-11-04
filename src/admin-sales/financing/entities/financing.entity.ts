@@ -17,16 +17,20 @@ export class Financing extends Timestamped {
   })
   financingType: FinancingType;
 
-  @OneToOne(() => Sale, (sale) => sale.financing)
+  @OneToOne(() => Sale, (sale) => sale.financing,{  onDelete: 'CASCADE' })
   sale: Sale;
 
-  @OneToOne(() => UrbanDevelopment, (urbanDevelopment) => urbanDevelopment.financing)
+  @OneToOne(
+    () => UrbanDevelopment,
+    (urbanDevelopment) => urbanDevelopment.financing,
+    { onDelete: 'CASCADE' }
+  )
   urbanDevelopment: UrbanDevelopment;
 
   @OneToMany(
     () => FinancingInstallments,
     (installments) => installments.financing,
-    {cascade: true}
+    {onDelete: 'CASCADE'}
   )
   financingInstallments: FinancingInstallments[];
 

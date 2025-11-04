@@ -65,7 +65,11 @@ export class FinancingInstallments extends Timestamped {
   })
   lateFeeAmountPaid: number;
 
-  @ManyToOne(() => Financing, (financing) => financing.financingInstallments)
+  @ManyToOne(
+    () => Financing,
+    (financing) => financing.financingInstallments,
+    { onDelete: 'CASCADE' }
+  )
   financing: Financing;
 
   @Column({

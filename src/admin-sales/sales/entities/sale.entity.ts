@@ -35,7 +35,11 @@ export class Sale extends Timestamped {
   })
   type: SaleType;
 
-  @OneToOne(() => Financing, (financing) => financing.sale, { nullable: true })
+  @OneToOne(
+    () => Financing,
+    (financing) => financing.sale,
+    { nullable: true, onDelete: 'CASCADE' }
+  )
   @JoinColumn({ name: 'financing_id' })
   financing?: Financing;
 
@@ -122,7 +126,7 @@ export class Sale extends Timestamped {
   @Column({ type: 'boolean', default: true })
   applyLateFee: boolean;
 
-  @OneToOne(() => UrbanDevelopment, (urbanDevelopment) => urbanDevelopment.sale, { nullable: true })
+  @OneToOne(() => UrbanDevelopment, (urbanDevelopment) => urbanDevelopment.sale, { nullable: true,  onDelete: 'CASCADE' })
   urbanDevelopment?: UrbanDevelopment;
 
   @OneToMany(() => SecondaryClientSale, (secondaryClient) => secondaryClient.sale)
