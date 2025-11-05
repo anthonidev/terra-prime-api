@@ -33,23 +33,26 @@ export class AdminTokenService {
     userId: string,
   ): Promise<{ pin: string, expiresAt: Date }> {
     const now = new Date();
+
+    // Buscar token vigente existente
     const existingToken = await this.adminTokenRepository.findOne({
       where: {
         expiresAt: MoreThan(now),
       },
     });
-    if (existingToken)
-      throw new ConflictException('Ya existe un token vigente. Espere a que expire antes de generar uno nuevo.');
-
+    // Si existe un token vigente, anularlo (marcar como expirado)
+    if (existingToken) {
+      existingToken.expiresAt = new Date(now.getTime() - 1000); // Expirado hace 1 segundo
+      await this.adminTokenRepository.save(existingToken);
+    }
+    // Crear nuevo token
     const expiration = new Date(now.getTime() + 15 * 60 * 1000);
     const pin = this.generateCode();
-
     const newToken = this.adminTokenRepository.create({
       generatedBy: { id: userId },
       codeHash: pin,
       expiresAt: expiration,
     });
-
     await this.adminTokenRepository.save(newToken);
     return { pin, expiresAt: expiration };
   }
