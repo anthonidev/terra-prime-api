@@ -1,8 +1,9 @@
-import { StatusPayment } from "src/admin-payments/payments/enums/status-payments.enum";
-import { StatusFinancingInstallments } from "src/admin-sales/financing/enums/status-financing-installments.enum";
 import { CurrencyType } from "src/project/entities/project.entity";
+import { CombinedInstallmentWithPayments } from "./combined-installment-with-payments.interface";
+import { StatusPayment } from "src/admin-payments/payments/enums/status-payments.enum";
+import { AmortizationMetadata } from "src/admin-sales/financing/interfaces/combined-amortization-response.interface";
 
-export interface SaleResponse {
+export interface SaleWithCombinedInstallmentsResponse {
   id: string;
   type: string;
   totalAmount: number;
@@ -36,45 +37,32 @@ export interface SaleResponse {
   };
   radicationPdfUrl: string | null;
   paymentAcordPdfUrl: string | null;
-  financing: {
+
+  // Información de financiamiento combinado
+  financing?: {
     id: string;
-    initialAmount: number;
-    interestRate: number;
-    quantityCoutes: number;
-    // AGREGAR ESTO:
-    financingInstallments: {
-      id: string;
-      couteAmount: number;
-      coutePending: number;
-      coutePaid: number;
-      expectedPaymentDate: string;
-      lateFeeAmountPending: number;
-      lateFeeAmountPaid: number;
-      status: StatusFinancingInstallments;
-    }[];
-  };
-  urbanDevelopment?: {
-    id: number;
-    amount: number;
-    initialAmount: number;
-    status: string;
-    financing?: {
+    lot: {
       id: string;
       initialAmount: number;
       interestRate: number;
       quantityCoutes: number;
-      financingInstallments: {
-        id: string;
-        couteAmount: number;
-        coutePending: number;
-        coutePaid: number;
-        expectedPaymentDate: string;
-        lateFeeAmountPending: number;
-        lateFeeAmountPaid: number;
-        status: StatusFinancingInstallments;
-      }[];
     };
+    urbanDevelopment?: {
+      id: number;
+      amount: number;
+      initialAmount: number;
+      status: string;
+      financing?: {
+        id: string;
+        initialAmount: number;
+        interestRate: number;
+        quantityCoutes: number;
+      };
+    };
+    installments: CombinedInstallmentWithPayments[];
+    meta: AmortizationMetadata;
   };
+
   guarantor: {
     firstName: string;
     lastName: string;
@@ -107,10 +95,6 @@ export interface SaleResponse {
     firstName: string;
     lastName: string;
   };
-  // reservation: {
-  //   id: string;
-  //   amount: number;
-  // };
   vendor: {
     document: string;
     firstName: string;

@@ -30,7 +30,7 @@ export class Financing extends Timestamped {
   @OneToMany(
     () => FinancingInstallments,
     (installments) => installments.financing,
-    {onDelete: 'CASCADE'}
+    { cascade: true, onDelete: 'CASCADE' }
   )
   financingInstallments: FinancingInstallments[];
 

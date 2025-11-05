@@ -221,7 +221,8 @@ export class LeadService {
     queryBuilder
       .addSelect('lead.updatedAt')
       .leftJoinAndSelect('lead.source', 'source')
-      .leftJoinAndSelect('lead.ubigeo', 'ubigeo');
+      .leftJoinAndSelect('lead.ubigeo', 'ubigeo')
+      .leftJoinAndSelect('lead.visits', 'visits');
     if (search) {
       queryBuilder.andWhere(
         '(lead.firstName ILIKE :search OR lead.lastName ILIKE :search OR lead.document ILIKE :search)',

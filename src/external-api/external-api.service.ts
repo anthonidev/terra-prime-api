@@ -3,11 +3,11 @@ import { CreateDetailPaymentDto } from 'src/admin-payments/payments/dto/create-d
 import { PaymentResponse } from 'src/admin-payments/payments/interfaces/payment-response.interface';
 import { CreateClientDto } from 'src/admin-sales/clients/dto/create-client.dto';
 import { FinancingInstallmentsService } from 'src/admin-sales/financing/services/financing-installments.service';
+import { CombinedAmortizationResponse } from 'src/admin-sales/financing/interfaces/combined-amortization-response.interface';
 import { CreateGuarantorDto } from 'src/admin-sales/guarantors/dto/create-guarantor.dto';
 import { CreatePaymentSaleDto } from 'src/admin-sales/sales/dto/create-payment-sale.dto';
 import { CreateSaleDto } from 'src/admin-sales/sales/dto/create-sale.dto';
 import { FindAllLotsDto } from 'src/admin-sales/sales/dto/find-all-lots.dto';
-import { CalculateAmortizationResponse } from 'src/admin-sales/sales/interfaces/calculate-amortization-response.interface';
 import { ClientAndGuarantorResponse } from 'src/admin-sales/sales/interfaces/client-and-guarantor-response.interface';
 import { SaleResponse } from 'src/admin-sales/sales/interfaces/sale-response.interface';
 import { SalesService } from 'src/admin-sales/sales/sales.service';
@@ -27,6 +27,7 @@ import { BlockService } from 'src/project/services/block.service';
 import { LotService } from 'src/project/services/lot.service';
 import { ProjectService } from 'src/project/services/project.service';
 import { StageService } from 'src/project/services/stage.service';
+import { SaleWithCombinedInstallmentsResponse } from 'src/admin-sales/sales/interfaces/sale-with-combined-installments-response.interface';
 
 @Injectable()
 export class ExternalApiService {
@@ -64,13 +65,13 @@ export class ExternalApiService {
   }
   
   calculeAmortization(
-    totalAmount: number, 
-    initialAmount: number, 
-    reservationAmount: number, 
-    interestRate: number, 
-    numberOfPayments: number, 
+    totalAmount: number,
+    initialAmount: number,
+    reservationAmount: number,
+    interestRate: number,
+    numberOfPayments: number,
     firstPaymentDate: string
-  ): CalculateAmortizationResponse {
+  ): CombinedAmortizationResponse {
     return this.salesService.calculateAmortization({
       totalAmount,
       initialAmount,
@@ -100,7 +101,7 @@ export class ExternalApiService {
   async createSale (
     createSaleDto: CreateSaleDto,
     userId: string,
-  ): Promise<SaleResponse> {
+  ): Promise<SaleWithCombinedInstallmentsResponse> {
     return await this.salesService.create(createSaleDto, userId);
   }
 
@@ -112,7 +113,7 @@ export class ExternalApiService {
 
   async findOneSaleById(
     id: string,
-  ): Promise<SaleResponse> {
+  ): Promise<SaleWithCombinedInstallmentsResponse> {
     return await this.salesService.findOneById(id);
   }
 

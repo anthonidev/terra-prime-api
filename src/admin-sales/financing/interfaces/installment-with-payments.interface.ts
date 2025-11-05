@@ -5,7 +5,7 @@ export interface InstallmentWithPayments {
   couteAmount: number;
   coutePaid: number;
   coutePending: number;
-  expectedPaymentDate: Date;
+  expectedPaymentDate: string;
   lateFeeAmountPending: number;
   lateFeeAmountPaid: number;
   status: string;

@@ -22,7 +22,7 @@ export class CalculateAmortizationDto {
   @IsNumber({}, { message: 'El porcentaje de interés debe ser un número' })
   @Type(() => Number)
   @Min(0, { message: 'El porcentaje de interés debe ser mayor o igual a 0' })
-  interestRate: number; 
+  interestRate: number;
 
   @IsNotEmpty({ message: 'La cantidad de cuotas es requerido' })
   @IsNumber({}, { message: 'La cantidad de cuotas debe ser un número' })
@@ -37,4 +37,20 @@ export class CalculateAmortizationDto {
   @IsBoolean()
   @IsOptional()
   includeDecimals?: boolean;
+
+  // Parámetros para HU (Habilitación Urbana) - Opcionales
+  @IsOptional()
+  @IsNumber({}, { message: 'El monto total de HU debe ser un número' })
+  @Type(() => Number)
+  totalAmountHu?: number;
+
+  @IsOptional()
+  @IsNumber({}, { message: 'La cantidad de cuotas de HU debe ser un número' })
+  @Type(() => Number)
+  @Min(1, { message: 'La cantidad de cuotas de HU debe ser mayor a 1' })
+  numberOfPaymentsHu?: number;
+
+  @IsOptional()
+  @IsDateString({}, { message: 'La fecha de pago inicial de HU debe ser válida' })
+  firstPaymentDateHu?: string;
 }

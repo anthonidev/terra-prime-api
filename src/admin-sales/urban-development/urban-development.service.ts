@@ -5,6 +5,7 @@ import { QueryRunner, Repository } from 'typeorm';
 import { CreateUrbanDevelopmentDto } from './dto/create-urban-development.dto';
 import { FinancingService } from '../financing/services/financing.service';
 import { SalesService } from '../sales/sales.service';
+import { StatusUrbanDevelopment } from './enums/status-urban-development.enum';
 
 @Injectable()
 export class UrbanDevelopmentService {
@@ -34,6 +35,8 @@ export class UrbanDevelopmentService {
       initialAmount,
       financing: { id: financingId },
       sale: { id: saleId },
+      // Como el inicial de HU siempre es 0, comienza directamente en proceso de pago
+      status: StatusUrbanDevelopment.IN_PAYMENT_PROCESS,
     });
     return await repository.save(urbanDevelopment);
   }

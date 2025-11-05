@@ -13,7 +13,7 @@ export class UrbanDevelopment extends Timestamped {
   @JoinColumn({ name: 'financing_id' })
   financing: Financing;
 
-  @OneToOne(() => Sale, (sale) => sale.urbanDevelopment)
+  @OneToOne(() => Sale, (sale) => sale.urbanDevelopment, { cascade: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'sale_id' })
   sale: Sale;
 

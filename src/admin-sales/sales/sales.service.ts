@@ -59,6 +59,9 @@ import { ClientAndGuarantorResponse } from './interfaces/client-and-guarantor-re
 import { StatusReservation } from '../reservations/enums/status-reservation.enum';
 import { formatSaleResponse } from './helpers/format-sale-response.helper';
 import { SaleResponse } from './interfaces/sale-response.interface';
+import { SaleWithCombinedInstallmentsResponse } from './interfaces/sale-with-combined-installments-response.interface';
+import { CombinedInstallmentWithPayments } from './interfaces/combined-installment-with-payments.interface';
+import { InstallmentWithPayments } from '../financing/interfaces/installment-with-payments.interface';
 import { PaginationDto } from 'src/common/dto/paginationDto';
 import { PaymentsService } from 'src/admin-payments/payments/services/payments.service';
 import { CreatePaymentDto } from 'src/admin-payments/payments/dto/create-payment.dto';
@@ -82,6 +85,7 @@ import { FinancingInstallmentsService } from '../financing/services/financing-in
 import { LeadWithParticipantsResponse } from 'src/lead/interfaces/lead-formatted-response.interface';
 import { Lead } from 'src/lead/entities/lead.entity';
 import { AdminTokenService } from 'src/project/services/admin-token.service';
+import { CombinedAmortizationResponse } from '../financing/interfaces/combined-amortization-response.interface';
 
 // SERVICIO ACTUALIZADO - UN SOLO ENDPOINT PARA VENTA/RESERVA
 
@@ -113,8 +117,36 @@ export class SalesService {
   async create(
     createSaleDto: CreateSaleDto,
     userId: string,
-  ): Promise<SaleResponse> {
+  ): Promise<SaleWithCombinedInstallmentsResponse> {
     try {
+      // Separar el array combinado en dos arrays: lote y HU
+      if (createSaleDto.combinedInstallments && createSaleDto.combinedInstallments.length > 0) {
+        const lotInstallments: CreateFinancingInstallmentsDto[] = [];
+        const huInstallments: CreateFinancingInstallmentsDto[] = [];
+
+        for (const combined of createSaleDto.combinedInstallments) {
+          // Agregar cuota de lote si existe
+          if (combined.lotInstallmentAmount !== null && combined.lotInstallmentAmount !== undefined) {
+            lotInstallments.push({
+              couteAmount: combined.lotInstallmentAmount,
+              expectedPaymentDate: combined.expectedPaymentDate,
+            });
+          }
+
+          // Agregar cuota de HU si existe
+          if (combined.huInstallmentAmount !== null && combined.huInstallmentAmount !== undefined) {
+            huInstallments.push({
+              couteAmount: combined.huInstallmentAmount,
+              expectedPaymentDate: combined.expectedPaymentDate,
+            });
+          }
+        }
+
+        // Asignar los arrays separados al DTO
+        createSaleDto.financingInstallments = lotInstallments;
+        createSaleDto.financingInstallmentsHu = huInstallments.length > 0 ? huInstallments : undefined;
+      }
+
       const {
         clientId,
         lotId,
@@ -177,6 +209,13 @@ export class SalesService {
               financingInstallments,
             } = data;
 
+            // Log para debug
+            console.log('=== VALIDACIÓN DE VENTA ===');
+            console.log('totalAmount:', totalAmount);
+            console.log('totalAmountUrbanDevelopment:', data.totalAmountUrbanDevelopment);
+            console.log('initialAmount:', initialAmount);
+            console.log('reservationAmount:', data.reservationAmount);
+
             this.isValidFinancingDataSale(
               totalAmount,
               data.reservationAmount || 0, // Usar reservationAmount del DTO
@@ -184,6 +223,10 @@ export class SalesService {
               interestRate,
               quantitySaleCoutes,
               financingInstallments,
+              data.totalAmountUrbanDevelopment,
+              data.quantityHuCuotes,
+              data.financingInstallmentsHu,
+              data.firstPaymentDateHu,
             );
 
             const financingData = {
@@ -404,7 +447,7 @@ export class SalesService {
 
   // ACTUALIZAR MÉTODO DE PAGO
   private async isValidDataPaymentSale(
-    sale: SaleResponse,
+    sale: SaleWithCombinedInstallmentsResponse,
     paymentDetails: CreateDetailPaymentDto[],
   ): Promise<CreatePaymentDto> {
     let paymentDto: CreatePaymentDto;
@@ -455,13 +498,13 @@ export class SalesService {
       } else if (sale.type === SaleType.FINANCED) {
         paymentDto = {
           methodPayment: MethodPayment.VOUCHER,
-          amount: sale.financing.initialAmount - reservationAmount,
+          amount: sale.financing.lot.initialAmount - reservationAmount,
           relatedEntityType: 'financing',
           relatedEntityId: sale.financing.id,
           metadata: {
             'Concepto de pago': 'Monto inicial de la venta de lote',
             'Fecha de pago': new Date().toISOString(),
-            'Monto de pago': sale.financing.initialAmount - reservationAmount,
+            'Monto de pago': sale.financing.lot.initialAmount - reservationAmount,
           },
           paymentDetails,
         };
@@ -573,7 +616,7 @@ export class SalesService {
   }
 
   // ACTUALIZAR TODOS LOS MÉTODOS findOne* PARA ELIMINAR RESERVATION JOINS
-  async findOneById(id: string): Promise<SaleResponse> {
+  async findOneById(id: string): Promise<SaleWithCombinedInstallmentsResponse> {
     const sale = await this.saleRepository
       .createQueryBuilder('sale')
       .leftJoinAndSelect('sale.client', 'client')
@@ -584,11 +627,16 @@ export class SalesService {
       .leftJoinAndSelect('block.stage', 'stage')
       .leftJoinAndSelect('stage.project', 'project')
       .leftJoinAndSelect('sale.guarantor', 'guarantor')
-      // ELIMINAR: .leftJoinAndSelect('sale.reservation', 'reservation')
       .leftJoinAndSelect('sale.financing', 'financing')
       .leftJoinAndSelect(
         'financing.financingInstallments',
         'financingInstallments',
+      )
+      .leftJoinAndSelect('sale.urbanDevelopment', 'urbanDevelopment')
+      .leftJoinAndSelect('urbanDevelopment.financing', 'urbanDevelopmentFinancing')
+      .leftJoinAndSelect(
+        'urbanDevelopmentFinancing.financingInstallments',
+        'urbanDevelopmentFinancingInstallments',
       )
       .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
       .leftJoinAndSelect(
@@ -618,24 +666,163 @@ export class SalesService {
 
     // Obtener resumen de pagos
     const paymentsSummary = await this.getPaymentsSummaryForSale(id);
-    let installmentsWithPayments = [];
+
+    // Obtener cuotas del lote con payments
+    let lotInstallmentsWithPayments: InstallmentWithPayments[] = [];
     if (sale.financing)
-      installmentsWithPayments =
+      lotInstallmentsWithPayments =
         await this.financingInstallmentsService.getInstallmentsWithPayments(
           sale.financing.id,
         );
+
+    // Obtener cuotas de HU con payments
+    let huInstallmentsWithPayments: InstallmentWithPayments[] = [];
+    if (sale.urbanDevelopment?.financing)
+      huInstallmentsWithPayments =
+        await this.financingInstallmentsService.getInstallmentsWithPayments(
+          sale.urbanDevelopment.financing.id,
+        );
+
+    // Combinar cuotas por fecha
+    const combinedInstallments = this.combinInstallmentsByDate(
+      lotInstallmentsWithPayments,
+      huInstallmentsWithPayments,
+    );
+
+    // Calcular metadata
+    const lotTotalAmount = lotInstallmentsWithPayments.reduce((sum, inst) => sum + Number(inst.couteAmount), 0);
+    const huTotalAmount = huInstallmentsWithPayments.reduce((sum, inst) => sum + Number(inst.couteAmount), 0);
+
+    const meta = {
+      lotInstallmentsCount: lotInstallmentsWithPayments.length,
+      lotTotalAmount: parseFloat(lotTotalAmount.toFixed(2)),
+      huInstallmentsCount: huInstallmentsWithPayments.length,
+      huTotalAmount: parseFloat(huTotalAmount.toFixed(2)),
+      totalInstallmentsCount: combinedInstallments.length,
+      totalAmount: parseFloat((lotTotalAmount + huTotalAmount).toFixed(2)),
+    };
+
     const formattedSale = formatSaleResponse(sale);
 
     return {
-      ...formattedSale,
-      paymentsSummary,
+      id: formattedSale.id,
+      type: formattedSale.type,
+      totalAmount: formattedSale.totalAmount,
+      contractDate: formattedSale.contractDate,
+      status: formattedSale.status,
+      currency: formattedSale.currency,
+      createdAt: formattedSale.createdAt,
+      reservationAmount: formattedSale.reservationAmount,
+      maximumHoldPeriod: formattedSale.maximumHoldPeriod,
+      fromReservation: formattedSale.fromReservation,
+      client: formattedSale.client,
+      secondaryClients: formattedSale.secondaryClients,
+      lot: formattedSale.lot,
+      radicationPdfUrl: formattedSale.radicationPdfUrl,
+      paymentAcordPdfUrl: formattedSale.paymentAcordPdfUrl,
       financing: sale.financing
         ? {
-            ...formattedSale.financing,
-            financingInstallments: installmentsWithPayments, // Reemplazar cuotas simples con cuotas + pagos
+            id: sale.financing.id,
+            lot: {
+              id: sale.financing.id,
+              initialAmount: sale.financing.initialAmount,
+              interestRate: sale.financing.interestRate,
+              quantityCoutes: sale.financing.quantityCoutes,
+            },
+            urbanDevelopment: sale.urbanDevelopment
+              ? {
+                  id: sale.urbanDevelopment.id,
+                  amount: sale.urbanDevelopment.amount,
+                  initialAmount: sale.urbanDevelopment.initialAmount,
+                  status: sale.urbanDevelopment.status,
+                  financing: sale.urbanDevelopment.financing
+                    ? {
+                        id: sale.urbanDevelopment.financing.id,
+                        initialAmount: sale.urbanDevelopment.financing.initialAmount,
+                        interestRate: sale.urbanDevelopment.financing.interestRate,
+                        quantityCoutes: sale.urbanDevelopment.financing.quantityCoutes,
+                      }
+                    : undefined,
+                }
+              : undefined,
+            installments: combinedInstallments,
+            meta,
           }
         : undefined,
+      guarantor: formattedSale.guarantor,
+      liner: formattedSale.liner,
+      telemarketingSupervisor: formattedSale.telemarketingSupervisor,
+      telemarketingConfirmer: formattedSale.telemarketingConfirmer,
+      telemarketer: formattedSale.telemarketer,
+      fieldManager: formattedSale.fieldManager,
+      fieldSupervisor: formattedSale.fieldSupervisor,
+      fieldSeller: formattedSale.fieldSeller,
+      vendor: formattedSale.vendor,
+      paymentsSummary,
     };
+  }
+
+  // Método privado para combinar cuotas por fecha - MISMO formato que calculateAmortization
+  private combinInstallmentsByDate(
+    lotInstallments: InstallmentWithPayments[],
+    huInstallments: InstallmentWithPayments[],
+  ): CombinedInstallmentWithPayments[] {
+    // Función helper para formatear fecha a YYYY-MM-DD
+    const formatDate = (dateStr: string): string => {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    // Crear mapas por fecha con número de cuota
+    const lotMap = new Map<string, { amount: number; number: number }>();
+    lotInstallments.forEach((inst, index) => {
+      const dateKey = formatDate(inst.expectedPaymentDate);
+      lotMap.set(dateKey, { amount: Number(inst.couteAmount), number: index + 1 });
+    });
+
+    const huMap = new Map<string, { amount: number; number: number }>();
+    huInstallments.forEach((inst, index) => {
+      const dateKey = formatDate(inst.expectedPaymentDate);
+      huMap.set(dateKey, { amount: Number(inst.couteAmount), number: index + 1 });
+    });
+
+    // Obtener todas las fechas únicas y ordenarlas
+    const allDates = new Set<string>([
+      ...Array.from(lotMap.keys()),
+      ...Array.from(huMap.keys()),
+    ]);
+    const sortedDates = Array.from(allDates).filter(d => d).sort();
+
+    // Combinar por fecha - EXACTAMENTE como el cálculo de amortización
+    const combined: CombinedInstallmentWithPayments[] = [];
+    for (const date of sortedDates) {
+      const lotData = lotMap.get(date);
+      const huData = huMap.get(date);
+
+      const lotInstallmentAmount = lotData ? lotData.amount : null;
+      const lotInstallmentNumber = lotData ? lotData.number : null;
+      const huInstallmentAmount = huData ? huData.amount : null;
+      const huInstallmentNumber = huData ? huData.number : null;
+
+      const totalInstallmentAmount = parseFloat(
+        ((lotInstallmentAmount || 0) + (huInstallmentAmount || 0)).toFixed(2)
+      );
+
+      combined.push({
+        lotInstallmentAmount,
+        lotInstallmentNumber,
+        huInstallmentAmount,
+        huInstallmentNumber,
+        expectedPaymentDate: date,
+        totalInstallmentAmount,
+      });
+    }
+
+    return combined;
   }
 
   async findOneByIdWithCollections(id: string): Promise<SaleResponse> {
@@ -653,6 +840,12 @@ export class SalesService {
       .leftJoinAndSelect(
         'financing.financingInstallments',
         'financingInstallments',
+      )
+      .leftJoinAndSelect('sale.urbanDevelopment', 'urbanDevelopment')
+      .leftJoinAndSelect('urbanDevelopment.financing', 'urbanDevelopmentFinancing')
+      .leftJoinAndSelect(
+        'urbanDevelopmentFinancing.financingInstallments',
+        'urbanDevelopmentFinancingInstallments',
       )
       .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
       .leftJoinAndSelect(
@@ -673,6 +866,14 @@ export class SalesService {
         await this.financingInstallmentsService.getInstallmentsWithPayments(
           sale.financing.id,
         );
+
+    let huInstallmentsWithPayments = [];
+    if (sale.urbanDevelopment?.financing)
+      huInstallmentsWithPayments =
+        await this.financingInstallmentsService.getInstallmentsWithPayments(
+          sale.urbanDevelopment.financing.id,
+        );
+
     const formattedSale = formatSaleResponse(sale);
 
     return {
@@ -681,6 +882,17 @@ export class SalesService {
         ? {
             ...formattedSale.financing,
             financingInstallments: installmentsWithPayments, // Reemplazar cuotas simples con cuotas + pagos
+          }
+        : undefined,
+      urbanDevelopment: sale.urbanDevelopment
+        ? {
+            ...formattedSale.urbanDevelopment,
+            financing: sale.urbanDevelopment.financing
+              ? {
+                  ...formattedSale.urbanDevelopment.financing,
+                  financingInstallments: huInstallmentsWithPayments,
+                }
+              : undefined,
           }
         : undefined,
     };
@@ -776,7 +988,7 @@ export class SalesService {
   async assignParticipantsToSale(
     saleId: string,
     assignParticipantsDto: AssignParticipantsToSaleDto,
-  ): Promise<SaleResponse> {
+  ): Promise<SaleWithCombinedInstallmentsResponse> {
     try {
       // Mapeo de campos DTO a validaciones de tipo
       const participantValidations = [
@@ -1008,32 +1220,20 @@ export class SalesService {
 
   calculateAmortization(
     calculateAmortizationDto: CalculateAmortizationDto,
-  ): CalculateAmortizationResponse {
-    const installments = this.financingService.generateAmortizationTable(
+  ): CombinedAmortizationResponse {
+    // Usar el nuevo método combinado que incluye lote + HU
+    return this.financingService.generateCombinedAmortizationTable(
       calculateAmortizationDto.totalAmount,
       calculateAmortizationDto.initialAmount,
       calculateAmortizationDto.reservationAmount,
       calculateAmortizationDto.interestRate,
       calculateAmortizationDto.numberOfPayments,
       calculateAmortizationDto.firstPaymentDate,
-      calculateAmortizationDto.includeDecimals,
+      calculateAmortizationDto.includeDecimals ?? true,
+      calculateAmortizationDto.totalAmountHu,
+      calculateAmortizationDto.numberOfPaymentsHu,
+      calculateAmortizationDto.firstPaymentDateHu,
     );
-    const totalCouteAmountSum = installments.reduce(
-      (sum, installment) => sum + installment.couteAmount,
-      0,
-    );
-    return {
-      installments: installments.map((installment) => {
-        const { couteAmount, expectedPaymentDate } = installment;
-        return {
-          couteAmount: couteAmount,
-          expectedPaymentDate: expectedPaymentDate,
-        };
-      }),
-      meta: {
-        totalCouteAmountSum,
-      },
-    };
   }
 
   async createPaymentSale(
@@ -1078,10 +1278,7 @@ export class SalesService {
       throw new BadRequestException(
         'La fecha de pago inicial de la habilitación urbana es requerida',
       );
-    if (!initialAmount)
-      throw new BadRequestException(
-        'El monto inicial de la habilitación urbana es requerido',
-      );
+    // El inicial de HU siempre es 0, no se valida
     if (!quantityHuCuotes)
       throw new BadRequestException(
         'El número de cuotas de la habilitación urbana es requerida',
@@ -1103,22 +1300,14 @@ export class SalesService {
   }
 
   private calculateAndCreateFinancingHu(saleDto: CreateSaleDto | UpdateSaleDto) {
-    const financingInstallmentsHu = this.calculateAmortization({
-      totalAmount: saleDto.totalAmountUrbanDevelopment,
-      initialAmount: saleDto.initialAmountUrbanDevelopment,
-      reservationAmount: 0,
-      interestRate: 0,
-      numberOfPayments: saleDto.quantityHuCuotes,
-      firstPaymentDate: saleDto.firstPaymentDateHu,
-    });
-
+    // Las cuotas de HU ahora vienen desde el frontend, no se calculan aquí
     return {
       financingType: FinancingType.CREDITO,
-      initialAmount: saleDto.initialAmountUrbanDevelopment,
+      initialAmount: saleDto.initialAmountUrbanDevelopment || 0,
       interestRate: 0,
       quantityCoutes: saleDto.quantityHuCuotes,
       initialPaymentDate: saleDto.firstPaymentDateHu,
-      financingInstallments: financingInstallmentsHu.installments,
+      financingInstallments: saleDto.financingInstallmentsHu || [],
     };
   }
 
@@ -1146,9 +1335,12 @@ export class SalesService {
     interestRate: number,
     quantitySaleCoutes: number,
     financingInstallments: CreateFinancingInstallmentsDto[],
+    totalAmountHu?: number,
+    quantityHuCoutes?: number,
+    financingInstallmentsHu?: CreateFinancingInstallmentsDto[],
+    firstPaymentDateHu?: string,
   ): void {
-    // if (!initialAmount)
-    //   throw new BadRequestException('El monto inicial de la financiación es requerido');
+    // Validaciones básicas del lote
     if (!interestRate)
       throw new BadRequestException('El porcentaje de interés es requerido');
     if (!quantitySaleCoutes)
@@ -1160,10 +1352,19 @@ export class SalesService {
         `El número de cuotas enviadas (${financingInstallments.length}) no coincide con la cantidad de cuotas esperada (${quantitySaleCoutes}).`,
       );
 
+    // Validar cuotas del lote
     const sumOfInstallmentAmounts = financingInstallments.reduce(
       (sum, installment) => sum + installment.couteAmount,
       0,
     );
+
+    console.log('=== VALIDACIÓN CUOTAS LOTE ===');
+    console.log('totalAmount (debe ser SOLO del lote):', totalAmount);
+    console.log('initialAmount:', initialAmount);
+    console.log('reservationAmount:', reservationAmount);
+    console.log('Principal a financiar (totalAmount - initial - reservation):', totalAmount - initialAmount - reservationAmount);
+    console.log('Suma de cuotas enviadas:', sumOfInstallmentAmounts);
+
     const calculatedAmortization =
       this.financingService.generateAmortizationTable(
         totalAmount,
@@ -1180,10 +1381,53 @@ export class SalesService {
       0,
     );
 
-    if (Math.abs(sumOfInstallmentAmounts - expectedTotalAmortizedAmount) > 0.01)
+    console.log('Suma esperada según cálculo:', expectedTotalAmortizedAmount);
+    console.log('Diferencia:', Math.abs(sumOfInstallmentAmounts - expectedTotalAmortizedAmount));
+
+    if (Math.abs(sumOfInstallmentAmounts - expectedTotalAmortizedAmount) > 1.00)
       throw new BadRequestException(
-        `La suma de los montos de las cuotas enviadas (${sumOfInstallmentAmounts.toFixed(2)}) no coincide con el monto total esperado según la amortización (${expectedTotalAmortizedAmount.toFixed(2)}).`,
+        `[LOTE] La suma de los montos de las cuotas del lote enviadas (${sumOfInstallmentAmounts.toFixed(2)}) no coincide con el monto total esperado según la amortización (${expectedTotalAmortizedAmount.toFixed(2)}). Diferencia: ${Math.abs(sumOfInstallmentAmounts - expectedTotalAmortizedAmount).toFixed(2)}. Verifica que totalAmount sea SOLO del lote (sin incluir HU).`,
       );
+
+    // Validar cuotas de HU si existen
+    if (totalAmountHu && totalAmountHu > 0) {
+      if (!quantityHuCoutes)
+        throw new BadRequestException('La cantidad de cuotas de HU es requerida');
+      if (!financingInstallmentsHu || financingInstallmentsHu.length === 0)
+        throw new BadRequestException('Las cuotas de HU son requeridas');
+      if (financingInstallmentsHu.length !== quantityHuCoutes)
+        throw new BadRequestException(
+          `El número de cuotas de HU enviadas (${financingInstallmentsHu.length}) no coincide con la cantidad de cuotas esperada (${quantityHuCoutes}).`,
+        );
+
+      // Validar suma de cuotas de HU
+      const sumOfHuInstallmentAmounts = financingInstallmentsHu.reduce(
+        (sum, installment) => sum + installment.couteAmount,
+        0,
+      );
+
+      // Generar amortización de HU (sin inicial, sin interés)
+      const calculatedHuAmortization =
+        this.financingService.generateAmortizationTable(
+          totalAmountHu,
+          0, // Sin inicial
+          0, // Sin reserva
+          0, // Sin interés
+          quantityHuCoutes,
+          firstPaymentDateHu || financingInstallmentsHu[0]?.expectedPaymentDate.toString(),
+          true,
+        );
+
+      const expectedTotalHuAmount = calculatedHuAmortization.reduce(
+        (sum, inst) => sum + inst.couteAmount,
+        0,
+      );
+
+      if (Math.abs(sumOfHuInstallmentAmounts - expectedTotalHuAmount) > 1.00)
+        throw new BadRequestException(
+          `[HU] La suma de los montos de las cuotas de HU enviadas (${sumOfHuInstallmentAmounts.toFixed(2)}) no coincide con el monto total esperado según la amortización (${expectedTotalHuAmount.toFixed(2)}). Diferencia: ${Math.abs(sumOfHuInstallmentAmounts - expectedTotalHuAmount).toFixed(2)}.`,
+        );
+    }
   }
 
   async updateReservationPeriod(
@@ -1328,8 +1572,36 @@ export class SalesService {
     id: string,
     updateSaleDto: UpdateSaleDto,
     userId: string,
-  ): Promise<SaleResponse> {
+  ): Promise<SaleWithCombinedInstallmentsResponse> {
     try {
+      // Separar el array combinado en dos arrays: lote y HU
+      if (updateSaleDto.combinedInstallments && updateSaleDto.combinedInstallments.length > 0) {
+        const lotInstallments: CreateFinancingInstallmentsDto[] = [];
+        const huInstallments: CreateFinancingInstallmentsDto[] = [];
+
+        for (const combined of updateSaleDto.combinedInstallments) {
+          // Agregar cuota de lote si existe
+          if (combined.lotInstallmentAmount !== null && combined.lotInstallmentAmount !== undefined) {
+            lotInstallments.push({
+              couteAmount: combined.lotInstallmentAmount,
+              expectedPaymentDate: combined.expectedPaymentDate,
+            });
+          }
+
+          // Agregar cuota de HU si existe
+          if (combined.huInstallmentAmount !== null && combined.huInstallmentAmount !== undefined) {
+            huInstallments.push({
+              couteAmount: combined.huInstallmentAmount,
+              expectedPaymentDate: combined.expectedPaymentDate,
+            });
+          }
+        }
+
+        // Asignar los arrays separados al DTO
+        updateSaleDto.financingInstallments = lotInstallments;
+        updateSaleDto.financingInstallmentsHu = huInstallments.length > 0 ? huInstallments : undefined;
+      }
+
       // Buscar la venta existente con todas sus relaciones
       const existingSale = await this.saleRepository.findOne({
         where: { id },
@@ -1408,6 +1680,10 @@ export class SalesService {
               updateSaleDto.interestRate,
               updateSaleDto.quantitySaleCoutes,
               updateSaleDto.financingInstallments,
+              updateSaleDto.totalAmountUrbanDevelopment || existingSale.urbanDevelopment?.amount,
+              updateSaleDto.quantityHuCuotes,
+              updateSaleDto.financingInstallmentsHu,
+              updateSaleDto.firstPaymentDateHu,
             );
             // Crear nuevo financiamiento
             const financingData = {
@@ -1448,6 +1724,10 @@ export class SalesService {
               updateSaleDto.interestRate,
               updateSaleDto.quantitySaleCoutes,
               updateSaleDto.financingInstallments,
+              updateSaleDto.totalAmountUrbanDevelopment || existingSale.urbanDevelopment?.amount,
+              updateSaleDto.quantityHuCuotes,
+              updateSaleDto.financingInstallmentsHu,
+              updateSaleDto.firstPaymentDateHu,
             );
             if (existingSale.financing) {
               // Actualizar financiamiento existente

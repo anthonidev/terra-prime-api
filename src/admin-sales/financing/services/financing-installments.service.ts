@@ -257,7 +257,7 @@ export class FinancingInstallmentsService {
       couteAmount: installment.couteAmount,
       coutePaid: 0, // Empezamos desde 0 para simular
       coutePending: installment.couteAmount,
-      expectedPaymentDate: installment.expectedPaymentDate,
+      expectedPaymentDate: installment.expectedPaymentDate.toDateString(),
       lateFeeAmountPending: installment.lateFeeAmountPending,
       lateFeeAmountPaid: 0,
       status: installment.status,

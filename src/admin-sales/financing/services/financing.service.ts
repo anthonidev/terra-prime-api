@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Financing } from '../entities/financing.entity';
 import { QueryRunner, Repository } from 'typeorm';
 import { CreateFinancingInstallmentsDto } from '../dto/create-financing-installments.dto';
+import { CombinedAmortizationResponse, CombinedInstallment } from '../interfaces/combined-amortization-response.interface';
 
 @Injectable()
 export class FinancingService {
@@ -109,21 +110,126 @@ export class FinancingService {
         expectedPaymentDate: formattedDate,
       });
     }
-    // --- Lógica de ajuste final en la última cuota (SOLO si no incluye decimales) ---
-    if (!includeDecimals && numberOfPayments > 0) {
-        let sumOfCalculatedInstallments = installments.reduce((sum, inst) => sum + inst.couteAmount, 0);
-        let totalExpectedPaymentWithFullDecimals = calculatedMonthlyPayment * numberOfPayments;
 
-        let adjustmentNeeded = totalExpectedPaymentWithFullDecimals - sumOfCalculatedInstallments;
+    // --- Lógica de ajuste final en la última cuota ---
+    // Ajustar solo errores de redondeo, no cambiar el monto total esperado
+    if (numberOfPayments > 0) {
+      const sumOfCalculatedInstallments = installments.reduce((sum, inst) => sum + inst.couteAmount, 0);
 
-        if (Math.abs(adjustmentNeeded) > 0.005) {
-          let lastCouteAmount = installments[numberOfPayments - 1].couteAmount;
-          // ✅ Añadir el ajuste y dejarlo con decimales
-          installments[numberOfPayments - 1].couteAmount = parseFloat((lastCouteAmount + adjustmentNeeded).toFixed(2));
-        }
+      // El monto total esperado es la cuota teórica multiplicada por el número de pagos
+      const expectedTotal = calculatedMonthlyPayment * numberOfPayments;
+
+      const adjustmentNeeded = expectedTotal - sumOfCalculatedInstallments;
+
+      // Si hay diferencia por redondeos (pequeña), ajustar la última cuota
+      if (Math.abs(adjustmentNeeded) > 0.001) {
+        const lastCouteAmount = installments[numberOfPayments - 1].couteAmount;
+        installments[numberOfPayments - 1].couteAmount = parseFloat((lastCouteAmount + adjustmentNeeded).toFixed(2));
+      }
     }
-    
+
     return installments;
+  }
+
+  generateCombinedAmortizationTable(
+    totalAmount: number,
+    initialAmount: number,
+    reservationAmount: number,
+    interestRate: number,
+    numberOfPayments: number,
+    firstPaymentDate: string | Date,
+    includeDecimals: boolean = true,
+    totalAmountHu?: number,
+    numberOfPaymentsHu?: number,
+    firstPaymentDateHu?: string | Date,
+  ): CombinedAmortizationResponse {
+    // 1. Generar cuotas del lote
+    const lotInstallments = this.generateAmortizationTable(
+      totalAmount,
+      initialAmount,
+      reservationAmount,
+      interestRate,
+      numberOfPayments,
+      firstPaymentDate,
+      includeDecimals,
+    );
+
+    // 2. Generar cuotas de HU si existen los parámetros
+    let huInstallments: CreateFinancingInstallmentsDto[] = [];
+    if (totalAmountHu && numberOfPaymentsHu && firstPaymentDateHu) {
+      // HU no tiene inicial ni interés
+      huInstallments = this.generateAmortizationTable(
+        totalAmountHu,
+        0, // Sin inicial
+        0, // Sin reserva
+        0, // Sin interés
+        numberOfPaymentsHu,
+        firstPaymentDateHu,
+        includeDecimals,
+      );
+    }
+
+    // 3. Combinar ambos arrays sincronizando por fecha
+    const combinedInstallments: CombinedInstallment[] = [];
+
+    // Crear un mapa para acceder rápidamente a las cuotas de HU por fecha
+    const huMap = new Map<string, { amount: number; number: number }>();
+    huInstallments.forEach((hu, index) => {
+      huMap.set(hu.expectedPaymentDate, { amount: hu.couteAmount, number: index + 1 });
+    });
+
+    // Crear un mapa para las cuotas de lote
+    const lotMap = new Map<string, { amount: number; number: number }>();
+    lotInstallments.forEach((lot, index) => {
+      lotMap.set(lot.expectedPaymentDate, { amount: lot.couteAmount, number: index + 1 });
+    });
+
+    // Obtener todas las fechas únicas ordenadas
+    const allDates = new Set<string>([
+      ...lotInstallments.map(i => i.expectedPaymentDate),
+      ...huInstallments.map(i => i.expectedPaymentDate),
+    ]);
+    const sortedDates = Array.from(allDates).sort();
+
+    // Para cada fecha, crear el installment combinado
+    for (const date of sortedDates) {
+      const lotData = lotMap.get(date);
+      const huData = huMap.get(date);
+
+      const lotInstallmentAmount = lotData ? lotData.amount : null;
+      const lotInstallmentNumber = lotData ? lotData.number : null;
+      const huInstallmentAmount = huData ? huData.amount : null;
+      const huInstallmentNumber = huData ? huData.number : null;
+
+      const totalInstallmentAmount = (lotInstallmentAmount || 0) + (huInstallmentAmount || 0);
+
+      combinedInstallments.push({
+        lotInstallmentAmount,
+        lotInstallmentNumber,
+        huInstallmentAmount,
+        huInstallmentNumber,
+        expectedPaymentDate: date,
+        totalInstallmentAmount: parseFloat(totalInstallmentAmount.toFixed(2)),
+      });
+    }
+
+    // 4. Calcular metadata
+    const lotTotalAmount = lotInstallments.reduce((sum, inst) => sum + inst.couteAmount, 0);
+    const huTotalAmount = huInstallments.reduce((sum, inst) => sum + inst.couteAmount, 0);
+
+    const meta = {
+      lotInstallmentsCount: lotInstallments.length,
+      lotTotalAmount: parseFloat(lotTotalAmount.toFixed(2)),
+      huInstallmentsCount: huInstallments.length,
+      huTotalAmount: parseFloat(huTotalAmount.toFixed(2)),
+      totalInstallmentsCount: combinedInstallments.length,
+      totalAmount: parseFloat((lotTotalAmount + huTotalAmount).toFixed(2)),
+    };
+
+    return {
+      installments: combinedInstallments,
+      meta,
+    };
   }
 
   // Internal helpers methods
@@ -220,10 +326,10 @@ export class FinancingService {
   }
 
   async remove(id: string, queryRunner?: QueryRunner): Promise<void> {
-    const repository = queryRunner
+    const financingRepository = queryRunner
       ? queryRunner.manager.getRepository(Financing)
       : this.financingRepository;
-    const financing = await repository.findOne({
+    const financing = await financingRepository.findOne({
       where: { id },
       relations: ['financingInstallments'],
     });
@@ -231,7 +337,18 @@ export class FinancingService {
       throw new NotFoundException(
         `El financiamiento con ID ${id} no se encuentra registrado`,
       );
-    // Las cuotas se eliminarán automáticamente por cascade
-    await repository.remove(financing);
+
+    // Eliminar manualmente las cuotas primero para evitar conflictos de FK
+    if (financing.financingInstallments && financing.financingInstallments.length > 0) {
+      const installmentsRepository = queryRunner
+        ? queryRunner.manager.getRepository('FinancingInstallments')
+        : this.financingRepository.manager.getRepository('FinancingInstallments');
+      await installmentsRepository.delete({
+        financing: { id },
+      });
+    }
+
+    // Ahora eliminar el financing
+    await financingRepository.remove(financing);
   }
 }

@@ -4,6 +4,7 @@ import { plainToInstance, Transform, Type } from "class-transformer";
 import { MethodPayment } from "src/admin-payments/payments/enums/method-payment.enum";
 import { CreateDetailPaymentDto } from "src/admin-payments/payments/dto/create-detail-payment.dto";
 import { CreateFinancingInstallmentsDto } from "src/admin-sales/financing/dto/create-financing-installments.dto";
+import { CombinedInstallmentDto } from "src/admin-sales/financing/dto/combined-installment.dto";
 
 export class CreateSaleDto {
 	@IsUUID('4', { message: 'El identificador del lote tiene que ser un UUID válido' })
@@ -113,8 +114,12 @@ export class CreateSaleDto {
 	@IsOptional()
 	@IsArray()
   @ValidateNested({ each: true })
-  @Type(() => CreateFinancingInstallmentsDto)
+  @Type(() => CombinedInstallmentDto)
+	combinedInstallments?: CombinedInstallmentDto[];
+
+	// Campos internos generados por el backend (no enviados por el frontend)
 	financingInstallments?: CreateFinancingInstallmentsDto[];
+	financingInstallmentsHu?: CreateFinancingInstallmentsDto[];
 
 	@IsOptional()
   @IsNumber({}, { message: 'El monto de reserva debe ser un número válido' })

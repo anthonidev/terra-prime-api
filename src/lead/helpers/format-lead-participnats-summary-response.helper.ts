@@ -19,14 +19,21 @@ export const formatLeadWithParticipantsSummary = (lead: Lead) => {
     ...leadData
   } = lead;
 
-  // Get reportPdfUrl from last visit
-  const lastVisit = visits && visits.length > 0 ? visits[0] : null;
+  // Get reportPdfUrl from visit with the latest createdAt date
+  let reportPdfUrl = null;
+  if (visits && visits.length > 0) {
+    const latestVisit = visits.reduce((latest, current) => {
+      if (!latest) return current;
+      return new Date(current.createdAt) > new Date(latest.createdAt) ? current : latest;
+    }, visits[0]);
+    reportPdfUrl = latestVisit?.reportPdfUrl || null;
+  }
 
   return {
     ...leadData,
     source: formatSource(source),
     ubigeo: formatUbigeo(ubigeo),
     vendor: formatVendor(vendor),
-    reportPdfUrl: lastVisit?.reportPdfUrl || null,
+    reportPdfUrl,
   };
 };

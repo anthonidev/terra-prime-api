@@ -77,6 +77,37 @@ export function formatSaleResponse(sale: Sale) {
           return dateA.getTime() - dateB.getTime();
         }),
     } : null,
+    urbanDevelopment: sale.urbanDevelopment ? {
+      id: sale.urbanDevelopment.id,
+      amount: sale.urbanDevelopment.amount,
+      initialAmount: sale.urbanDevelopment.initialAmount,
+      status: sale.urbanDevelopment.status,
+      financing: sale.urbanDevelopment.financing ? {
+        id: sale.urbanDevelopment.financing.id,
+        initialAmount: sale.urbanDevelopment.financing.initialAmount,
+        interestRate: sale.urbanDevelopment.financing.interestRate,
+        quantityCoutes: sale.urbanDevelopment.financing.quantityCoutes,
+        financingInstallments: sale.urbanDevelopment.financing.financingInstallments
+          .map((installment) => ({
+            id: installment.id,
+            couteAmount: installment.couteAmount,
+            coutePending: installment.coutePending,
+            coutePaid: installment.coutePaid,
+            expectedPaymentDate: installment.expectedPaymentDate?.toISOString(),
+            lateFeeAmountPending: installment.lateFeeAmountPending,
+            lateFeeAmountPaid: installment.lateFeeAmountPaid,
+            status: installment.status,
+          }))
+          .sort((a, b) => {
+            const dateA = a.expectedPaymentDate ? new Date(a.expectedPaymentDate) : null;
+            const dateB = b.expectedPaymentDate ? new Date(b.expectedPaymentDate) : null;
+            if (dateA === null && dateB !== null) return 1;
+            if (dateB === null && dateA !== null) return -1;
+            if (dateA === null && dateB === null) return 0;
+            return dateA.getTime() - dateB.getTime();
+          }),
+      } : undefined,
+    } : undefined,
     // Participantes
     liner: sale.liner ? {
       firstName: sale.liner.firstName,
