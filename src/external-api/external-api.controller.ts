@@ -52,14 +52,7 @@ export class ExternalApiController {
 
   @Post('calculate/amortization')
   async calculateAmortization(@Body() calculateDto: CalculateAmortizationDto) {
-    return this.externalApiService.calculeAmortization(
-      calculateDto.totalAmount,
-      calculateDto.initialAmount,
-      calculateDto.reservationAmount,
-      calculateDto.interestRate,
-      calculateDto.numberOfPayments,
-      calculateDto.firstPaymentDate,
-    );
+    return this.externalApiService.calculeAmortization(calculateDto);
   }
 
   @Post('leads')

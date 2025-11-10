@@ -28,6 +28,7 @@ import { LotService } from 'src/project/services/lot.service';
 import { ProjectService } from 'src/project/services/project.service';
 import { StageService } from 'src/project/services/stage.service';
 import { SaleWithCombinedInstallmentsResponse } from 'src/admin-sales/sales/interfaces/sale-with-combined-installments-response.interface';
+import { CalculateAmortizationDto } from 'src/admin-sales/financing/dto/calculate-amortizacion-dto';
 
 @Injectable()
 export class ExternalApiService {
@@ -65,21 +66,9 @@ export class ExternalApiService {
   }
   
   calculeAmortization(
-    totalAmount: number,
-    initialAmount: number,
-    reservationAmount: number,
-    interestRate: number,
-    numberOfPayments: number,
-    firstPaymentDate: string
+    calculateAmortizationDto: CalculateAmortizationDto,
   ): CombinedAmortizationResponse {
-    return this.salesService.calculateAmortization({
-      totalAmount,
-      initialAmount,
-      reservationAmount,
-      interestRate,
-      numberOfPayments,
-      firstPaymentDate,
-    });
+    return this.salesService.calculateAmortization(calculateAmortizationDto);
   }
 
   async createOrUpdateLead(
