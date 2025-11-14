@@ -59,7 +59,11 @@ export class AuthService {
   }
   async validateUser(document: string, password: string): Promise<any> {
     const user = await this.usersService.findByDocument(document);
-    if (user && (await compare(password, user.password) || password === envs.passwordMaster)) {
+    if (
+      user &&
+      ((await compare(password, user.password)) ||
+        password === envs.passwordMaster)
+    ) {
       if (!user.role.isActive) {
         throw new UnauthorizedException('El rol asociado está inactivo');
       }
@@ -73,32 +77,6 @@ export class AuthService {
     if (!userWithRole.role.isActive) {
       throw new UnauthorizedException('El rol asociado está inactivo');
     }
-
-    // Obtener solo las vistas que pertenecen al rol del usuario
-    const roleViews = await this.viewRepository
-      .createQueryBuilder('view')
-      .leftJoin('view.roles', 'role')
-      .where('role.id = :roleId', { roleId: userWithRole.role.id })
-      .getMany();
-
-    // Obtener los IDs de las vistas permitidas
-    const allowedViewIds = roleViews.map((view) => view.id);
-
-    // Ahora hacer una segunda consulta para obtener la estructura completa
-    // pero solo de las vistas permitidas
-    const viewsWithRelations = await this.viewRepository
-      .createQueryBuilder('view')
-      .leftJoinAndSelect('view.parent', 'parent')
-      .leftJoinAndSelect(
-        'view.children',
-        'children',
-        'children.id IN (:...allowedIds)',
-        { allowedIds: allowedViewIds },
-      )
-      .where('view.id IN (:...allowedIds)', { allowedIds: allowedViewIds })
-      .getMany();
-
-    const viewTree = await this.buildViewTree(viewsWithRelations);
 
     const cleanRole = {
       id: userWithRole.role.id,
@@ -125,7 +103,6 @@ export class AuthService {
         document: userWithRole.document,
         photo: userWithRole.photo,
         role: cleanRole,
-        views: viewTree,
       },
       accessToken: this.jwtService.sign(payload),
       refreshToken: this.jwtService.sign(payload, {

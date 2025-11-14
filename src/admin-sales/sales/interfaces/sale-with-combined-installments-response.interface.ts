@@ -1,7 +1,7 @@
-import { CurrencyType } from "src/project/entities/project.entity";
-import { CombinedInstallmentWithPayments } from "./combined-installment-with-payments.interface";
-import { StatusPayment } from "src/admin-payments/payments/enums/status-payments.enum";
-import { AmortizationMetadata } from "src/admin-sales/financing/interfaces/combined-amortization-response.interface";
+import { CurrencyType } from 'src/project/entities/project.entity';
+import { CombinedInstallmentWithPayments } from './combined-installment-with-payments.interface';
+import { StatusPayment } from 'src/admin-payments/payments/enums/status-payments.enum';
+import { AmortizationMetadata } from 'src/admin-sales/financing/interfaces/combined-amortization-response.interface';
 
 export interface SaleWithCombinedInstallmentsResponse {
   id: string;

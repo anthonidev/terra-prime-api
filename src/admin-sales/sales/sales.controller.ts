@@ -109,7 +109,7 @@ export class SalesController {
   }
 
   @Get('projects/actives')
-  @Roles('JVE', 'VEN', 'ADM','REC')
+  @Roles('JVE', 'VEN', 'ADM', 'REC')
   findAllActiveProjects() {
     return this.salesService.findAllActiveProjects();
   }

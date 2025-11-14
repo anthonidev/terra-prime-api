@@ -57,7 +57,7 @@ export class ParticipantsController {
   }
 
   @Get('all/actives')
-  @Roles('JVE', 'SYS')
+  @Roles('JVE', 'SYS', 'REC')
   async findAllParticipants(
     @Query() findParticipantsDto: FindParticipantsActivesDto,
   ) {
