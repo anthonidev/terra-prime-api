@@ -70,4 +70,44 @@ export class UbigeoService {
 
     return await queryBuilder.getMany();
   }
+
+  async getUbigeoByCode(code: string) {
+    if (!code) return null;
+
+    const ubigeo = await this.ubigeoRepository.findOne({
+      where: { code },
+      relations: ['parent', 'parent.parent'],
+    });
+
+    if (!ubigeo) return null;
+
+    // Si no tiene padre, es un departamento
+    if (!ubigeo.parent) {
+      return {
+        departamento: ubigeo.name,
+        provincia: null,
+        distrito: null,
+      };
+    }
+
+    // Si tiene padre pero el padre no tiene padre, es una provincia
+    if (ubigeo.parent && !ubigeo.parent.parent) {
+      return {
+        departamento: ubigeo.parent.name,
+        provincia: ubigeo.name,
+        distrito: null,
+      };
+    }
+
+    // Si tiene padre y el padre tiene padre, es un distrito
+    if (ubigeo.parent && ubigeo.parent.parent) {
+      return {
+        departamento: ubigeo.parent.parent.name,
+        provincia: ubigeo.parent.name,
+        distrito: ubigeo.name,
+      };
+    }
+
+    return null;
+  }
 }
