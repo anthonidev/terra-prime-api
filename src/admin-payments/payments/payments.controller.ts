@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, ParseIntPipe } from '@nestjs/common';
 import { UpdatePaymentDto } from './dto/update-payment.dto';
+import { UpdateDetailPaymentDto } from './dto/update-detail-payment.dto';
 import { PaymentsService } from './services/payments.service';
+import { PaymentsDetailService } from './services/payments-detail.service';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/user/entities/user.entity';
@@ -14,7 +16,10 @@ import { CompletePaymentDto } from './dto/complete-payment.dto';
 @Controller('payments')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(
+    private readonly paymentsService: PaymentsService,
+    private readonly paymentsDetailService: PaymentsDetailService,
+  ) {}
 
   @Post('approve/:id')
   @Roles('FAC')
@@ -64,5 +69,22 @@ export class PaymentsController {
       user.id,
       completePaymentDto,
     );
+  }
+
+  @Patch('details/:id')
+  @Roles('FAC')
+  async updatePaymentDetail(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateDetailPaymentDto: UpdateDetailPaymentDto,
+  ) {
+    return this.paymentsDetailService.update(id, updateDetailPaymentDto);
+  }
+
+  @Patch('details/:id/deactivate')
+  @Roles('FAC')
+  async deactivatePaymentDetail(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.paymentsDetailService.deactivate(id);
   }
 }

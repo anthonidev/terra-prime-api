@@ -77,6 +77,54 @@ export class Sale extends Timestamped {
   reservationAmount?: number;
 
   @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value),
+    },
+  })
+  reservationAmountPaid: number;
+
+  @Column({
+    type: 'decimal',
+    nullable: true,
+    precision: 10,
+    scale: 2,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value),
+    },
+  })
+  reservationAmountPending?: number;
+
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value),
+    },
+  })
+  totalAmountPaid: number;
+
+  @Column({
+    type: 'decimal',
+    nullable: true,
+    precision: 10,
+    scale: 2,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value),
+    },
+  })
+  totalAmountPending?: number;
+
+  @Column({
     type: 'int',
     nullable: true,
   })

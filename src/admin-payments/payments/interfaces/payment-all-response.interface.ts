@@ -14,7 +14,6 @@ export interface PaymentAllResponse {
   createdAt: Date;
   reviewedAt?: Date;
   reviewBy?: ReviewByBasic | null;
-  codeOperation?: string;
   banckName?: string;
   dateOperation?: Date;
   numberTicket?: string;
@@ -30,6 +29,8 @@ export interface PaymentAllResponse {
     amount: number;
     bankName: string;
     transactionReference: string;
+    codeOperation?: string;
     transactionDate: Date;
+    isActive: boolean;
   }[];
 }

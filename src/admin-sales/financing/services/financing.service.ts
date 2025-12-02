@@ -15,13 +15,20 @@ export class FinancingService {
   async create(
     createFinancingDto: CreateFinancingDto,
     queryRunner?: QueryRunner,
+    reservationAmount?: number,
   ) {
     const repository = queryRunner
       ? queryRunner.manager.getRepository(Financing)
       : this.financingRepository;
     const { financingInstallments, ...restData } = createFinancingDto;
+
+    // Calcular el monto pendiente de la inicial
+    const initialToPay = Number((Number(restData.initialAmount) - Number(reservationAmount || 0)).toFixed(2));
+
     const financing = repository.create({
       ...restData,
+      initialAmountPaid: 0,
+      initialAmountPending: initialToPay,
       financingInstallments: financingInstallments.map((financingInstallment) => {
         const { couteAmount, expectedPaymentDate } = financingInstallment;
         return {

@@ -325,7 +325,6 @@ export class FinancingInstallmentsService {
               amountAppliedToPrincipal: amountAppliedToPrincipal,
               paymentDate: payment.createdAt,
               paymentStatus: payment.status,
-              codeOperation: payment.codeOperation,
               banckName: payment.banckName,
               dateOperation: payment.dateOperation,
               numberTicket: payment.numberTicket

@@ -5,7 +5,6 @@ export interface PaymentContribution {
   amountAppliedToPrincipal: number;
   paymentDate: string;
   paymentStatus: string;
-  codeOperation?: string;
   banckName?: string;
   dateOperation?: string;
   numberTicket?: string;

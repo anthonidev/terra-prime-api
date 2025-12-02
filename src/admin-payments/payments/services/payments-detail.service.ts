@@ -2,7 +2,8 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { PaymentDetails } from "../entities/payment-details.entity";
 import { QueryRunner, Repository } from "typeorm";
 import { CreateDetailPaymentDto } from "../dto/create-detail-payment.dto";
-import { BadRequestException } from "@nestjs/common";
+import { UpdateDetailPaymentDto } from "../dto/update-detail-payment.dto";
+import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { AwsS3Service } from '../../../files/aws-s3.service';
 
 export class PaymentsDetailService {
@@ -33,6 +34,7 @@ export class PaymentsDetailService {
         amount: detailDto.amount,
         bankName: detailDto.bankName,
         transactionReference: detailDto.transactionReference,
+        codeOperation: detailDto.codeOperation,
         transactionDate: new Date(detailDto.transactionDate),
         isActive: true,
       });
@@ -63,5 +65,55 @@ export class PaymentsDetailService {
         console.error(`Error deleting payment detail ${detailId} and S3 file ${urlKey}:`, error);
         throw error;
     }
+  }
+
+  async update(
+    detailId: number,
+    updateDto: UpdateDetailPaymentDto,
+    queryRunner?: QueryRunner,
+  ): Promise<PaymentDetails> {
+    const repository = queryRunner
+      ? queryRunner.manager.getRepository(PaymentDetails)
+      : this.paymentDetailsRepository;
+
+    const detail = await repository.findOne({ where: { id: detailId } });
+
+    if (!detail) {
+      throw new NotFoundException(`Detalle de pago con ID ${detailId} no encontrado`);
+    }
+
+    if (!detail.isActive) {
+      throw new BadRequestException(`No se puede actualizar un detalle de pago anulado`);
+    }
+
+    if (updateDto.amount !== undefined) detail.amount = updateDto.amount;
+    if (updateDto.bankName !== undefined) detail.bankName = updateDto.bankName;
+    if (updateDto.transactionReference !== undefined) detail.transactionReference = updateDto.transactionReference;
+    if (updateDto.codeOperation !== undefined) detail.codeOperation = updateDto.codeOperation;
+    if (updateDto.transactionDate !== undefined) detail.transactionDate = new Date(updateDto.transactionDate);
+
+    return await repository.save(detail);
+  }
+
+  async deactivate(
+    detailId: number,
+    queryRunner?: QueryRunner,
+  ): Promise<PaymentDetails> {
+    const repository = queryRunner
+      ? queryRunner.manager.getRepository(PaymentDetails)
+      : this.paymentDetailsRepository;
+
+    const detail = await repository.findOne({ where: { id: detailId } });
+
+    if (!detail) {
+      throw new NotFoundException(`Detalle de pago con ID ${detailId} no encontrado`);
+    }
+
+    if (!detail.isActive) {
+      throw new BadRequestException(`El detalle de pago ya está anulado`);
+    }
+
+    detail.isActive = false;
+    return await repository.save(detail);
   }
 }

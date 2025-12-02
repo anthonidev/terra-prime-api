@@ -8,7 +8,6 @@ export const formatPaymentsResponse = (payment: Payment) => {
     amount: payment.amount,
     methodPayment: payment.methodPayment,
     numberTicker: payment.numberTicket,
-    codeOperation: payment.codeOperation,
     rejectionReason: payment.rejectionReason ? payment.rejectionReason : null,
     status: payment.status,
     createdAt: payment.createdAt,

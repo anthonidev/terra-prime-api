@@ -135,6 +135,7 @@ interface FinancingInstallmentDto {
   couteAmount: number;              // 1084.00
   expectedPaymentDate: string;      // "2023-08-15" (ISO format)
   lateFeeAmount: number;            // 0.00 (mora calculada)
+  observation?: string;             // Texto del Excel (campo DETALLE) - SOLO para cuota 0
 
   // Calculados automáticamente al crear pagos:
   // coutePaid: suma de todos los pagos
@@ -204,12 +205,49 @@ Usar el voucher genérico de migración:
 
 ## 🔍 REGLAS DE NEGOCIO IMPORTANTES
 
-### 1. Cuota 0 (Inicial)
+### 1. Cuota 0 (Clasificación por campo DETALLE/observation)
 
 - **Puede haber múltiples filas con cuota 0 en el Excel**
-- **Solución:** Sumar todos los importes de cuota 0 → `financing.initialAmount`
-- **Crear UNA SOLA cuota** con número 0 y el importe total
-- **Agregar TODOS los pagos** de todas las filas con cuota 0 a esa única cuota
+- **Cada cuota 0 debe incluir el campo `observation`** con el texto del campo DETALLE del Excel
+- **Clasificación automática basada en el texto:**
+  - Si `observation` contiene **"SEPARACION"** o **"SEPARACIÓN"** → Es un pago de **RESERVA**
+    - Se suma a `Sale.reservationAmount`
+    - Se crea Payment con `relatedEntityType = 'reservation'` y `relatedEntityId = sale.id`
+  - Si `observation` contiene **"CANCELACION"**, **"CANCELACIÓN"** o **"CUOTA INICIAL"** → Es un pago de **INICIAL**
+    - Se suma a `Financing.initialAmount`
+    - Se crea Payment con `relatedEntityType = 'financing'` y `relatedEntityId = financing.id`
+  - Si no tiene `observation` o no coincide → Se asume como **INICIAL** por defecto
+
+**Ejemplo:**
+```json
+"installments": [
+  {
+    "couteNumber": 0,
+    "couteAmount": 2000.00,
+    "expectedPaymentDate": "2023-07-15",
+    "lateFeeAmount": 0,
+    "observation": "SEPARACION POR LOTE M7"  // → RESERVA
+  },
+  {
+    "couteNumber": 0,
+    "couteAmount": 1000.00,
+    "expectedPaymentDate": "2023-07-20",
+    "lateFeeAmount": 0,
+    "observation": "SEPARACION ADICIONAL"  // → RESERVA
+  },
+  {
+    "couteNumber": 0,
+    "couteAmount": 3000.00,
+    "expectedPaymentDate": "2023-07-25",
+    "lateFeeAmount": 0,
+    "observation": "CANCELACION CUOTA INICIAL"  // → INICIAL
+  }
+]
+```
+
+**Resultado:**
+- `Sale.reservationAmount = 3000` (2000 + 1000)
+- `Financing.initialAmount = 3000`
 
 ### 2. Montos y Símbolos
 
@@ -317,9 +355,17 @@ function excelSerialToDate(serial) {
         "installments": [
           {
             "couteNumber": 0,
-            "couteAmount": 6000.00,
+            "couteAmount": 3000.00,
+            "expectedPaymentDate": "2023-07-10",
+            "lateFeeAmount": 0.00,
+            "observation": "SEPARACION LOTE M7"
+          },
+          {
+            "couteNumber": 0,
+            "couteAmount": 3000.00,
             "expectedPaymentDate": "2023-07-15",
-            "lateFeeAmount": 0.00
+            "lateFeeAmount": 0.00,
+            "observation": "CANCELACION CUOTA INICIAL"
           },
           {
             "couteNumber": 1,

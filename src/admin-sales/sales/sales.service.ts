@@ -259,6 +259,7 @@ export class SalesService {
             const financingSale = await this.financingService.create(
               financingData,
               queryRunner,
+              data.reservationAmount || 0, // Pasar reservationAmount para calcular pending
             );
             return await this.createSale(
               data,
@@ -329,6 +330,7 @@ export class SalesService {
         const financingHu = await this.financingService.create(
           financingDataHu,
           queryRunner,
+          0, // Urban Development no tiene reserva
         );
         await this.createUrbanDevelopment(
           savedSale.id,
@@ -353,6 +355,9 @@ export class SalesService {
       ? queryRunner.manager.getRepository(Sale)
       : this.saleRepository;
 
+    const reservationAmount = createSaleDto.reservationAmount || 0;
+    const totalAmount = createSaleDto.totalAmount || 0;
+
     const sale = repository.create({
       lot: { id: createSaleDto.lotId },
       client: { id: createSaleDto.clientId },
@@ -361,7 +366,7 @@ export class SalesService {
         : null,
       type: createSaleDto.saleType,
       vendor: { id: userId },
-      totalAmount: createSaleDto.totalAmount,
+      totalAmount: totalAmount,
       contractDate: createSaleDto.contractDate,
       financing: financingId ? { id: financingId } : null,
       metadata: createSaleDto?.metadata || null,
@@ -369,9 +374,17 @@ export class SalesService {
       applyLateFee: createSaleDto?.applyLateFee ?? true,
       // Campos de reserva
       fromReservation: createSaleDto.isReservation,
-      reservationAmount: createSaleDto.reservationAmount || null,
+      reservationAmount: createSaleDto.isReservation ? reservationAmount : null,
+      reservationAmountPaid: 0,
+      reservationAmountPending: createSaleDto.isReservation ? reservationAmount : null,
       maximumHoldPeriod: createSaleDto.maximumHoldPeriod || null,
-      // reservationDate: isReservation ? new Date() : null,
+      // Campos de pago total (para venta directa)
+      totalAmountPaid: 0,
+      totalAmountPending: createSaleDto.saleType === SaleType.DIRECT_PAYMENT && !createSaleDto.isReservation
+        ? totalAmount
+        : (createSaleDto.saleType === SaleType.DIRECT_PAYMENT && createSaleDto.isReservation
+          ? totalAmount - reservationAmount
+          : null),
       status: createSaleDto.isReservation
         ? StatusSale.RESERVATION_PENDING
         : StatusSale.PENDING,
@@ -471,65 +484,109 @@ export class SalesService {
   ): Promise<CreatePaymentDto> {
     let paymentDto: CreatePaymentDto;
 
-    // Pago de reserva
-    if (sale.status === StatusSale.RESERVATION_PENDING) {
+    // Calcular monto total del pago basado en los detalles
+    const totalPaymentAmount = paymentDetails.reduce((sum, detail) => sum + detail.amount, 0);
+
+    // Validar que el monto sea positivo
+    if (totalPaymentAmount <= 0) {
+      throw new BadRequestException('El monto del pago debe ser mayor a 0');
+    }
+
+    // ========== PAGO DE RESERVA ==========
+    if (sale.status === StatusSale.RESERVATION_PENDING || sale.status === StatusSale.RESERVATION_IN_PAYMENT) {
       if (!sale.reservationAmount)
+        throw new BadRequestException('No se encontró monto de reserva para esta venta');
+
+      // Calcular monto pendiente
+      const amountPending = Number((Number(sale.reservationAmount) - Number(sale.reservationAmountPaid || 0)).toFixed(2));
+
+      // Validar que el pago no exceda el pendiente
+      if (totalPaymentAmount > amountPending) {
         throw new BadRequestException(
-          'No se encontró monto de reserva para esta venta',
+          `El monto del pago ($${totalPaymentAmount.toFixed(2)}) excede el monto pendiente de reserva ($${amountPending.toFixed(2)})`
         );
+      }
 
       paymentDto = {
         methodPayment: MethodPayment.VOUCHER,
-        amount: sale.reservationAmount,
+        amount: totalPaymentAmount,
         relatedEntityType: 'reservation',
         relatedEntityId: sale.id,
         metadata: {
           'Concepto de pago': 'Pago de reserva de lote',
           'Fecha de pago': new Date().toISOString(),
-          'Monto de pago': sale.reservationAmount,
+          'Monto de pago': totalPaymentAmount,
+          'Monto pendiente antes de pago': amountPending,
         },
         paymentDetails,
       };
     }
-    // Pagos de venta (después de reserva aprobada o venta directa)
+    // ========== PAGO DE VENTA DIRECTA ==========
     else if (
-      sale.status === StatusSale.RESERVED ||
-      sale.status === StatusSale.PENDING
+      (sale.status === StatusSale.RESERVED || sale.status === StatusSale.PENDING || sale.status === StatusSale.IN_PAYMENT) &&
+      sale.type === SaleType.DIRECT_PAYMENT
     ) {
-      const reservationAmount =
-        sale.fromReservation && sale.reservationAmount
-          ? sale.reservationAmount
-          : 0;
+      const reservationAmount = sale.fromReservation && sale.reservationAmount ? sale.reservationAmount : 0;
+      const totalToPay = Number((Number(sale.totalAmount) - Number(reservationAmount)).toFixed(2));
 
-      if (sale.type === SaleType.DIRECT_PAYMENT) {
-        paymentDto = {
-          methodPayment: MethodPayment.VOUCHER,
-          amount: sale.totalAmount - reservationAmount,
-          relatedEntityType: 'sale',
-          relatedEntityId: sale.id,
-          metadata: {
-            'Concepto de pago': 'Monto total de la venta de lote',
-            'Fecha de pago': new Date().toISOString(),
-            'Monto de pago': sale.totalAmount - reservationAmount,
-          },
-          paymentDetails,
-        };
-      } else if (sale.type === SaleType.FINANCED) {
-        paymentDto = {
-          methodPayment: MethodPayment.VOUCHER,
-          amount: sale.financing.lot.initialAmount - reservationAmount,
-          relatedEntityType: 'financing',
-          relatedEntityId: sale.financing.id,
-          metadata: {
-            'Concepto de pago': 'Monto inicial de la venta de lote',
-            'Fecha de pago': new Date().toISOString(),
-            'Monto de pago':
-              sale.financing.lot.initialAmount - reservationAmount,
-          },
-          paymentDetails,
-        };
+      // Calcular monto pendiente
+      const amountPending = Number((totalToPay - Number(sale.totalAmountPaid || 0)).toFixed(2));
+
+      // Validar que el pago no exceda el pendiente
+      if (totalPaymentAmount > amountPending) {
+        throw new BadRequestException(
+          `El monto del pago ($${totalPaymentAmount.toFixed(2)}) excede el monto pendiente de la venta ($${amountPending.toFixed(2)})`
+        );
       }
-    } else if (sale.status === StatusSale.PENDING_APPROVAL) {
+
+      paymentDto = {
+        methodPayment: MethodPayment.VOUCHER,
+        amount: totalPaymentAmount,
+        relatedEntityType: 'sale',
+        relatedEntityId: sale.id,
+        metadata: {
+          'Concepto de pago': 'Pago de venta de lote',
+          'Fecha de pago': new Date().toISOString(),
+          'Monto de pago': totalPaymentAmount,
+          'Monto pendiente antes de pago': amountPending,
+        },
+        paymentDetails,
+      };
+    }
+    // ========== PAGO INICIAL DE FINANCIAMIENTO ==========
+    else if (
+      (sale.status === StatusSale.RESERVED || sale.status === StatusSale.PENDING || sale.status === StatusSale.IN_PAYMENT) &&
+      sale.type === SaleType.FINANCED
+    ) {
+      const reservationAmount = sale.fromReservation && sale.reservationAmount ? sale.reservationAmount : 0;
+      const initialToPay = Number((Number(sale.financing.lot.initialAmount) - Number(reservationAmount)).toFixed(2));
+
+      // Calcular monto pendiente
+      const amountPending = Number((initialToPay - Number(sale.financing.lot.initialAmountPaid || 0)).toFixed(2));
+
+      // Validar que el pago no exceda el pendiente
+      if (totalPaymentAmount > amountPending) {
+        throw new BadRequestException(
+          `El monto del pago ($${totalPaymentAmount.toFixed(2)}) excede el monto pendiente de la inicial ($${amountPending.toFixed(2)})`
+        );
+      }
+
+      paymentDto = {
+        methodPayment: MethodPayment.VOUCHER,
+        amount: totalPaymentAmount,
+        relatedEntityType: 'financing',
+        relatedEntityId: sale.financing.id,
+        metadata: {
+          'Concepto de pago': 'Pago inicial de financiamiento',
+          'Fecha de pago': new Date().toISOString(),
+          'Monto de pago': totalPaymentAmount,
+          'Monto pendiente antes de pago': amountPending,
+        },
+        paymentDetails,
+      };
+    }
+    // ========== VALIDACIONES DE ESTADOS QUE NO PERMITEN PAGOS ==========
+    else if (sale.status === StatusSale.PENDING_APPROVAL) {
       throw new BadRequestException(
         'No se puede realizar pago porque la venta tiene un pago pendiente de aprobación',
       );
@@ -543,15 +600,17 @@ export class SalesService {
       );
     } else if (sale.status === StatusSale.COMPLETED) {
       throw new BadRequestException(
-        'No se puede realizar pago directo desde la venta porque la venta ya se ha completado',
+        'No se puede realizar pago porque la venta ya se ha completado',
       );
     } else if (sale.status === StatusSale.REJECTED) {
       throw new BadRequestException(
-        'No se puede realizar pago directo desde la venta porque la venta ha sido rechazada',
+        'No se puede realizar pago porque la venta ha sido rechazada',
       );
-    }
-    // Estados que no permiten pagos
-    else {
+    } else if (sale.status === StatusSale.WITHDRAWN) {
+      throw new BadRequestException(
+        'No se puede realizar pago porque la venta ha sido retirada',
+      );
+    } else {
       throw new BadRequestException(
         `No se puede realizar pago en el estado actual: ${sale.status}`,
       );
@@ -626,7 +685,6 @@ export class SalesService {
             email: payment.reviewedBy.email,
           }
         : null,
-      codeOperation: payment.codeOperation,
       banckName: payment.banckName,
       dateOperation: payment.dateOperation,
       numberTicket: payment.numberTicket,

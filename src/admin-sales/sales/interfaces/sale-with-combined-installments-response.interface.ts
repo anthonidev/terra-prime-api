@@ -7,11 +7,15 @@ export interface SaleWithCombinedInstallmentsResponse {
   id: string;
   type: string;
   totalAmount: number;
+  totalAmountPaid?: number;
+  totalAmountPending?: number;
   contractDate: string;
   status: string;
   currency: CurrencyType;
   createdAt: string;
   reservationAmount?: number;
+  reservationAmountPaid?: number;
+  reservationAmountPending?: number;
   maximumHoldPeriod?: number;
   fromReservation?: boolean;
   client: {
@@ -44,6 +48,8 @@ export interface SaleWithCombinedInstallmentsResponse {
     lot: {
       id: string;
       initialAmount: number;
+      initialAmountPaid?: number;
+      initialAmountPending?: number;
       interestRate: number;
       quantityCoutes: number;
     };
@@ -106,7 +112,6 @@ export interface SaleWithCombinedInstallmentsResponse {
     status: StatusPayment;
     createdAt: string;
     reviewedAt: string | null;
-    codeOperation: string | null;
     banckName: string | null;
     dateOperation: string | null;
     numberTicket: string | null;

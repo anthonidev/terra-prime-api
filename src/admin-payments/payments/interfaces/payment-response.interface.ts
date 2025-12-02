@@ -10,7 +10,6 @@ export interface PaymentResponse {
   status: StatusPayment;
   createdAt: Date;
   rejectionReason: string | null;
-  codeOperation: string | null;
   numberTicker: string | null;
   vouchers: {
     id: number;
@@ -18,6 +17,8 @@ export interface PaymentResponse {
     amount: number;
     bankName: string;
     transactionReference: string;
+    codeOperation: string | null;
     transactionDate: Date;
+    isActive: boolean;
   }[];
 }

@@ -6,11 +6,15 @@ export interface SaleResponse {
   id: string;
   type: string;
   totalAmount: number;
+  totalAmountPaid?: number;
+  totalAmountPending?: number;
   contractDate: string;
   status: string;
   currency: CurrencyType;
   createdAt: string;
   reservationAmount?: number;
+  reservationAmountPaid?: number;
+  reservationAmountPending?: number;
   maximumHoldPeriod?: number;
   fromReservation?: boolean;
   client: {
@@ -39,6 +43,8 @@ export interface SaleResponse {
   financing: {
     id: string;
     initialAmount: number;
+    initialAmountPaid?: number;
+    initialAmountPending?: number;
     interestRate: number;
     quantityCoutes: number;
     // AGREGAR ESTO:
@@ -122,7 +128,6 @@ export interface SaleResponse {
     status: StatusPayment;
     createdAt: string;
     reviewedAt: string | null;
-    codeOperation: string | null;
     banckName: string | null;
     dateOperation: string | null;
     numberTicket: string | null;

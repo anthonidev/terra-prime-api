@@ -49,13 +49,6 @@ export class Payment extends Timestamped {
     length: 25,
     nullable: true
   })
-  codeOperation: string;
-
-  @Column({
-    type: 'varchar',
-    length: 25,
-    nullable: true
-  })
   banckName: string;
 
   @Column({
@@ -106,6 +99,9 @@ export class Payment extends Timestamped {
 
   @Column({ type: 'json', nullable: true })
   metadata: Record<string, any>;
+
+  @Column({ type: 'text', nullable: true })
+  observation: string;
 
   @BeforeInsert()
   @BeforeUpdate()

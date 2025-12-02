@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
+import * as XLSX from 'xlsx';
 
 // Entities
 import { Project } from 'src/project/entities/project.entity';
@@ -32,6 +33,7 @@ import { SaleImportDto } from './dto/sale-import.dto';
 import { SaleType } from 'src/admin-sales/sales/enums/sale-type.enum';
 import { StatusSale } from 'src/admin-sales/sales/enums/status-sale.enum';
 import { MethodPayment } from 'src/admin-payments/payments/enums/method-payment.enum';
+import { FinancingType } from 'src/admin-sales/financing/enums/financing-type.enum';
 
 // Interfaces
 import { ImportResult } from './interfaces/import-result.interface';
@@ -47,6 +49,95 @@ export class MigrationsService {
     private readonly userRepo: Repository<User>,
     private readonly dataSource: DataSource,
   ) {}
+
+  /**
+   * Validar y transformar Excel a JSON
+   */
+  async validateAndTransformExcel(buffer: Buffer): Promise<{
+    data: BulkImportSalesDto;
+    summary: {
+      totalRows: number;
+      totalSales: number;
+      warnings: string[];
+    };
+  }> {
+    this.logger.log('📊 Iniciando lectura y validación de Excel...');
+
+    // 1. Leer Excel
+    const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+
+    // 2. Convertir a JSON (array de objetos)
+    const rawData: any[] = XLSX.utils.sheet_to_json(worksheet, {
+      header: 1,
+      defval: null,
+      raw: false
+    });
+
+    if (rawData.length < 2) {
+      throw new BadRequestException('El Excel está vacío o no tiene datos');
+    }
+
+    this.logger.log(`📋 Total de filas en Excel: ${rawData.length - 1} (sin contar header)`);
+
+    // 3. Eliminar header (primera fila)
+    const dataRows = rawData.slice(1);
+
+    // 4. Transformar filas a estructura intermedia
+    const warnings: string[] = [];
+    const salesMap = new Map<string, any[]>(); // Agrupar por código de venta
+
+    for (let i = 0; i < dataRows.length; i++) {
+      const row = dataRows[i];
+      const rowNumber = i + 2; // +2 porque Excel empieza en 1 y saltamos header
+
+      try {
+        const excelCode = this.cleanString(row[0]); // Columna 0 = código
+
+        if (!excelCode) {
+          warnings.push(`Fila ${rowNumber}: Sin código de venta, se omitirá`);
+          continue;
+        }
+
+        if (!salesMap.has(excelCode)) {
+          salesMap.set(excelCode, []);
+        }
+
+        salesMap.get(excelCode).push({ row, rowNumber });
+      } catch (error) {
+        warnings.push(`Fila ${rowNumber}: Error al procesar - ${error.message}`);
+      }
+    }
+
+    this.logger.log(`🔢 Total de ventas únicas identificadas: ${salesMap.size}`);
+
+    // 5. Transformar cada grupo de filas a una venta
+    const sales = [];
+    for (const [excelCode, rows] of salesMap.entries()) {
+      try {
+        const sale = await this.transformRowsToSale(excelCode, rows);
+        sales.push(sale);
+      } catch (error) {
+        warnings.push(`Venta ${excelCode}: Error - ${error.message}`);
+        this.logger.warn(`⚠️ Error en venta ${excelCode}: ${error.message}`);
+      }
+    }
+
+    this.logger.log(`✅ Transformación completada: ${sales.length} ventas generadas`);
+
+    return {
+      data: {
+        vendorId: '5f3e7c0a-2b8f-4a32-9e5e-3c409ad21bfa', // Vendedor fijo para migraciones
+        sales,
+      },
+      summary: {
+        totalRows: dataRows.length,
+        totalSales: sales.length,
+        warnings,
+      },
+    };
+  }
 
   /**
    * Importación masiva de ventas desde JSON
@@ -144,9 +235,17 @@ export class MigrationsService {
       // 7. Crear pagos y detalles
       await this.createPayments(data, sale, financing, installmentMap, vendorId, manager);
 
-      // 8. Actualizar estados de cuotas y venta
+      // 8. Actualizar montos de reserva (si aplica)
+      await this.updateReservationAmounts(sale.id, manager);
+
+      // 9. Actualizar montos de financiamiento (inicial pagado/pendiente)
+      await this.updateFinancingAmounts(financing.id, manager);
+
+      // 10. Actualizar estados de cuotas
       await this.updateInstallmentsStatus(financing.id, manager);
-      await this.updateSaleStatus(sale.id, manager);
+
+      // 11. Actualizar montos y estado de venta
+      await this.updateSaleAmounts(sale.id, manager);
 
       return sale;
     });
@@ -346,12 +445,16 @@ export class MigrationsService {
       type: data.sale.saleType,
       contractDate: new Date(data.sale.contractDate),
       totalAmount: data.sale.totalAmount,
+      totalAmountPaid: 0, // ✅ Se actualizará con pagos
+      totalAmountPending: data.sale.totalAmount, // ✅ Pendiente = total
       totalAmountUrbanDevelopment: data.sale.totalAmountUrbanDevelopment,
       applyLateFee: data.sale.applyLateFee,
       metadata: data.sale.metadata || {},
       notes: data.sale.notes || null,
       status: StatusSale.IN_PAYMENT_PROCESS, // Temporal, se actualizará después
       fromReservation: false,
+      reservationAmountPaid: 0, // ✅ No hay reserva en migraciones
+      reservationAmountPending: null, // ✅ No hay reserva
       lot: lot,
       client: client,
       vendor: { id: vendorId } as any,
@@ -364,6 +467,21 @@ export class MigrationsService {
   }
 
   /**
+   * Clasificar tipo de cuota 0 basado en observation
+   */
+  private classifyCuota0(observation?: string): 'reservation' | 'initial' {
+    if (!observation) return 'initial';
+    const upperObservation = observation.toUpperCase();
+    if (upperObservation.includes('SEPARACION') || upperObservation.includes('SEPARACIÓN')) {
+      return 'reservation';
+    }
+    if (upperObservation.includes('CANCELACION') || upperObservation.includes('CANCELACIÓN') || upperObservation.includes('CUOTA INICIAL')) {
+      return 'initial';
+    }
+    return 'initial'; // Por defecto
+  }
+
+  /**
    * Crear financiamiento y cuotas
    */
   private async createFinancing(
@@ -371,24 +489,27 @@ export class MigrationsService {
     sale: Sale,
     manager: EntityManager,
   ): Promise<{ financing: Financing; installmentMap: Map<number, string> }> {
-    // Separar cuotas 0 (inicial) de las cuotas regulares
-    const initialInstallments = data.financing.installments.filter(
-      (inst) => inst.couteNumber === 0,
-    );
+    // Solo procesar cuotas regulares (1, 2, 3... N)
     const regularInstallments = data.financing.installments.filter(
       (inst) => inst.couteNumber > 0,
     );
 
-    // Calcular monto inicial sumando todas las cuotas 0
-    const calculatedInitialAmount = initialInstallments.reduce(
-      (sum, inst) => sum + inst.couteAmount,
-      0,
-    );
+    // Actualizar Sale con reservationAmount si viene del Excel
+    if (data.sale.reservationAmount && data.sale.reservationAmount > 0) {
+      await manager.update(Sale, sale.id, {
+        reservationAmount: data.sale.reservationAmount,
+        reservationAmountPaid: 0,
+        reservationAmountPending: data.sale.reservationAmount,
+      });
+      this.logger.log(`  💵 Reserva configurada: $${data.sale.reservationAmount}`);
+    }
 
     // Crear financiamiento
     const financing = manager.create(Financing, {
-      financingType: data.financing.financingType,
-      initialAmount: calculatedInitialAmount, // ✅ Suma de cuotas 0
+      financingType: data.financing.financingType || FinancingType.CREDITO, // ✅ CREDITO por defecto
+      initialAmount: data.financing.initialAmount, // ✅ Ya calculado desde Excel
+      initialAmountPaid: 0, // ✅ Se actualizará con pagos
+      initialAmountPending: data.financing.initialAmount, // ✅ Pendiente = total inicial
       interestRate: data.financing.interestRate || null,
       quantityCoutes: regularInstallments.length, // ✅ Solo cuotas regulares
       sale: sale,
@@ -396,7 +517,7 @@ export class MigrationsService {
 
     await manager.save(financing);
     this.logger.log(
-      `  🏦 Financiamiento creado - Inicial: $${calculatedInitialAmount}`,
+      `  🏦 Financiamiento creado - Inicial: $${data.financing.initialAmount}`,
     );
 
     // Ordenar cuotas regulares por fecha de vencimiento
@@ -455,12 +576,20 @@ export class MigrationsService {
 
       let relatedEntityType: string;
       let relatedEntityId: string;
+      const observation = paymentGroup.observation || null; // ✅ Observation viene del paymentGroup
 
-      // Determinar si es pago de inicial (cuota 0) o pago de cuota regular
+      // Determinar tipo de pago
       if (paymentGroup.couteNumber === 0) {
-        // ✅ Pago de inicial → va al financing directamente
-        relatedEntityType = 'financing';
-        relatedEntityId = financing.id;
+        // ✅ Pago de cuota 0 → clasificar por observation
+        const cuota0Type = this.classifyCuota0(observation);
+
+        if (cuota0Type === 'reservation') {
+          relatedEntityType = 'reservation';
+          relatedEntityId = sale.id;
+        } else {
+          relatedEntityType = 'financing';
+          relatedEntityId = financing.id;
+        }
       } else {
         // ✅ Pago de cuota regular → va a la cuota específica
         const installmentId = installmentMap.get(paymentGroup.couteNumber);
@@ -484,14 +613,14 @@ export class MigrationsService {
         methodPayment: MethodPayment.VOUCHER,
         relatedEntityType: relatedEntityType,
         relatedEntityId: relatedEntityId,
+        observation: observation, // ✅ Observación del Excel (campo DETALLE)
         metadata: {
           'Concepto de pago':
             paymentGroup.couteNumber === 0
-              ? 'Pago de cuota inicial'
+              ? (relatedEntityType === 'reservation' ? 'Pago de reserva' : 'Pago de cuota inicial')
               : `Pago de cuota ${paymentGroup.couteNumber}`,
           'Migración histórica': true,
         },
-        codeOperation: paymentGroup.paymentDetails[0]?.transactionReference || null,
         reviewedBy: { id: vendorId } as any,
         reviewedAt: new Date(),
       });
@@ -505,6 +634,7 @@ export class MigrationsService {
           amount: detailData.amount,
           bankName: detailData.bankName || null,
           transactionReference: detailData.transactionReference,
+          codeOperation: detailData.transactionReference, // ✅ Código de operación en detalle
           transactionDate: new Date(detailData.transactionDate),
           url: detailData.url,
           urlKey: detailData.urlKey,
@@ -567,7 +697,128 @@ export class MigrationsService {
   }
 
   /**
+   * Actualizar montos de reserva (pagado/pendiente)
+   */
+  private async updateReservationAmounts(
+    saleId: string,
+    manager: EntityManager,
+  ): Promise<void> {
+    const sale = await manager.findOne(Sale, {
+      where: { id: saleId },
+    });
+
+    if (!sale || !sale.reservationAmount) {
+      return; // No hay reserva, no hacer nada
+    }
+
+    // Calcular pagos realizados a la reserva (relatedEntityType = 'reservation')
+    const payments = await manager
+      .createQueryBuilder(Payment, 'payment')
+      .where('payment.relatedEntityType = :type', { type: 'reservation' })
+      .andWhere('payment.relatedEntityId = :id', { id: saleId })
+      .andWhere('payment.status = :status', { status: StatusPayment.APPROVED })
+      .getMany();
+
+    const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+    const pending = Number(sale.reservationAmount) - totalPaid;
+
+    await manager.update(Sale, saleId, {
+      reservationAmountPaid: Number(totalPaid.toFixed(2)),
+      reservationAmountPending: Number((pending > 0 ? pending : 0).toFixed(2)),
+    });
+
+    this.logger.log(
+      `  💵 Reserva actualizada - Pagado: $${totalPaid.toFixed(2)}, Pendiente: $${(pending > 0 ? pending : 0).toFixed(2)}`,
+    );
+  }
+
+  /**
+   * Actualizar montos de financiamiento (inicial pagado/pendiente)
+   */
+  private async updateFinancingAmounts(
+    financingId: string,
+    manager: EntityManager,
+  ): Promise<void> {
+    const financing = await manager.findOne(Financing, {
+      where: { id: financingId },
+    });
+
+    if (!financing) {
+      return;
+    }
+
+    // Calcular pagos realizados a la inicial (relatedEntityType = 'financing')
+    const payments = await manager
+      .createQueryBuilder(Payment, 'payment')
+      .where('payment.relatedEntityType = :type', { type: 'financing' })
+      .andWhere('payment.relatedEntityId = :id', { id: financingId })
+      .andWhere('payment.status = :status', { status: StatusPayment.APPROVED })
+      .getMany();
+
+    const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+    const pending = Number(financing.initialAmount) - totalPaid;
+
+    financing.initialAmountPaid = Number(totalPaid.toFixed(2));
+    financing.initialAmountPending = Number((pending > 0 ? pending : 0).toFixed(2));
+
+    await manager.save(financing);
+    this.logger.log(
+      `  💵 Financiamiento actualizado - Inicial pagado: $${financing.initialAmountPaid}, Pendiente: $${financing.initialAmountPending}`,
+    );
+  }
+
+  /**
+   * Actualizar montos y estado de la venta
+   */
+  private async updateSaleAmounts(
+    saleId: string,
+    manager: EntityManager,
+  ): Promise<void> {
+    const sale = await manager.findOne(Sale, {
+      where: { id: saleId },
+      relations: ['financing', 'financing.financingInstallments'],
+    });
+
+    if (!sale || !sale.financing) {
+      return;
+    }
+
+    // Calcular total pagado: inicial + cuotas
+    const initialPaid = Number(sale.financing.initialAmountPaid || 0);
+    const installments = sale.financing.financingInstallments;
+    const installmentsPaid = installments.reduce(
+      (sum, inst) => sum + Number(inst.coutePaid || 0),
+      0,
+    );
+
+    const totalPaid = Number((initialPaid + installmentsPaid).toFixed(2));
+    const totalPending = Number((Number(sale.totalAmount) - totalPaid).toFixed(2));
+
+    sale.totalAmountPaid = totalPaid;
+    sale.totalAmountPending = totalPending > 0 ? totalPending : 0;
+
+    // Determinar estado de la venta
+    const allInstallmentsPaid = installments.every(
+      (inst) => inst.status === StatusFinancingInstallments.PAID,
+    );
+    const initialFullyPaid =
+      Number(sale.financing.initialAmountPending || 0) === 0;
+
+    if (allInstallmentsPaid && initialFullyPaid) {
+      sale.status = StatusSale.COMPLETED;
+    } else {
+      sale.status = StatusSale.IN_PAYMENT_PROCESS;
+    }
+
+    await manager.save(sale);
+    this.logger.log(
+      `  💰 Venta actualizada - Total pagado: $${sale.totalAmountPaid}, Pendiente: $${sale.totalAmountPending}, Estado: ${sale.status}`,
+    );
+  }
+
+  /**
    * Actualizar estado de la venta según cuotas pagadas
+   * @deprecated Use updateSaleAmounts instead
    */
   private async updateSaleStatus(
     saleId: string,
@@ -595,5 +846,312 @@ export class MigrationsService {
 
     await manager.save(sale);
     this.logger.log(`  ✅ Estado de venta actualizado: ${sale.status}`);
+  }
+
+  // ========== MÉTODOS AUXILIARES PARA TRANSFORMACIÓN DE EXCEL ==========
+
+  /**
+   * Transformar grupo de filas del Excel a una venta
+   */
+  private async transformRowsToSale(excelCode: string, rows: any[]): Promise<any> {
+    const firstRow = rows[0].row; // Usamos la primera fila para datos generales
+
+    // Extraer datos generales de la venta (siempre en la primera fila)
+    const project = {
+      name: this.cleanString(firstRow[2]), // Col 02: Proyecto
+      currency: this.mapCurrency(this.cleanString(firstRow[25])), // Col 25: MONEDA
+    };
+
+    const stage = {
+      name: this.cleanString(firstRow[3]), // Col 03: Etapa
+    };
+
+    const block = {
+      name: this.cleanString(firstRow[6]), // Col 06: Bloque
+    };
+
+    const lot = {
+      name: this.cleanString(firstRow[7]), // Col 07: Lote
+      area: this.cleanNumber(firstRow[8]), // Col 08: Área
+      lotPrice: this.cleanAmount(firstRow[9]), // Col 09: Precio del Lote
+      urbanizationPrice: this.cleanAmount(firstRow[10]), // Col 10: Precio de Urbanización
+      status: LotStatus.SOLD, // Siempre vendido
+      currency: this.mapCurrency(this.cleanString(firstRow[25])), // Col 25: MONEDA
+    };
+
+    // Cliente principal
+    const clientFullName = this.cleanString(firstRow[14]); // Col 14: NOMBRE
+    const clientNames = this.splitFullName(clientFullName);
+
+    const client = {
+      lead: {
+        firstName: clientNames.firstName,
+        lastName: clientNames.lastName,
+        document: this.cleanString(firstRow[13]), // Col 13: DOCUMENTO
+        documentType: this.mapDocumentType(this.cleanString(firstRow[12])), // Col 12: TIPO DE DOCUMENTO
+        email: null,
+        phone: null,
+        age: null,
+        interestProjects: [],
+      },
+      address: null,
+    };
+
+    // Cliente secundario (opcional)
+    let secondaryClient = null;
+    const secondaryDocument = this.cleanString(firstRow[16]); // Col 16: DOCUMENTO secundario
+
+    if (secondaryDocument) {
+      const secondaryFullName = this.cleanString(firstRow[17]); // Col 17: NOMBRE secundario
+      const secondaryNames = this.splitFullName(secondaryFullName);
+
+      secondaryClient = {
+        firstName: secondaryNames.firstName,
+        lastName: secondaryNames.lastName,
+        document: secondaryDocument,
+        documentType: this.mapDocumentType(this.cleanString(firstRow[15])), // Col 15: TIPO DOC secundario
+        email: null,
+        phone: null,
+        address: null,
+      };
+    }
+
+    // Venta
+    const totalAmount = this.cleanAmount(firstRow[26]); // Col 26: PRECIO
+    const contractDate = this.parseExcelDate(firstRow[24]); // Col 24: FECHA DE CONTRATO
+
+    // Financiamiento y cuotas
+    const quantityCoutes = this.cleanNumber(firstRow[27]); // Col 27: NUMERO DE CUOTAS
+
+    // Procesar todas las filas para obtener cuotas, pagos, reserva e inicial
+    const { installments, payments, reservationAmount, initialAmount } = this.processInstallmentsAndPayments(rows);
+
+    const sale = {
+      saleType: SaleType.FINANCED, // Siempre financiamiento
+      contractDate: contractDate,
+      totalAmount: totalAmount,
+      totalAmountUrbanDevelopment: 0, // No hay HU en el Excel
+      applyLateFee: false, // Se calculará después
+      reservationAmount: reservationAmount > 0 ? reservationAmount : null, // ✅ Solo si hay SEPARACION
+      metadata: {},
+      notes: null,
+    };
+
+    const financing = {
+      financingType: FinancingType.CREDITO, // ✅ Siempre CREDITO para ventas con cuotas
+      initialAmount: initialAmount, // ✅ Calculado desde cuotas 0 tipo CANCELACION
+      interestRate: null, // No está en Excel
+      quantityCoutes: quantityCoutes,
+      installments: installments, // ✅ Sin cuotas 0
+    };
+
+    return {
+      excelCode,
+      project,
+      stage,
+      block,
+      lot,
+      client,
+      secondaryClient,
+      sale,
+      financing,
+      payments,
+    };
+  }
+
+  /**
+   * Procesar cuotas y pagos de todas las filas
+   */
+  private processInstallmentsAndPayments(rows: any[]): {
+    installments: any[];
+    payments: any[];
+    reservationAmount: number;
+    initialAmount: number;
+  } {
+    const installmentsMap = new Map<number, any>();
+    const paymentsMap = new Map<number, any[]>();
+    let reservationAmount = 0;
+    let initialAmount = 0;
+
+    for (const { row } of rows) {
+      const couteNumber = this.cleanNumber(row[28]); // Col 28: CUOTA
+      const couteAmount = this.cleanAmount(row[30]); // Col 30: IMPORTE DE CUOTA
+      const expectedPaymentDate = this.parseExcelDate(row[29]); // Col 29: FECHA DE VENCIMIENTO
+      const lateFeeAmount = this.cleanAmount(row[31]); // Col 31: MORA
+      const detalle = this.cleanString(row[39]) || this.cleanString(row[47]); // Col 39 o 47: DETALLE
+
+      // ========== CLASIFICAR CUOTA 0 ==========
+      if (couteNumber === 0) {
+        const cuota0Type = this.classifyCuota0(detalle);
+
+        if (cuota0Type === 'reservation') {
+          reservationAmount += couteAmount;
+        } else {
+          initialAmount += couteAmount;
+        }
+
+        // ✅ Procesar pagos de cuota 0 pero NO agregar a installments
+        const paymentDetails = this.extractPaymentDetails(row);
+
+        if (paymentDetails.length > 0) {
+          if (!paymentsMap.has(couteNumber)) {
+            paymentsMap.set(couteNumber, []);
+          }
+
+          paymentsMap.get(couteNumber).push({
+            couteNumber,
+            paymentConfigId: cuota0Type === 'reservation' ? 2 : 3, // FINANCING_PAYMENT para cuota 0 (inicial)
+            paymentDetails,
+            observation: detalle, // ✅ Observation para clasificar luego
+          });
+        }
+
+        continue; // ✅ NO agregar cuota 0 a installments
+      }
+
+      // ========== CUOTAS REGULARES (1, 2, 3... N) ==========
+      if (!installmentsMap.has(couteNumber)) {
+        installmentsMap.set(couteNumber, {
+          couteNumber,
+          couteAmount,
+          expectedPaymentDate,
+          lateFeeAmount,
+        });
+      }
+
+      // Procesar pagos de cuotas regulares
+      const paymentDetails = this.extractPaymentDetails(row);
+
+      if (paymentDetails.length > 0) {
+        if (!paymentsMap.has(couteNumber)) {
+          paymentsMap.set(couteNumber, []);
+        }
+
+        paymentsMap.get(couteNumber).push({
+          couteNumber,
+          paymentConfigId: 4, // FINANCING_INSTALLMENTS_PAYMENT para cuotas regulares
+          paymentDetails,
+          observation: detalle, // ✅ Observation va en payment, no en installment
+        });
+      }
+    }
+
+    return {
+      installments: Array.from(installmentsMap.values())
+        .filter(inst => inst.couteNumber > 0) // ✅ Solo cuotas regulares
+        .sort((a, b) => a.couteNumber - b.couteNumber),
+      payments: Array.from(paymentsMap.values()).flat(),
+      reservationAmount,
+      initialAmount,
+    };
+  }
+
+  /**
+   * Extraer detalles de pago (abonos) de una fila
+   */
+  private extractPaymentDetails(row: any): any[] {
+    const details = [];
+    const voucherUrl = 'https://firebasestorage.googleapis.com/v0/b/test-project-3657a.appspot.com/o/huertas%2Fvoucher-migracion.png?alt=media&token=3fa1f499-cb83-41cb-92e4-441ebe529824';
+    const voucherKey = 'huertas/voucher-migracion.png';
+
+    // Procesar hasta 8 grupos de abonos (cols 48-95, cada 6 columnas)
+    for (let i = 0; i < 8; i++) {
+      const baseCol = 48 + (i * 6); // 48, 54, 60, 66, 72, 78, 84, 90
+
+      const transactionDate = this.parseExcelDate(row[baseCol]); // Col 48/54/60...: FECHA DE ABONO
+      const transactionReference = this.cleanString(row[baseCol + 1]); // Col 49/55/61...: NUMERO DE OPERACIÓN
+      const amountPEN = this.cleanAmount(row[baseCol + 2]); // Col 50/56/62...: ABONADO S/
+      const amountUSD = this.cleanAmount(row[baseCol + 4]); // Col 52/58/64...: ABONADO $
+
+      const amount = amountUSD > 0 ? amountUSD : amountPEN;
+
+      if (amount > 0 && transactionReference) {
+        details.push({
+          bankName: null,
+          transactionReference,
+          transactionDate,
+          amount,
+          url: voucherUrl,
+          urlKey: voucherKey,
+        });
+      }
+    }
+
+    return details;
+  }
+
+  // ========== MÉTODOS AUXILIARES DE LIMPIEZA Y CONVERSIÓN ==========
+
+  private cleanString(value: any): string | null {
+    if (!value) return null;
+    return String(value).trim();
+  }
+
+  private cleanNumber(value: any): number {
+    if (!value) return 0;
+    const num = parseFloat(String(value).replace(/[^0-9.-]/g, ''));
+    return isNaN(num) ? 0 : num;
+  }
+
+  private cleanAmount(value: any): number {
+    if (!value) return 0;
+    const str = String(value);
+    const cleaned = str.replace(/[$S\/\s,]/g, '');
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? 0 : num;
+  }
+
+  private parseExcelDate(value: any): string {
+    if (!value) return new Date().toISOString().split('T')[0];
+
+    // Si es un número (serial de Excel)
+    if (typeof value === 'number') {
+      const excelEpoch = new Date(1899, 11, 30);
+      const days = Math.floor(value);
+      const milliseconds = days * 24 * 60 * 60 * 1000;
+      const date = new Date(excelEpoch.getTime() + milliseconds);
+      return date.toISOString().split('T')[0];
+    }
+
+    // Si ya es una fecha o string
+    const date = new Date(value);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split('T')[0];
+    }
+
+    return new Date().toISOString().split('T')[0];
+  }
+
+  private splitFullName(fullName: string): { firstName: string; lastName: string } {
+    if (!fullName) return { firstName: '', lastName: '' };
+
+    const parts = fullName.trim().split(/\s+/);
+
+    if (parts.length <= 2) {
+      return {
+        firstName: parts[0] || '',
+        lastName: parts[1] || '',
+      };
+    }
+
+    const firstName = parts.slice(0, 2).join(' ');
+    const lastName = parts.slice(2).join(' ');
+
+    return { firstName, lastName };
+  }
+
+  private mapCurrency(value: string): 'USD' | 'PEN' {
+    if (!value) return 'PEN';
+    const upper = value.toUpperCase();
+    if (upper.includes('DOLAR') || upper.includes('USD')) return 'USD';
+    return 'PEN';
+  }
+
+  private mapDocumentType(value: string): 'DNI' | 'CE' | 'RUC' {
+    if (!value) return 'DNI';
+    const upper = value.toUpperCase();
+    if (upper.includes('CE')) return 'CE';
+    if (upper.includes('RUC')) return 'RUC';
+    return 'DNI';
   }
 }

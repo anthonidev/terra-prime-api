@@ -47,12 +47,19 @@ export class PaymentDetails {
   })
   bankName: string;
 
-  @Column({ 
+  @Column({
     type: 'varchar',
     length: 100,
     nullable: true
   })
   transactionReference: string;
+
+  @Column({
+    type: 'varchar',
+    length: 50,
+    nullable: true
+  })
+  codeOperation: string;
 
   @Column({
     type: 'timestamp'

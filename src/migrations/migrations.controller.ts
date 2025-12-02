@@ -6,7 +6,11 @@ import {
   HttpStatus,
   HttpCode,
   Logger,
+  UploadedFile,
+  UseInterceptors,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { MigrationsService } from './migrations.service';
 import { BulkImportSalesDto } from './dto/bulk-import-sales.dto';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
@@ -20,6 +24,58 @@ export class MigrationsController {
   private readonly logger = new Logger(MigrationsController.name);
 
   constructor(private readonly migrationsService: MigrationsService) {}
+
+  /**
+   * Endpoint para validar Excel y generar JSON
+   * POST /migrations/validate-excel
+   *
+   * Solo accesible por roles: SYS, JVE
+   */
+  @Post('validate-excel')
+  @Roles('SYS', 'JVE')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file'))
+  async validateExcel(
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<{
+    message: string;
+    data: BulkImportSalesDto;
+    summary: {
+      totalRows: number;
+      totalSales: number;
+      warnings: string[];
+    };
+  }> {
+    if (!file) {
+      throw new BadRequestException('No se proporcionó ningún archivo');
+    }
+
+    if (!file.originalname.match(/\.(xlsx|xls)$/)) {
+      throw new BadRequestException('El archivo debe ser formato Excel (.xlsx o .xls)');
+    }
+
+    this.logger.log(`📄 Archivo Excel recibido: ${file.originalname}`);
+
+    try {
+      const result = await this.migrationsService.validateAndTransformExcel(file.buffer);
+
+      this.logger.log(
+        `✅ Excel validado: ${result.data.sales.length} ventas generadas`,
+      );
+
+      return {
+        message: 'Excel validado exitosamente',
+        data: result.data,
+        summary: result.summary,
+      };
+    } catch (error) {
+      this.logger.error(
+        `❌ Error al validar Excel: ${error.message}`,
+        error.stack,
+      );
+      throw error;
+    }
+  }
 
   /**
    * Endpoint de importación masiva de ventas

@@ -12,6 +12,11 @@ export class CreateDetailPaymentDto {
     @Transform(({ value }) => value?.trim())
     transactionReference: string;
 
+    @IsString()
+    @IsNotEmpty({ message: 'El código de operación es requerido' })
+    @Transform(({ value }) => value?.trim())
+    codeOperation: string;
+
     @IsDateString({}, { message: 'La fecha de transacción debe ser válida' })
     @IsNotEmpty({ message: 'La fecha de transacción es requerida' })
     transactionDate: string;

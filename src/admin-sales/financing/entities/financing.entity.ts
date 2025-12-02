@@ -42,6 +42,30 @@ export class Financing extends Timestamped {
   initialAmount: number;
 
   @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value),
+    },
+  })
+  initialAmountPaid: number;
+
+  @Column({
+    type: 'decimal',
+    nullable: true,
+    precision: 10,
+    scale: 2,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value),
+    },
+  })
+  initialAmountPending?: number;
+
+  @Column({
     type: 'numeric',
     precision: 10,
     scale: 2,

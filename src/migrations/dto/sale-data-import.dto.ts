@@ -26,6 +26,12 @@ export class SaleDataImportDto {
   @Type(() => Number)
   totalAmount: number;
 
+  @IsOptional()
+  @IsNumber({}, { message: 'El monto de reserva debe ser un número' })
+  @Min(0, { message: 'El monto de reserva no puede ser negativo' })
+  @Type(() => Number)
+  reservationAmount?: number;
+
   @IsNumber({}, { message: 'El monto de habilitación urbana debe ser un número' })
   @Min(0, { message: 'El monto de habilitación urbana no puede ser negativo' })
   @Type(() => Number)
