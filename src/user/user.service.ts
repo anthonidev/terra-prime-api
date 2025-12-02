@@ -187,6 +187,7 @@ export class UsersService {
         limit = 10,
         search,
         isActive,
+        roleId,
         order = 'DESC',
       } = filters;
       const queryBuilder = this.userRepository
@@ -196,10 +197,13 @@ export class UsersService {
       if (typeof isActive === 'boolean') {
         queryBuilder.andWhere('user.isActive = :isActive', { isActive });
       }
+      if (roleId) {
+        queryBuilder.andWhere('role.id = :roleId', { roleId });
+      }
       if (search?.trim()) {
         const searchTerm = search.toLowerCase().trim();
         queryBuilder.andWhere(
-          '(LOWER(user.firstName) LIKE :search OR LOWER(user.lastName) LIKE :search OR user.document LIKE :search)',
+          '(LOWER(user.firstName) LIKE :search OR LOWER(user.lastName) LIKE :search OR user.document LIKE :search OR LOWER(user.email) LIKE :search)',
           { search: `%${searchTerm}%` },
         );
       }
@@ -219,6 +223,7 @@ export class UsersService {
           'user.isActive',
           'user.createdAt',
           'user.updatedAt',
+          'user.lastLoginAt',
           'role.id',
           'role.code',
           'role.name',

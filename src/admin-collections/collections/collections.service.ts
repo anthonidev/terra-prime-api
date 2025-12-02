@@ -67,13 +67,14 @@ export class CollectionsService {
   async findAllClientsByUser(
     userId: string,
     filters?: ClientFiltersDto,
-  ): Promise<ClientCollectionResponse[]> {
+  ): Promise<Paginated<ClientCollectionResponse>> {
+    const { departamentoId, provinciaId, distritoId, search, ...paginationDto } = filters;
     const clients = await this.clientService.findAllByUser(
       userId,
-      filters?.departamentoId,
-      filters?.provinciaId,
-      filters?.distritoId,
-      filters?.search,
+      departamentoId,
+      provinciaId,
+      distritoId,
+      search,
     );
 
     // Obtener IDs de clientes con mora activa (cuotas con lateFeeAmount > 0)
@@ -100,14 +101,21 @@ export class CollectionsService {
       clientsWithLatePayment.map((row: any) => row.id),
     );
 
-    const clientsFormatted = clients.map(formatClientResponse);
-    return clientsFormatted.map((client) => {
-      const { collector, ...rest } = client;
-      return {
-        ...rest,
-        hasActiveLatePayment: clientIdsWithLatePayment.has(client.id),
-      };
-    });
+    const clientsFormatted = clients
+      .map(formatClientResponse)
+      .map((client) => {
+        const { collector, ...rest } = client;
+        return {
+          ...rest,
+          hasActiveLatePayment: clientIdsWithLatePayment.has(client.id),
+        };
+      });
+
+    return PaginationHelper.createPaginatedResponse(
+      clientsFormatted,
+      clientsFormatted.length,
+      paginationDto,
+    );
   }
 
   async findAllClientsWithCollection(
