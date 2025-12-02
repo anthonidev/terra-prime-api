@@ -27,7 +27,7 @@ export class Client extends Timestamped {
   @Column({
     type: 'varchar',
     length: 70,
-    nullable: false
+    nullable: true
   })
   address: string;
 

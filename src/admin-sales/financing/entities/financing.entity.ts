@@ -45,7 +45,7 @@ export class Financing extends Timestamped {
     type: 'numeric',
     precision: 10,
     scale: 2,
-    nullable: false,
+    nullable: true,
   })
   interestRate: number;
 

@@ -47,14 +47,14 @@ export class SecondaryClient {
   @Column({
     type: 'varchar',
     length: 20,
-    nullable: false
+    nullable: true
   })
   phone: string;
 
   @Column({
     type: 'varchar',
     length: 70,
-    nullable: false
+    nullable: true
   })
   address: string;
 

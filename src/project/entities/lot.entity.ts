@@ -15,6 +15,8 @@ import { Transform } from 'class-transformer';
 import { Reservation } from 'src/admin-sales/reservations/entities/reservation.entity';
 import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
 import { Block } from './block.entity';
+import { CurrencyType } from './project.entity';
+
 export enum LotStatus {
   ACTIVE = 'Activo',
   INACTIVE = 'Inactivo',
@@ -41,6 +43,15 @@ export class Lot {
     default: LotStatus.ACTIVE,
   })
   status: LotStatus;
+
+  @Column({
+    type: 'enum',
+    enum: CurrencyType,
+    default: CurrencyType.PEN,
+    comment: 'Moneda del lote, heredada del proyecto pero modificable'
+  })
+  currency: CurrencyType;
+
   @ManyToOne(() => Block, (block) => block.lots, {
     nullable: false,
     onDelete: 'CASCADE',
