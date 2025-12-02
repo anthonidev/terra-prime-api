@@ -120,7 +120,14 @@ export class ClientsService {
   async findOneClientById(id: number): Promise<Client> {
     const client = await this.clientRepository.findOne({
       where: { id },
-      relations: ['lead', 'lead.source', 'lead.ubigeo', 'collector'],
+      relations: [
+        'lead',
+        'lead.source',
+        'lead.ubigeo',
+        'lead.ubigeo.parent',
+        'lead.ubigeo.parent.parent',
+        'collector',
+      ],
     });
 
     if (!client)
@@ -129,13 +136,19 @@ export class ClientsService {
   }
 
   async findAllClientsWithCollection(
-    ubigeoId?: number,
+    departamentoId?: number,
+    provinciaId?: number,
+    distritoId?: number,
+    collectorId?: string,
+    search?: string,
   ): Promise<Client[]> {
     const queryBuilder = this.clientRepository
       .createQueryBuilder('client')
       .leftJoinAndSelect('client.lead', 'lead')
       .leftJoinAndSelect('lead.source', 'source')
       .leftJoinAndSelect('lead.ubigeo', 'ubigeo')
+      .leftJoinAndSelect('ubigeo.parent', 'ubigeoParent')
+      .leftJoinAndSelect('ubigeoParent.parent', 'ubigeoGrandParent')
       .leftJoinAndSelect('client.collector', 'collector')
       .innerJoinAndSelect(
         'client.sales',
@@ -144,9 +157,31 @@ export class ClientsService {
         { type: SaleType.FINANCED, status: StatusSale.IN_PAYMENT_PROCESS }
       );
 
-    // Aplicar filtro de ubigeo si se proporciona
-    if (ubigeoId) {
-      queryBuilder.andWhere('ubigeo.id = :ubigeoId', { ubigeoId });
+    // Aplicar filtro de distrito (más específico)
+    if (distritoId) {
+      queryBuilder.andWhere('ubigeo.id = :distritoId', { distritoId });
+    } else if (provinciaId) {
+      // Aplicar filtro de provincia (incluye todos los distritos de la provincia)
+      queryBuilder.andWhere('(ubigeo.id = :provinciaId OR ubigeo.parentId = :provinciaId)', { provinciaId });
+    } else if (departamentoId) {
+      // Aplicar filtro de departamento (incluye todas las provincias y distritos)
+      queryBuilder.andWhere(
+        '(ubigeo.id = :departamentoId OR ubigeo.parentId = :departamentoId OR ubigeoParent.parentId = :departamentoId)',
+        { departamentoId }
+      );
+    }
+
+    // Aplicar filtro de cobrador si se proporciona
+    if (collectorId) {
+      queryBuilder.andWhere('collector.id = :collectorId', { collectorId });
+    }
+
+    // Aplicar filtro de búsqueda por nombre, apellido o documento
+    if (search) {
+      queryBuilder.andWhere(
+        '(LOWER(lead.firstName) LIKE LOWER(:search) OR LOWER(lead.lastName) LIKE LOWER(:search) OR lead.document LIKE :search)',
+        { search: `%${search}%` }
+      );
     }
 
     return await queryBuilder.getMany();
@@ -190,18 +225,40 @@ export class ClientsService {
 
   async findAllByUser(
     userId: string,
-    ubigeoId?: number,
+    departamentoId?: number,
+    provinciaId?: number,
+    distritoId?: number,
+    search?: string,
   ): Promise<Client[]> {
     const queryBuilder = this.clientRepository.createQueryBuilder('client')
       .leftJoinAndSelect('client.lead', 'lead')
       .leftJoinAndSelect('lead.source', 'source')
       .leftJoinAndSelect('lead.ubigeo', 'ubigeo')
+      .leftJoinAndSelect('ubigeo.parent', 'ubigeoParent')
+      .leftJoinAndSelect('ubigeoParent.parent', 'ubigeoGrandParent')
       .leftJoinAndSelect('client.collector', 'collector')
       .where('collector.id = :userId', { userId });
 
-    // Aplicar filtro de ubigeo si se proporciona
-    if (ubigeoId) {
-      queryBuilder.andWhere('ubigeo.id = :ubigeoId', { ubigeoId });
+    // Aplicar filtro de distrito (más específico)
+    if (distritoId) {
+      queryBuilder.andWhere('ubigeo.id = :distritoId', { distritoId });
+    } else if (provinciaId) {
+      // Aplicar filtro de provincia (incluye todos los distritos de la provincia)
+      queryBuilder.andWhere('(ubigeo.id = :provinciaId OR ubigeo.parentId = :provinciaId)', { provinciaId });
+    } else if (departamentoId) {
+      // Aplicar filtro de departamento (incluye todas las provincias y distritos)
+      queryBuilder.andWhere(
+        '(ubigeo.id = :departamentoId OR ubigeo.parentId = :departamentoId OR ubigeoParent.parentId = :departamentoId)',
+        { departamentoId }
+      );
+    }
+
+    // Aplicar filtro de búsqueda por nombre, apellido o documento
+    if (search) {
+      queryBuilder.andWhere(
+        '(LOWER(lead.firstName) LIKE LOWER(:search) OR LOWER(lead.lastName) LIKE LOWER(:search) OR lead.document LIKE :search)',
+        { search: `%${search}%` }
+      );
     }
 
     queryBuilder.orderBy('client.createdAt', 'DESC');

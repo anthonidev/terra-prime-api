@@ -13,10 +13,9 @@ export interface LeadsByDayResponse {
     name: string;
   } | null;
   ubigeo: {
-    id: number;
-    name: string;
-    code: string;
-    parentId: number;
+    departamento: string;
+    provincia: string | null;
+    distrito: string | null;
   } | null;
   vendor?: {
     id: string;

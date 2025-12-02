@@ -1,4 +1,20 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, UseInterceptors, ValidationPipe, UsePipes, UploadedFiles, ParseFilePipeBuilder, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseGuards,
+  UseInterceptors,
+  ValidationPipe,
+  UsePipes,
+  UploadedFiles,
+  ParseFilePipeBuilder,
+  HttpStatus,
+} from '@nestjs/common';
 import { CollectionsService } from './collections.service';
 import { AssignClientsToCollectorDto } from 'src/admin-sales/clients/dto/assign-clients-to-collector.dto';
 import { PaginationDto } from 'src/common/dto/paginationDto';
@@ -23,22 +39,20 @@ export class CollectionsController {
   assignClientsToCollector(
     @Body() assignClientsToCollectorDto: AssignClientsToCollectorDto,
   ) {
-    return this.collectionsService.assignClientsToCollector(assignClientsToCollectorDto);
+    return this.collectionsService.assignClientsToCollector(
+      assignClientsToCollectorDto,
+    );
   }
 
   @Get('collectors/list')
   @Roles('SCO')
-  findAllCollectors(
-    @Query() paginationDto: PaginationDto,
-  ) {
+  findAllCollectors(@Query() paginationDto: PaginationDto) {
     return this.collectionsService.findAllCollectors(paginationDto);
   }
 
   @Get('clients/list')
   @Roles('SCO')
-  findAllClientsWithCollection(
-    @Query() filters: ClientFiltersDto,
-  ) {
+  findAllClientsWithCollection(@Query() filters: ClientFiltersDto) {
     return this.collectionsService.findAllClientsWithCollection(filters);
   }
 
@@ -52,18 +66,14 @@ export class CollectionsController {
   }
 
   @Get('sales/list-by-client/:clientId')
-  @Roles('COB')
-  findAllSalesByClient(
-    @Param('clientId') clientId: number,
-  ) {
+  @Roles('COB', 'SCO')
+  findAllSalesByClient(@Param('clientId') clientId: number) {
     return this.collectionsService.findAllSalesByClient(clientId);
   }
 
   @Get('clients/sales/:saleId')
   @Roles('COB', 'SCO')
-  findOneSaleByIdForClient(
-    @Param('saleId') saleId: string,
-  ) {
+  findOneSaleByIdForClient(@Param('saleId') saleId: string) {
     return this.collectionsService.findOneSaleByIdForClient(saleId);
   }
 
@@ -78,17 +88,13 @@ export class CollectionsController {
 
   @Get('list/all/payments')
   @Roles('SCO')
-  async findAllPaymentsAll(
-    @Query() filters: FindPaymentsDto,
-  ) {
+  async findAllPaymentsAll(@Query() filters: FindPaymentsDto) {
     return this.collectionsService.findAllPaymentsByCollector(filters);
   }
 
   @Get('payments/details/:id')
   @Roles('COB', 'SCO')
-  async findOnePayment(
-    @Param('id') id: number,
-  ) {
+  async findOnePayment(@Param('id') id: number) {
     return this.collectionsService.findOnePaymentByCollector(id);
   }
 
@@ -100,35 +106,61 @@ export class CollectionsController {
     @Param('financingId') financingId: string,
     @Body() paidInstallmentsDto: PaidInstallmentsDto,
     @GetUser() user: User,
-      @UploadedFiles(
-        new ParseFilePipeBuilder()
-          .addFileTypeValidator({
-            fileType: /(jpg|jpeg|png|webp)$/,
-          })
-          .addMaxSizeValidator({
-            maxSize: 1024 * 1024 * 2,
-          })
-          .build({
-            errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
-            fileIsRequired: false,
-          }),
-      )
-      files: Array<Express.Multer.File>,
+    @UploadedFiles(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({
+          fileType: /(jpg|jpeg|png|webp)$/,
+        })
+        .addMaxSizeValidator({
+          maxSize: 1024 * 1024 * 2,
+        })
+        .build({
+          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+          fileIsRequired: false,
+        }),
+    )
+    files: Array<Express.Multer.File>,
   ) {
     return this.collectionsService.paidInstallments(
       financingId,
       paidInstallmentsDto.amountPaid,
       paidInstallmentsDto.payments,
       files,
-      user.id
+      user.id,
     );
   }
 
   @Get('collectors/statistics')
   @Roles('SCO')
-  getCollectorStatistics(
-    @Query() filters: CollectorStatisticsFiltersDto,
-  ) {
+  getCollectorStatistics(@Query() filters: CollectorStatisticsFiltersDto) {
     return this.collectionsService.getCollectorStatistics(filters);
+  }
+
+  @Get('ubigeo/departamentos')
+  @Roles('SCO', 'COB')
+  findAllDepartamentos() {
+    return this.collectionsService.findAllDepartamentos();
+  }
+
+  @Get('ubigeo/provincias/:departamentoId')
+  @Roles('SCO', 'COB')
+  findProvinciasByDepartamento(
+    @Param('departamentoId') departamentoId: string,
+  ) {
+    return this.collectionsService.findProvinciasByDepartamento(
+      +departamentoId,
+    );
+  }
+
+  @Get('ubigeo/distritos/:provinciaId')
+  @Roles('SCO', 'COB')
+  findDistritosByProvincia(@Param('provinciaId') provinciaId: string) {
+    return this.collectionsService.findDistritosByProvincia(+provinciaId);
+  }
+
+  @Get('collectors/all')
+  @Roles('SCO')
+  findAllCollectorsWithoutPagination() {
+    return this.collectionsService.findAllCollectorsWithoutPagination();
   }
 }
