@@ -47,6 +47,8 @@ export class MigrationsService {
   constructor(
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    @InjectRepository(Sale)
+    private readonly saleRepo: Repository<Sale>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -112,19 +114,44 @@ export class MigrationsService {
 
     this.logger.log(`🔢 Total de ventas únicas identificadas: ${salesMap.size}`);
 
-    // 5. Transformar cada grupo de filas a una venta
+    // 5. Transformar cada grupo de filas a una venta, verificando duplicados y consistencia
     const sales = [];
     for (const [excelCode, rows] of salesMap.entries()) {
+      const firstRowData = rows[0].row;
+
+
+
+      // VALIDATION 2: Mandatory Lot Info
+      const projectName = this.cleanString(firstRowData[2]);
+      const stageName = this.cleanString(firstRowData[3]);
+      const blockName = this.cleanString(firstRowData[6]);
+      const lotName = this.cleanString(firstRowData[7]);
+
+      if (!projectName || !stageName || !blockName || !lotName) {
+        warnings.push(`Venta ${excelCode}: Falta información de Lote/Proyecto (Proyecto: ${projectName || 'N/A'}, Etapa: ${stageName || 'N/A'}, Bloque: ${blockName || 'N/A'}, Lote: ${lotName || 'N/A'}). Se omitirá.`);
+        continue;
+      }
+
+      // PRE-EXISTENCE CHECK
+      const existingSale = await this.saleRepo.createQueryBuilder("sale")
+        .where("sale.metadata ->> 'Codigo' = :excelCode", { excelCode })
+        .getOne();
+
+      if (existingSale) {
+        warnings.push(`Venta ${excelCode}: Ya fue registrada previamente (ID: ${existingSale.id}), se omitirá`);
+        continue;
+      }
+
       try {
         const sale = await this.transformRowsToSale(excelCode, rows);
         sales.push(sale);
       } catch (error) {
-        warnings.push(`Venta ${excelCode}: Error - ${error.message}`);
-        this.logger.warn(`⚠️ Error en venta ${excelCode}: ${error.message}`);
+        warnings.push(`Venta ${excelCode}: Error en transformación - ${error.message}`);
+        this.logger.warn(`⚠️ Error en transformación de venta ${excelCode}: ${error.message}`);
       }
     }
 
-    this.logger.log(`✅ Transformación completada: ${sales.length} ventas generadas`);
+    this.logger.log(`✅ Transformación completada: ${sales.length} ventas generadas para importación`);
 
     return {
       data: {
@@ -449,7 +476,11 @@ export class MigrationsService {
       totalAmountPending: data.sale.totalAmount, // ✅ Pendiente = total
       totalAmountUrbanDevelopment: data.sale.totalAmountUrbanDevelopment,
       applyLateFee: data.sale.applyLateFee,
-      metadata: data.sale.metadata || {},
+      metadata: {
+        ...(data.sale.metadata || {}),
+        'Fuente': 'Migración de Excel',
+        'Codigo': data.excelCode,
+      },
       notes: data.sale.notes || null,
       status: StatusSale.IN_PAYMENT_PROCESS, // Temporal, se actualizará después
       fromReservation: false,
@@ -920,9 +951,6 @@ export class MigrationsService {
     const totalAmount = this.cleanAmount(firstRow[26]); // Col 26: PRECIO
     const contractDate = this.parseExcelDate(firstRow[24]); // Col 24: FECHA DE CONTRATO
 
-    // Financiamiento y cuotas
-    const quantityCoutes = this.cleanNumber(firstRow[27]); // Col 27: NUMERO DE CUOTAS
-
     // Procesar todas las filas para obtener cuotas, pagos, reserva e inicial
     const { installments, payments, reservationAmount, initialAmount } = this.processInstallmentsAndPayments(rows);
 
@@ -941,7 +969,7 @@ export class MigrationsService {
       financingType: FinancingType.CREDITO, // ✅ Siempre CREDITO para ventas con cuotas
       initialAmount: initialAmount, // ✅ Calculado desde cuotas 0 tipo CANCELACION
       interestRate: null, // No está en Excel
-      quantityCoutes: quantityCoutes,
+      quantityCoutes: installments.length, // Derivado del número real de cuotas procesadas
       installments: installments, // ✅ Sin cuotas 0
     };
 
