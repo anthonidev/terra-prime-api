@@ -334,7 +334,7 @@ export class CollectionsService {
           p."rejectionReason"
         FROM payments p
         WHERE p."relatedEntityId" = $1
-          AND p."relatedEntityType" = 'financingInstallments'
+          AND p."relatedEntityType" = 'financingInstallment'
         ORDER BY p."createdAt" ASC
         `,
         [installmentId]
