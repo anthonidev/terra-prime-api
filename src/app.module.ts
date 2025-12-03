@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdminCollectionsModule } from './admin-collections/admin-collections.module';
@@ -19,6 +19,7 @@ import { SystemsModule } from './systems/systems.module';
 import { UsersModule } from './user/user.module';
 import { ExternalApiModule } from './external-api/external-api.module';
 import { MigrationsModule } from './migrations/migrations.module';
+import { json, urlencoded } from 'express';
 
 @Module({
   imports: [
@@ -54,4 +55,10 @@ import { MigrationsModule } from './migrations/migrations.module';
     MigrationsModule,
   ],
 })
-export class AppModule {}
+export class AppModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(json({ limit: '50mb' }), urlencoded({ extended: true, limit: '50mb' }))
+      .forRoutes('*'); // Aplica a todas las rutas
+  }
+}
