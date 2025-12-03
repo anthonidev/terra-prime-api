@@ -260,7 +260,7 @@ export class CollectionsService {
       items: sales.map((sale) => ({
         id: sale.id,
         type: sale.type,
-        totalAmount: sale.totalAmount.toString(),
+        totalAmount: sale.totalAmount?.toString(),
         status: sale.status,
         createdAt: sale.createdAt,
         currency: sale.currency,
@@ -275,9 +275,9 @@ export class CollectionsService {
         paymentAcordPdfUrl: sale.paymentAcordPdfUrl,
         financing: sale.financing ? {
           id: sale.financing.id,
-          initialAmount: sale.financing.initialAmount.toString(),
-          interestRate: sale.financing.interestRate.toString(),
-          quantityCoutes: sale.financing.quantityCoutes.toString(),
+          initialAmount: sale.financing.initialAmount?.toString(),
+          interestRate: sale.financing.interestRate?.toString(),
+          quantityCoutes: sale.financing.quantityCoutes?.toString(),
         } : null,
         vendor: {
           document: sale.vendor.document,
