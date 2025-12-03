@@ -122,6 +122,20 @@ export class PaymentsService {
     approvePaymentDto: ApprovePaymentDto,
   ): Promise<PaymentResponse> {
     const payment = await this.isValidPayment(paymentId);
+
+    // ✅ Validar que todos los paymentDetails tengan codeOperation
+    if (payment.details && payment.details.length > 0) {
+      const detailsWithoutCode = payment.details.filter(
+        detail => !detail.codeOperation || detail.codeOperation.trim() === ''
+      );
+
+      if (detailsWithoutCode.length > 0) {
+        throw new BadRequestException(
+          `No se puede aprobar el pago. ${detailsWithoutCode.length} detalle(s) de pago no tienen código de operación. Por favor, complete todos los códigos de operación antes de aprobar.`
+        );
+      }
+    }
+
     return await this.transactionService.runInTransaction(async (queryRunner) => {
       payment.status = StatusPayment.APPROVED;
       payment.reviewedBy = { id: reviewedById } as any;

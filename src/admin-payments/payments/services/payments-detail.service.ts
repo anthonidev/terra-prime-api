@@ -116,4 +116,37 @@ export class PaymentsDetailService {
     detail.isActive = false;
     return await repository.save(detail);
   }
+
+  async updateCodeOperation(
+    detailId: number,
+    codeOperation: string,
+    queryRunner?: QueryRunner,
+  ): Promise<PaymentDetails> {
+    const repository = queryRunner
+      ? queryRunner.manager.getRepository(PaymentDetails)
+      : this.paymentDetailsRepository;
+
+    const detail = await repository.findOne({
+      where: { id: detailId },
+      relations: ['payment']
+    });
+
+    if (!detail) {
+      throw new NotFoundException(`Detalle de pago con ID ${detailId} no encontrado`);
+    }
+
+    if (!detail.isActive) {
+      throw new BadRequestException(`No se puede actualizar un detalle de pago anulado`);
+    }
+
+    // Validar que el pago esté en estado PENDING
+    if (detail.payment && detail.payment.status !== 'PENDING') {
+      throw new BadRequestException(
+        `No se puede actualizar el código de operación de un pago que no está en estado PENDIENTE`
+      );
+    }
+
+    detail.codeOperation = codeOperation.trim();
+    return await repository.save(detail);
+  }
 }

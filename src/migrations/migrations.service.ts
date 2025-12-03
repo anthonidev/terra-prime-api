@@ -541,7 +541,7 @@ export class MigrationsService {
       initialAmount: data.financing.initialAmount, // ✅ Ya calculado desde Excel
       initialAmountPaid: 0, // ✅ Se actualizará con pagos
       initialAmountPending: data.financing.initialAmount, // ✅ Pendiente = total inicial
-      interestRate: data.financing.interestRate || null,
+      interestRate: data.financing.interestRate || 0, // ✅ 0 por defecto si no viene del Excel
       quantityCoutes: regularInstallments.length, // ✅ Solo cuotas regulares
       sale: sale,
     });
@@ -968,7 +968,7 @@ export class MigrationsService {
     const financing = {
       financingType: FinancingType.CREDITO, // ✅ Siempre CREDITO para ventas con cuotas
       initialAmount: initialAmount, // ✅ Calculado desde cuotas 0 tipo CANCELACION
-      interestRate: null, // No está en Excel
+      interestRate: 0, // ✅ 0 por defecto (no está en Excel)
       quantityCoutes: installments.length, // Derivado del número real de cuotas procesadas
       installments: installments, // ✅ Sin cuotas 0
     };
@@ -996,20 +996,22 @@ export class MigrationsService {
     reservationAmount: number;
     initialAmount: number;
   } {
-    const installmentsMap = new Map<number, any>();
-    const paymentsMap = new Map<number, any[]>();
+    const installmentsArray: any[] = []; // ✅ Usamos array para mantener orden
+    const paymentsMap = new Map<number, any[]>(); // ✅ Mapeo temporal usando número de Excel
+    const excelCouteToNewCouteMap = new Map<number, number>(); // ✅ Mapeo Excel → Secuencial
     let reservationAmount = 0;
     let initialAmount = 0;
 
+    // ========== PRIMER PASO: Procesar cuotas 0 y recolectar cuotas regulares ==========
     for (const { row } of rows) {
-      const couteNumber = this.cleanNumber(row[28]); // Col 28: CUOTA
+      const couteNumberExcel = this.cleanNumber(row[28]); // Col 28: CUOTA (del Excel)
       const couteAmount = this.cleanAmount(row[30]); // Col 30: IMPORTE DE CUOTA
       const expectedPaymentDate = this.parseExcelDate(row[29]); // Col 29: FECHA DE VENCIMIENTO
       const lateFeeAmount = this.cleanAmount(row[31]); // Col 31: MORA
       const detalle = this.cleanString(row[39]) || this.cleanString(row[47]); // Col 39 o 47: DETALLE
 
       // ========== CLASIFICAR CUOTA 0 ==========
-      if (couteNumber === 0) {
+      if (couteNumberExcel === 0) {
         const cuota0Type = this.classifyCuota0(detalle);
 
         if (cuota0Type === 'reservation') {
@@ -1022,12 +1024,12 @@ export class MigrationsService {
         const paymentDetails = this.extractPaymentDetails(row);
 
         if (paymentDetails.length > 0) {
-          if (!paymentsMap.has(couteNumber)) {
-            paymentsMap.set(couteNumber, []);
+          if (!paymentsMap.has(couteNumberExcel)) {
+            paymentsMap.set(couteNumberExcel, []);
           }
 
-          paymentsMap.get(couteNumber).push({
-            couteNumber,
+          paymentsMap.get(couteNumberExcel).push({
+            couteNumber: 0, // ✅ Cuota 0 mantiene su número
             paymentConfigId: cuota0Type === 'reservation' ? 2 : 3, // FINANCING_PAYMENT para cuota 0 (inicial)
             paymentDetails,
             observation: detalle, // ✅ Observation para clasificar luego
@@ -1038,25 +1040,26 @@ export class MigrationsService {
       }
 
       // ========== CUOTAS REGULARES (1, 2, 3... N) ==========
-      if (!installmentsMap.has(couteNumber)) {
-        installmentsMap.set(couteNumber, {
-          couteNumber,
+      // ✅ Verificar si ya existe esta cuota del Excel
+      if (!excelCouteToNewCouteMap.has(couteNumberExcel)) {
+        installmentsArray.push({
+          couteNumberExcel, // ✅ Guardamos el número original del Excel
           couteAmount,
           expectedPaymentDate,
           lateFeeAmount,
         });
       }
 
-      // Procesar pagos de cuotas regulares
+      // Procesar pagos de cuotas regulares (aún usando número del Excel)
       const paymentDetails = this.extractPaymentDetails(row);
 
       if (paymentDetails.length > 0) {
-        if (!paymentsMap.has(couteNumber)) {
-          paymentsMap.set(couteNumber, []);
+        if (!paymentsMap.has(couteNumberExcel)) {
+          paymentsMap.set(couteNumberExcel, []);
         }
 
-        paymentsMap.get(couteNumber).push({
-          couteNumber,
+        paymentsMap.get(couteNumberExcel).push({
+          couteNumberExcel, // ✅ Temporal, se actualizará después
           paymentConfigId: 4, // FINANCING_INSTALLMENTS_PAYMENT para cuotas regulares
           paymentDetails,
           observation: detalle, // ✅ Observation va en payment, no en installment
@@ -1064,11 +1067,50 @@ export class MigrationsService {
       }
     }
 
+    // ========== SEGUNDO PASO: Renumerar cuotas regulares secuencialmente ==========
+    // Ordenar por fecha de vencimiento
+    installmentsArray.sort((a, b) =>
+      new Date(a.expectedPaymentDate).getTime() - new Date(b.expectedPaymentDate).getTime()
+    );
+
+    // Asignar números secuenciales (1, 2, 3...) y crear mapeo
+    const renumberedInstallments = installmentsArray.map((inst, index) => {
+      const newCouteNumber = index + 1; // ✅ Renumeración secuencial
+      excelCouteToNewCouteMap.set(inst.couteNumberExcel, newCouteNumber);
+
+      return {
+        couteNumber: newCouteNumber, // ✅ Nuevo número secuencial
+        couteAmount: inst.couteAmount,
+        expectedPaymentDate: inst.expectedPaymentDate,
+        lateFeeAmount: inst.lateFeeAmount,
+      };
+    });
+
+    // ========== TERCER PASO: Actualizar números de cuota en pagos ==========
+    const updatedPayments: any[] = [];
+
+    for (const [excelCouteNumber, paymentGroup] of paymentsMap.entries()) {
+      for (const payment of paymentGroup) {
+        if (excelCouteNumber === 0) {
+          // ✅ Cuota 0 mantiene su número
+          updatedPayments.push(payment);
+        } else {
+          // ✅ Cuotas regulares: usar el nuevo número secuencial
+          const newCouteNumber = excelCouteToNewCouteMap.get(excelCouteNumber);
+          if (newCouteNumber) {
+            updatedPayments.push({
+              ...payment,
+              couteNumber: newCouteNumber, // ✅ Actualizar con el número secuencial
+            });
+            delete payment.couteNumberExcel; // ✅ Limpiar campo temporal
+          }
+        }
+      }
+    }
+
     return {
-      installments: Array.from(installmentsMap.values())
-        .filter(inst => inst.couteNumber > 0) // ✅ Solo cuotas regulares
-        .sort((a, b) => a.couteNumber - b.couteNumber),
-      payments: Array.from(paymentsMap.values()).flat(),
+      installments: renumberedInstallments, // ✅ Cuotas renumeradas (1, 2, 3...)
+      payments: updatedPayments, // ✅ Pagos con números actualizados
       reservationAmount,
       initialAmount,
     };

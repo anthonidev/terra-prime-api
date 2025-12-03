@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, ParseIntPipe } from '@nestjs/common';
 import { UpdatePaymentDto } from './dto/update-payment.dto';
 import { UpdateDetailPaymentDto } from './dto/update-detail-payment.dto';
+import { UpdateCodeOperationDto } from './dto/update-code-operation.dto';
 import { PaymentsService } from './services/payments.service';
 import { PaymentsDetailService } from './services/payments-detail.service';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -86,5 +87,17 @@ export class PaymentsController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.paymentsDetailService.deactivate(id);
+  }
+
+  @Patch('details/:id/code-operation')
+  @Roles('FAC')
+  async updateCodeOperation(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateCodeOperationDto: UpdateCodeOperationDto,
+  ) {
+    return this.paymentsDetailService.updateCodeOperation(
+      id,
+      updateCodeOperationDto.codeOperation,
+    );
   }
 }
