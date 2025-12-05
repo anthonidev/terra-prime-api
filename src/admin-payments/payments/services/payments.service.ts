@@ -1,4 +1,11 @@
-import { BadRequestException, forwardRef, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  forwardRef,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { QueryRunner, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Payment } from '../entities/payment.entity';
@@ -42,7 +49,7 @@ export class PaymentsService {
     private readonly reservationService: ReservationsService,
     private readonly lotService: LotService,
     private readonly nexusApiService: NexusApiService,
-  ){}
+  ) {}
   // Methods for endpoints
   async create(
     createPaymentDto: CreatePaymentDto,
@@ -50,7 +57,11 @@ export class PaymentsService {
     userId: string,
     queryRunner?: QueryRunner,
   ): Promise<PaymentResponse> {
-    this.isValidPaymentsItems(createPaymentDto.amount, createPaymentDto.paymentDetails, files);
+    this.isValidPaymentsItems(
+      createPaymentDto.amount,
+      createPaymentDto.paymentDetails,
+      files,
+    );
     const uploadedKeys: { detailId: number; urlKey: string }[] = [];
     try {
       const {
@@ -62,7 +73,10 @@ export class PaymentsService {
         metadata,
       } = createPaymentDto;
 
-      const paymentConfig = await this.isValidPaymentConfig(relatedEntityType, relatedEntityId);
+      const paymentConfig = await this.isValidPaymentConfig(
+        relatedEntityType,
+        relatedEntityId,
+      );
       const payment = this.paymentRepository.create({
         user: { id: userId },
         paymentConfig: { id: paymentConfig.id },
@@ -74,19 +88,30 @@ export class PaymentsService {
         metadata: metadata ? metadata : {},
       });
       const savedPayment = await queryRunner.manager.save(payment);
-      await this.updateStatusSale(relatedEntityType, relatedEntityId, queryRunner);
+      await this.updateStatusSale(
+        relatedEntityType,
+        relatedEntityId,
+        queryRunner,
+      );
       const createdVouchers = await Promise.all(
         files.map(async (file, i) => {
-          const currentPaymentDetailDto = paymentDetails.find(detail => detail.fileIndex === i);
-          if (!currentPaymentDetailDto) 
-            throw new BadRequestException(`No se encontró detalle de pago para el archivo en el índice ${i}.`);
+          const currentPaymentDetailDto = paymentDetails.find(
+            (detail) => detail.fileIndex === i,
+          );
+          if (!currentPaymentDetailDto)
+            throw new BadRequestException(
+              `No se encontró detalle de pago para el archivo en el índice ${i}.`,
+            );
           const savedDetail = await this.paymentsDetailService.create(
             savedPayment.id,
             currentPaymentDetailDto,
             file,
             queryRunner,
           );
-          uploadedKeys.push({ detailId: savedDetail.id, urlKey: savedDetail.urlKey });
+          uploadedKeys.push({
+            detailId: savedDetail.id,
+            urlKey: savedDetail.urlKey,
+          });
           return {
             id: savedDetail.id,
             url: savedDetail.url,
@@ -97,22 +122,23 @@ export class PaymentsService {
             transactionDate: savedDetail.transactionDate,
             isActive: savedDetail.isActive,
           };
-        })
+        }),
       );
       return {
         ...formatPaymentsResponse(savedPayment),
         vouchers: createdVouchers,
       };
-
     } catch (error) {
       for (const { detailId, urlKey } of uploadedKeys) {
         try {
           await this.paymentsDetailService.delete(urlKey, detailId);
         } catch (deleteErr) {
-          console.error(`Error al eliminar detalle de pago ${detailId} y archivo S3 ${urlKey} durante el rollback: ${deleteErr.message}`);
+          console.error(
+            `Error al eliminar detalle de pago ${detailId} y archivo S3 ${urlKey} durante el rollback: ${deleteErr.message}`,
+          );
         }
       }
-      throw error; 
+      throw error;
     }
   }
 
@@ -126,214 +152,277 @@ export class PaymentsService {
     // ✅ Validar que todos los paymentDetails tengan codeOperation
     if (payment.details && payment.details.length > 0) {
       const detailsWithoutCode = payment.details.filter(
-        detail => !detail.codeOperation || detail.codeOperation.trim() === ''
+        (detail) => !detail.codeOperation || detail.codeOperation.trim() === '',
       );
 
       if (detailsWithoutCode.length > 0) {
         throw new BadRequestException(
-          `No se puede aprobar el pago. ${detailsWithoutCode.length} detalle(s) de pago no tienen código de operación. Por favor, complete todos los códigos de operación antes de aprobar.`
+          `No se puede aprobar el pago. ${detailsWithoutCode.length} detalle(s) de pago no tienen código de operación. Por favor, complete todos los códigos de operación antes de aprobar.`,
         );
       }
     }
 
-    return await this.transactionService.runInTransaction(async (queryRunner) => {
-      payment.status = StatusPayment.APPROVED;
-      payment.reviewedBy = { id: reviewedById } as any;
-      payment.reviewedAt = new Date();
-      payment.banckName = approvePaymentDto.banckName;
-      payment.dateOperation = new Date(approvePaymentDto.dateOperation);
-      payment.numberTicket = approvePaymentDto.numberTicket;
-      payment.metadata = {
-        "Configuración de Pago": payment.paymentConfig.code,
-        "Estado del Pago": StatusPayment.APPROVED,
-        "Monto": payment.amount,
-        "Descripción": `Pago aprobado el ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString()}`,
-      };
-      const approvedPayment = await queryRunner.manager.save(payment);
-      await this.updateStatusApprovedPayment(payment, queryRunner);
+    return await this.transactionService.runInTransaction(
+      async (queryRunner) => {
+        payment.status = StatusPayment.APPROVED;
+        payment.reviewedBy = { id: reviewedById } as any;
+        payment.reviewedAt = new Date();
+        // payment.banckName = approvePaymentDto.banckName;
+        payment.dateOperation = new Date(approvePaymentDto.dateOperation);
+        payment.numberTicket = approvePaymentDto.numberTicket;
+        payment.metadata = {
+          'Configuración de Pago': payment.paymentConfig.code,
+          'Estado del Pago': StatusPayment.APPROVED,
+          Monto: payment.amount,
+          Descripción: `Pago aprobado el ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString()}`,
+        };
+        const approvedPayment = await queryRunner.manager.save(payment);
+        await this.updateStatusApprovedPayment(payment, queryRunner);
 
-      // Notificar a Nexus si el pago tiene bankName === 'NEXUS' en el primer item
-      if (payment.details && payment.details.length > 0 && payment.details[0].bankName === 'NEXUS') {
-        await this.notifyNexusPaymentApproved(payment, reviewedById);
-      }
+        // Notificar a Nexus si el pago tiene bankName === 'NEXUS' en el primer item
+        if (
+          payment.details &&
+          payment.details.length > 0 &&
+          payment.details[0].bankName === 'NEXUS'
+        ) {
+          await this.notifyNexusPaymentApproved(payment, reviewedById);
+        }
 
-      return {
-        ...formatPaymentsResponse(approvedPayment),
-        vouchers: payment.details.map(detail => ({
-          id: detail.id,
-          url: detail.url,
-          amount: detail.amount,
-          bankName: detail.bankName,
-          transactionReference: detail.transactionReference,
-          codeOperation: detail.codeOperation,
-          transactionDate: detail.transactionDate,
-          isActive: detail.isActive,
-        })),
-      };
-    });
+        return {
+          ...formatPaymentsResponse(approvedPayment),
+          vouchers: payment.details.map((detail) => ({
+            id: detail.id,
+            url: detail.url,
+            amount: detail.amount,
+            bankName: detail.bankName,
+            transactionReference: detail.transactionReference,
+            codeOperation: detail.codeOperation,
+            transactionDate: detail.transactionDate,
+            isActive: detail.isActive,
+          })),
+        };
+      },
+    );
   }
 
   async rejectPayment(
-  paymentId: number,
-  rejectionReason: string,
-  reviewedById: string,
-): Promise<PaymentResponse> {
-  const payment = await this.isValidPayment(paymentId);
-  const wasApproved = payment.status === StatusPayment.APPROVED;
+    paymentId: number,
+    rejectionReason: string,
+    reviewedById: string,
+  ): Promise<PaymentResponse> {
+    const payment = await this.isValidPayment(paymentId);
+    const wasApproved = payment.status === StatusPayment.APPROVED;
 
-    return await this.transactionService.runInTransaction(async (queryRunner) => {
-      payment.status = StatusPayment.REJECTED;
-      payment.rejectionReason = rejectionReason;
-      payment.reviewedBy = { id: reviewedById } as any;
-      payment.reviewedAt = new Date();
-      const canceledPayment = await queryRunner.manager.save(payment);
+    return await this.transactionService.runInTransaction(
+      async (queryRunner) => {
+        payment.status = StatusPayment.REJECTED;
+        payment.rejectionReason = rejectionReason;
+        payment.reviewedBy = { id: reviewedById } as any;
+        payment.reviewedAt = new Date();
+        const canceledPayment = await queryRunner.manager.save(payment);
 
-      // ========== REVERTIR PAGO DE RESERVA ==========
-      if (payment.relatedEntityType === 'reservation' && payment.relatedEntityId) {
-        const sale = await this.salesService.findOneById(payment.relatedEntityId);
+        // ========== REVERTIR PAGO DE RESERVA ==========
+        if (
+          payment.relatedEntityType === 'reservation' &&
+          payment.relatedEntityId
+        ) {
+          const sale = await this.salesService.findOneById(
+            payment.relatedEntityId,
+          );
 
-        // Si el pago fue aprobado, revertir montos
-        if (wasApproved) {
-          const newPaid = Number((Number(sale.reservationAmountPaid || 0) - Number(payment.amount)).toFixed(2));
-          const newPending = Number((Number(sale.reservationAmount) - newPaid).toFixed(2));
+          // Si el pago fue aprobado, revertir montos
+          if (wasApproved) {
+            const newPaid = Number(
+              (
+                Number(sale.reservationAmountPaid || 0) - Number(payment.amount)
+              ).toFixed(2),
+            );
+            const newPending = Number(
+              (Number(sale.reservationAmount) - newPaid).toFixed(2),
+            );
 
-          await queryRunner.manager.update('sales',
-            { id: sale.id },
-            {
-              reservationAmountPaid: newPaid > 0 ? newPaid : 0,
-              reservationAmountPending: newPending > 0 ? newPending : sale.reservationAmount
-            }
+            await queryRunner.manager.update(
+              'sales',
+              { id: sale.id },
+              {
+                reservationAmountPaid: newPaid > 0 ? newPaid : 0,
+                reservationAmountPending:
+                  newPending > 0 ? newPending : sale.reservationAmount,
+              },
+            );
+          }
+
+          // Determinar nuevo estado
+          const updatedSale = await queryRunner.manager.findOne('sales', {
+            where: { id: sale.id },
+          } as any);
+          let newStatus: StatusSale;
+          if (Number(updatedSale.reservationAmountPaid || 0) === 0) {
+            newStatus = StatusSale.RESERVATION_PENDING;
+          } else {
+            newStatus = StatusSale.RESERVATION_IN_PAYMENT;
+          }
+
+          await this.salesService.updateStatusSale(
+            payment.relatedEntityId,
+            newStatus,
+            queryRunner,
           );
         }
 
-        // Determinar nuevo estado
-        const updatedSale = await queryRunner.manager.findOne('sales', { where: { id: sale.id } } as any);
-        let newStatus: StatusSale;
-        if (Number(updatedSale.reservationAmountPaid || 0) === 0) {
-          newStatus = StatusSale.RESERVATION_PENDING;
-        } else {
-          newStatus = StatusSale.RESERVATION_IN_PAYMENT;
-        }
+        // ========== REVERTIR PAGO DE VENTA COMPLETA ==========
+        if (payment.relatedEntityType === 'sale' && payment.relatedEntityId) {
+          const sale = await this.salesService.findOneById(
+            payment.relatedEntityId,
+          );
 
-        await this.salesService.updateStatusSale(
-          payment.relatedEntityId,
-          newStatus,
-          queryRunner,
-        );
-      }
+          // Si el pago fue aprobado, revertir montos
+          if (wasApproved) {
+            const newPaid = Number(
+              (
+                Number(sale.totalAmountPaid || 0) - Number(payment.amount)
+              ).toFixed(2),
+            );
+            const totalToPay = Number(
+              (
+                Number(sale.totalAmount) - Number(sale.reservationAmount || 0)
+              ).toFixed(2),
+            );
+            const newPending = Number((totalToPay - newPaid).toFixed(2));
 
-      // ========== REVERTIR PAGO DE VENTA COMPLETA ==========
-      if (payment.relatedEntityType === 'sale' && payment.relatedEntityId) {
-        const sale = await this.salesService.findOneById(payment.relatedEntityId);
+            await queryRunner.manager.update(
+              'sales',
+              { id: sale.id },
+              {
+                totalAmountPaid: newPaid > 0 ? newPaid : 0,
+                totalAmountPending: newPending > 0 ? newPending : totalToPay,
+              },
+            );
+          }
 
-        // Si el pago fue aprobado, revertir montos
-        if (wasApproved) {
-          const newPaid = Number((Number(sale.totalAmountPaid || 0) - Number(payment.amount)).toFixed(2));
-          const totalToPay = Number((Number(sale.totalAmount) - Number(sale.reservationAmount || 0)).toFixed(2));
-          const newPending = Number((totalToPay - newPaid).toFixed(2));
+          // Determinar nuevo estado
+          const updatedSale = await queryRunner.manager.findOne('sales', {
+            where: { id: sale.id },
+          } as any);
+          let newStatus: StatusSale;
+          if (Number(updatedSale.totalAmountPaid || 0) === 0) {
+            newStatus = StatusSale.PENDING;
+          } else {
+            newStatus = StatusSale.IN_PAYMENT;
+          }
 
-          await queryRunner.manager.update('sales',
-            { id: sale.id },
-            {
-              totalAmountPaid: newPaid > 0 ? newPaid : 0,
-              totalAmountPending: newPending > 0 ? newPending : totalToPay
-            }
+          await this.salesService.updateStatusSale(
+            payment.relatedEntityId,
+            newStatus,
+            queryRunner,
           );
         }
 
-        // Determinar nuevo estado
-        const updatedSale = await queryRunner.manager.findOne('sales', { where: { id: sale.id } } as any);
-        let newStatus: StatusSale;
-        if (Number(updatedSale.totalAmountPaid || 0) === 0) {
-          newStatus = StatusSale.PENDING;
-        } else {
-          newStatus = StatusSale.IN_PAYMENT;
-        }
+        // ========== REVERTIR PAGO INICIAL DE FINANCIAMIENTO ==========
+        if (
+          payment.relatedEntityType === 'financing' &&
+          payment.relatedEntityId
+        ) {
+          const sale = await this.salesService.findOneByIdFinancing(
+            payment.relatedEntityId,
+          );
+          const financing = await queryRunner.manager.findOne('financing', {
+            where: { id: payment.relatedEntityId },
+          } as any);
 
-        await this.salesService.updateStatusSale(
-          payment.relatedEntityId,
-          newStatus,
-          queryRunner,
-        );
-      }
+          // Si el pago fue aprobado, revertir montos
+          if (wasApproved && financing) {
+            const newPaid = Number(
+              (
+                Number(financing.initialAmountPaid || 0) -
+                Number(payment.amount)
+              ).toFixed(2),
+            );
+            const initialToPay = Number(
+              (
+                Number(financing.initialAmount) -
+                Number(sale.reservationAmount || 0)
+              ).toFixed(2),
+            );
+            const newPending = Number((initialToPay - newPaid).toFixed(2));
 
-      // ========== REVERTIR PAGO INICIAL DE FINANCIAMIENTO ==========
-      if (payment.relatedEntityType === 'financing' && payment.relatedEntityId) {
-        const sale = await this.salesService.findOneByIdFinancing(payment.relatedEntityId);
-        const financing = await queryRunner.manager.findOne('financing', {
-          where: { id: payment.relatedEntityId }
-        } as any);
+            await queryRunner.manager.update(
+              'financing',
+              { id: financing.id },
+              {
+                initialAmountPaid: newPaid > 0 ? newPaid : 0,
+                initialAmountPending:
+                  newPending > 0 ? newPending : initialToPay,
+              },
+            );
+          }
 
-        // Si el pago fue aprobado, revertir montos
-        if (wasApproved && financing) {
-          const newPaid = Number((Number(financing.initialAmountPaid || 0) - Number(payment.amount)).toFixed(2));
-          const initialToPay = Number((Number(financing.initialAmount) - Number(sale.reservationAmount || 0)).toFixed(2));
-          const newPending = Number((initialToPay - newPaid).toFixed(2));
-
-          await queryRunner.manager.update('financing',
-            { id: financing.id },
+          // Determinar nuevo estado
+          const updatedFinancing = await queryRunner.manager.findOne(
+            'financing',
             {
-              initialAmountPaid: newPaid > 0 ? newPaid : 0,
-              initialAmountPending: newPending > 0 ? newPending : initialToPay
-            }
+              where: { id: payment.relatedEntityId },
+            } as any,
+          );
+          let newStatus: StatusSale;
+          if (Number(updatedFinancing.initialAmountPaid || 0) === 0) {
+            newStatus = StatusSale.PENDING;
+          } else {
+            newStatus = StatusSale.IN_PAYMENT;
+          }
+
+          await this.salesService.updateStatusSale(
+            sale.id,
+            newStatus,
+            queryRunner,
           );
         }
 
-        // Determinar nuevo estado
-        const updatedFinancing = await queryRunner.manager.findOne('financing', {
-          where: { id: payment.relatedEntityId }
-        } as any);
-        let newStatus: StatusSale;
-        if (Number(updatedFinancing.initialAmountPaid || 0) === 0) {
-          newStatus = StatusSale.PENDING;
-        } else {
-          newStatus = StatusSale.IN_PAYMENT;
+        // ========== REVERTIR PAGOS DE CUOTAS ==========
+        if (
+          payment.relatedEntityType === 'financingInstallments' &&
+          payment.relatedEntityId
+        ) {
+          await this.revertInstallmentsPayment(paymentId, queryRunner);
         }
 
-        await this.salesService.updateStatusSale(
-          sale.id,
-          newStatus,
-          queryRunner,
-        );
-      }
-
-      // ========== REVERTIR PAGOS DE CUOTAS ==========
-      if (payment.relatedEntityType === 'financingInstallments' && payment.relatedEntityId) {
-        await this.revertInstallmentsPayment(paymentId, queryRunner);
-      }
-
-      return {
-        ...formatPaymentsResponse(canceledPayment),
-        vouchers: payment.details.map(detail => ({
-          id: detail.id,
-          url: detail.url,
-          amount: detail.amount,
-          bankName: detail.bankName,
-          transactionReference: detail.transactionReference,
-          codeOperation: detail.codeOperation,
-          transactionDate: detail.transactionDate,
-          isActive: detail.isActive,
-        })),
-      };
-    });
+        return {
+          ...formatPaymentsResponse(canceledPayment),
+          vouchers: payment.details.map((detail) => ({
+            id: detail.id,
+            url: detail.url,
+            amount: detail.amount,
+            bankName: detail.bankName,
+            transactionReference: detail.transactionReference,
+            codeOperation: detail.codeOperation,
+            transactionDate: detail.transactionDate,
+            isActive: detail.isActive,
+          })),
+        };
+      },
+    );
   }
 
   async revertInstallmentsPayment(
     paymentId: number,
-    queryRunner?: QueryRunner
+    queryRunner?: QueryRunner,
   ): Promise<void> {
     const payment = await queryRunner.manager.getRepository(Payment).findOne({
       where: { id: paymentId },
-      relations: ['details']
+      relations: ['details'],
     });
 
     if (!payment || !payment.metadata?.installmentsBackup) {
-      throw new BadRequestException('No se encontró información de respaldo para revertir las cuotas');
+      throw new BadRequestException(
+        'No se encontró información de respaldo para revertir las cuotas',
+      );
     }
 
     try {
-      const installmentsBackup = JSON.parse(payment.metadata.installmentsBackup);
-      
+      const installmentsBackup = JSON.parse(
+        payment.metadata.installmentsBackup,
+      );
+
       // Restaurar cada cuota a su estado anterior
       for (const backup of installmentsBackup) {
         await this.financingInstallmentsService.updateAmountsPayment(
@@ -347,11 +436,16 @@ export class PaymentsService {
         );
       }
     } catch (error) {
-      throw new BadRequestException('Error al revertir las cuotas: ' + error.message);
+      throw new BadRequestException(
+        'Error al revertir las cuotas: ' + error.message,
+      );
     }
   }
 
-  async findAllPayments(filters: FindPaymentsDto, userId?: string): Promise<Paginated<PaymentAllResponse>> {
+  async findAllPayments(
+    filters: FindPaymentsDto,
+    userId?: string,
+  ): Promise<Paginated<PaymentAllResponse>> {
     try {
       const {
         page = 1,
@@ -376,8 +470,7 @@ export class PaymentsService {
           paymentConfigId,
         });
 
-      if (status)
-        queryBuilder.andWhere('payment.status = :status', { status });
+      if (status) queryBuilder.andWhere('payment.status = :status', { status });
 
       if (startDate)
         queryBuilder.andWhere('payment.createdAt >= :startDate', {
@@ -393,16 +486,17 @@ export class PaymentsService {
       }
 
       if (search)
-        queryBuilder.andWhere(
-          '(user.email ILIKE :search)',
-          { search: `%${search}%` },
-        );
+        queryBuilder.andWhere('(user.email ILIKE :search)', {
+          search: `%${search}%`,
+        });
 
       if (userId)
         queryBuilder.andWhere('payment.user.id = :userId', { userId });
 
       if (collectorId)
-        queryBuilder.andWhere('payment.user.id = :collectorId', { collectorId });
+        queryBuilder.andWhere('payment.user.id = :collectorId', {
+          collectorId,
+        });
 
       queryBuilder
         .orderBy('payment.createdAt', order)
@@ -486,22 +580,27 @@ export class PaymentsService {
       .getOne();
 
     if (!payment) {
-      throw new NotFoundException(`El pago con ID ${paymentId} no se encuentra registrado`);
+      throw new NotFoundException(
+        `El pago con ID ${paymentId} no se encuentra registrado`,
+      );
     }
-    const [enrichedPayment] = await this.enrichPaymentsWithRelatedEntities([payment]);
-    
+    const [enrichedPayment] = await this.enrichPaymentsWithRelatedEntities([
+      payment,
+    ]);
+
     const response: PaymentAllResponse = {
       ...enrichedPayment,
-      vouchers: payment.details?.map(detail => ({
-        id: detail.id,
-        url: detail.url,
-        amount: detail.amount,
-        bankName: detail.bankName,
-        transactionReference: detail.transactionReference,
-        codeOperation: detail.codeOperation,
-        transactionDate: detail.transactionDate,
-        isActive: detail.isActive,
-      })) || []
+      vouchers:
+        payment.details?.map((detail) => ({
+          id: detail.id,
+          url: detail.url,
+          amount: detail.amount,
+          bankName: detail.bankName,
+          transactionReference: detail.transactionReference,
+          codeOperation: detail.codeOperation,
+          transactionDate: detail.transactionDate,
+          isActive: detail.isActive,
+        })) || [],
     };
 
     return response;
@@ -514,31 +613,36 @@ export class PaymentsService {
   ) {
     const { numberTicket } = completePaymentDto;
     if (!numberTicket)
-      throw new BadRequestException(
-        'Se requiere el número de ticket',
-      );
+      throw new BadRequestException('Se requiere el número de ticket');
 
-    return await this.transactionService.runInTransaction(async (queryRunner) => {
-      const payment = await this.paymentRepository.findOne({
-        where: { id: paymentId },
-        relations: ['user', 'paymentConfig', 'details'],
-      });
+    return await this.transactionService.runInTransaction(
+      async (queryRunner) => {
+        const payment = await this.paymentRepository.findOne({
+          where: { id: paymentId },
+          relations: ['user', 'paymentConfig', 'details'],
+        });
 
-      if (!payment) throw new NotFoundException(`Pago con ID ${paymentId} no encontrado`);
+        if (!payment)
+          throw new NotFoundException(`Pago con ID ${paymentId} no encontrado`);
 
-      if (payment.status !== StatusPayment.APPROVED)
-        throw new BadRequestException(`El pago tiene que estar aprobado previamente`);
+        if (payment.status !== StatusPayment.APPROVED)
+          throw new BadRequestException(
+            `El pago tiene que estar aprobado previamente`,
+          );
 
-      payment.numberTicket = numberTicket;
-      payment.status = StatusPayment.COMPLETED;
+        payment.numberTicket = numberTicket;
+        payment.status = StatusPayment.COMPLETED;
 
-      await queryRunner.manager.save(payment);
-      return formatPaymentsResponse(payment);
-    });
+        await queryRunner.manager.save(payment);
+        return formatPaymentsResponse(payment);
+      },
+    );
   }
 
   // Internal helpers methods
-  private async enrichPaymentsWithRelatedEntities(payments: Payment[]): Promise<any[]> {
+  private async enrichPaymentsWithRelatedEntities(
+    payments: Payment[],
+  ): Promise<any[]> {
     return await Promise.all(
       payments.map(async (payment) => {
         const type = payment.relatedEntityType;
@@ -557,8 +661,8 @@ export class PaymentsService {
           dateOperation: payment.dateOperation,
           numberTicket: payment.numberTicket,
           paymentConfig: payment.paymentConfig.name,
-          reason: payment?.rejectionReason? payment.rejectionReason: null,
-          user: payment.user
+          reason: payment?.rejectionReason ? payment.rejectionReason : null,
+          user: payment.user,
         };
 
         const getSaleData = async () => {
@@ -566,9 +670,12 @@ export class PaymentsService {
             case 'sale':
               return await this.salesService.findOneSaleWithPayments(id);
             case 'financing':
-              return (await this.financingService.findOneWithPayments(id))?.sale;
+              return (await this.financingService.findOneWithPayments(id))
+                ?.sale;
             case 'financingInstallments':
-              return (await this.financingInstallmentsService.findOneWithPayments(id));
+              return await this.financingInstallmentsService.findOneWithPayments(
+                id,
+              );
             case 'reservation':
               return await this.salesService.findOneSaleWithPayments(id);
             default:
@@ -588,8 +695,8 @@ export class PaymentsService {
                 lead: {
                   firstName: sale.client.lead?.firstName,
                   lastName: sale.client.lead?.lastName,
-                  document: sale.client.lead?.document
-                }
+                  document: sale.client.lead?.document,
+                },
               }
             : null,
 
@@ -601,9 +708,9 @@ export class PaymentsService {
                 stage: sale.lot.block?.stage?.name,
                 project: sale.lot.block?.stage?.project?.name,
               }
-            : null
+            : null,
         };
-      })
+      }),
     );
   }
 
@@ -612,29 +719,28 @@ export class PaymentsService {
     relatedEntityId: string,
     queryRunner: QueryRunner,
   ) {
-    
-      if (
-        relatedEntityType === 'sale' && relatedEntityId)
-        await this.salesService.updateStatusSale(
-          relatedEntityId,
-          StatusSale.PENDING_APPROVAL,
-          queryRunner,
-        );
-      if (relatedEntityType === 'financing' && relatedEntityId) {
-        const sale = await this.salesService.findOneByIdFinancing(relatedEntityId);
-        await this.salesService.updateStatusSale(
-          sale.id,
-          StatusSale.PENDING_APPROVAL,
-          queryRunner,
-        );
-      }
-      if (relatedEntityType === 'reservation' && relatedEntityId) {
-        await this.salesService.updateStatusSale(
-          relatedEntityId,
-          StatusSale.RESERVATION_PENDING_APPROVAL,
-          queryRunner,
-        );
-      }
+    if (relatedEntityType === 'sale' && relatedEntityId)
+      await this.salesService.updateStatusSale(
+        relatedEntityId,
+        StatusSale.PENDING_APPROVAL,
+        queryRunner,
+      );
+    if (relatedEntityType === 'financing' && relatedEntityId) {
+      const sale =
+        await this.salesService.findOneByIdFinancing(relatedEntityId);
+      await this.salesService.updateStatusSale(
+        sale.id,
+        StatusSale.PENDING_APPROVAL,
+        queryRunner,
+      );
+    }
+    if (relatedEntityType === 'reservation' && relatedEntityId) {
+      await this.salesService.updateStatusSale(
+        relatedEntityId,
+        StatusSale.RESERVATION_PENDING_APPROVAL,
+        queryRunner,
+      );
+    }
   }
 
   private isValidPaymentsItems(
@@ -643,25 +749,34 @@ export class PaymentsService {
     files: Express.Multer.File[],
   ): void {
     if (!files || files.length === 0)
-      throw new BadRequestException('Se requiere al menos una imagen de comprobante de pago (voucher)');
+      throw new BadRequestException(
+        'Se requiere al menos una imagen de comprobante de pago (voucher)',
+      );
 
-    if (!paymentDetails || !Array.isArray(paymentDetails) || paymentDetails.length === 0)
+    if (
+      !paymentDetails ||
+      !Array.isArray(paymentDetails) ||
+      paymentDetails.length === 0
+    )
       throw new BadRequestException('Se requieren detalles de pago');
 
     if (files.length !== paymentDetails.length)
-      throw new BadRequestException(`El número de imágenes (${files.length}) no coincide con el número de detalles de pago (${paymentDetails.length}).`);
+      throw new BadRequestException(
+        `El número de imágenes (${files.length}) no coincide con el número de detalles de pago (${paymentDetails.length}).`,
+      );
 
-    const totalVoucherAmountSent = paymentDetails.reduce((sum, detail) => sum + detail.amount, 0);
+    const totalVoucherAmountSent = paymentDetails.reduce(
+      (sum, detail) => sum + detail.amount,
+      0,
+    );
 
     if (Math.abs(totalVoucherAmountSent - amount) > 0.01)
       throw new BadRequestException(
-        `El monto total de los vouchers enviados (${totalVoucherAmountSent.toFixed(2)}) no coincide con el monto total del pago declarado (${amount.toFixed(2)}).`
+        `El monto total de los vouchers enviados (${totalVoucherAmountSent.toFixed(2)}) no coincide con el monto total del pago declarado (${amount.toFixed(2)}).`,
       );
   }
 
-  private async isValidPayment(
-    paymentId: number,
-  ): Promise<Payment> {
+  private async isValidPayment(paymentId: number): Promise<Payment> {
     const payment = await this.paymentRepository.findOne({
       where: { id: paymentId },
       relations: ['user', 'user.role', 'paymentConfig', 'details'],
@@ -673,63 +788,92 @@ export class PaymentsService {
     if (payment.status !== StatusPayment.PENDING)
       throw new BadRequestException(
         `El pago con ID ${paymentId} no está en estado PENDIENTE y no puede ser aprobado. Estado actual: ${payment.status}.`,
-      ); 
-    
-    if(payment.relatedEntityType === 'sale' && payment.relatedEntityId) {
+      );
+
+    if (payment.relatedEntityType === 'sale' && payment.relatedEntityId) {
       const sale = await this.salesService.findOneById(payment.relatedEntityId);
       if (sale.type === SaleType.FINANCED)
         throw new BadRequestException(
           `El pago no puede ser aprobado porque esta venta está sujeta a un pago de financiación.`,
         );
     }
-    
-    if(payment.relatedEntityType === 'reservation' && payment.relatedEntityId) {
+
+    if (
+      payment.relatedEntityType === 'reservation' &&
+      payment.relatedEntityId
+    ) {
       const sale = await this.salesService.findOneById(payment.relatedEntityId);
       if (sale.status !== StatusSale.RESERVATION_PENDING_APPROVAL)
         throw new BadRequestException(
           `El pago de reserva no puede ser procesado porque la venta no está en estado de pago pendiente.`,
         );
     }
-    
+
     return payment;
   }
 
-  async isValidPaymentConfig(relatedEntityType: string, relatedEntityId: string) {
+  async isValidPaymentConfig(
+    relatedEntityType: string,
+    relatedEntityId: string,
+  ) {
     let paymentConfig;
     let sale;
     if (relatedEntityType === 'sale') {
       sale = await this.salesService.findOneById(relatedEntityId);
       if (sale.status === StatusSale.PENDING_APPROVAL)
-        throw new BadRequestException(`El pago porque tiene un pago pendiente en curso.`);
-      paymentConfig = await this.paymentConfigService.findOneByCode('SALE_PAYMENT');
+        throw new BadRequestException(
+          `El pago porque tiene un pago pendiente en curso.`,
+        );
+      paymentConfig =
+        await this.paymentConfigService.findOneByCode('SALE_PAYMENT');
     }
     if (relatedEntityType === 'financing') {
       sale = await this.salesService.findOneByIdFinancing(relatedEntityId);
       if (sale.status === StatusSale.PENDING_APPROVAL)
-        throw new BadRequestException(`El pago porque tiene un pago pendiente en curso.`);
-      paymentConfig = await this.paymentConfigService.findOneByCode('FINANCING_PAYMENT');
+        throw new BadRequestException(
+          `El pago porque tiene un pago pendiente en curso.`,
+        );
+      paymentConfig =
+        await this.paymentConfigService.findOneByCode('FINANCING_PAYMENT');
     }
-    if (relatedEntityType === 'financingInstallments'){
-      paymentConfig = await this.paymentConfigService.findOneByCode('FINANCING_INSTALLMENTS_PAYMENT');
+    if (relatedEntityType === 'financingInstallments') {
+      paymentConfig = await this.paymentConfigService.findOneByCode(
+        'FINANCING_INSTALLMENTS_PAYMENT',
+      );
       const pendingPayment = await this.paymentRepository.findOne({
-        where: { relatedEntityType, relatedEntityId, status: StatusPayment.PENDING },
+        where: {
+          relatedEntityType,
+          relatedEntityId,
+          status: StatusPayment.PENDING,
+        },
       });
       if (pendingPayment)
-        throw new BadRequestException(`El pago de cuotas no se puede realizar porque tiene un pago pendiente en curso.`);
+        throw new BadRequestException(
+          `El pago de cuotas no se puede realizar porque tiene un pago pendiente en curso.`,
+        );
     }
-    
+
     if (relatedEntityType === 'reservation') {
       sale = await this.salesService.findOneById(relatedEntityId);
       if (sale.status !== StatusSale.RESERVATION_PENDING)
-        throw new BadRequestException(`La reserva no está en estado pendiente de pago.`);
+        throw new BadRequestException(
+          `La reserva no está en estado pendiente de pago.`,
+        );
       if (sale.status === StatusSale.RESERVATION_PENDING_APPROVAL)
-        throw new BadRequestException(`La reserva ya tiene un pago pendiente en curso.`);
-      paymentConfig = await this.paymentConfigService.findOneByCode('RESERVATION_PAYMENT');
+        throw new BadRequestException(
+          `La reserva ya tiene un pago pendiente en curso.`,
+        );
+      paymentConfig = await this.paymentConfigService.findOneByCode(
+        'RESERVATION_PAYMENT',
+      );
     }
     return paymentConfig;
   }
 
-  async findPaymentsByRelatedEntity(relatedEntityType: string, relatedEntityId: string): Promise<Payment[]> {
+  async findPaymentsByRelatedEntity(
+    relatedEntityType: string,
+    relatedEntityId: string,
+  ): Promise<Payment[]> {
     return this.paymentRepository.find({
       where: {
         relatedEntityType,
@@ -739,13 +883,18 @@ export class PaymentsService {
     });
   }
 
-  async findPaymentsByRelatedEntities(relatedEntityType: string, relatedEntityIds: string[]): Promise<Payment[]> {
+  async findPaymentsByRelatedEntities(
+    relatedEntityType: string,
+    relatedEntityIds: string[],
+  ): Promise<Payment[]> {
     if (!relatedEntityIds.length) return [];
     return this.paymentRepository
       .createQueryBuilder('payment')
       .leftJoinAndSelect('payment.paymentConfig', 'paymentConfig')
       .where('payment.relatedEntityType = :type', { type: relatedEntityType })
-      .andWhere('payment.relatedEntityId IN (:...ids)', { ids: relatedEntityIds })
+      .andWhere('payment.relatedEntityId IN (:...ids)', {
+        ids: relatedEntityIds,
+      })
       .getMany();
   }
 
@@ -756,23 +905,38 @@ export class PaymentsService {
     let sale;
 
     // ========== PAGO DE RESERVA ==========
-    if (payment.relatedEntityType === 'reservation' && payment.relatedEntityId) {
+    if (
+      payment.relatedEntityType === 'reservation' &&
+      payment.relatedEntityId
+    ) {
       sale = await this.salesService.findOneById(payment.relatedEntityId);
 
       // Validar estado
-      if (sale.status !== StatusSale.RESERVATION_PENDING_APPROVAL && sale.status !== StatusSale.RESERVATION_IN_PAYMENT)
-        throw new BadRequestException(`El pago de reserva no puede ser aprobado porque no está pendiente de aprobación.`);
+      if (
+        sale.status !== StatusSale.RESERVATION_PENDING_APPROVAL &&
+        sale.status !== StatusSale.RESERVATION_IN_PAYMENT
+      )
+        throw new BadRequestException(
+          `El pago de reserva no puede ser aprobado porque no está pendiente de aprobación.`,
+        );
 
       // Actualizar montos
-      const newPaid = Number((Number(sale.reservationAmountPaid || 0) + Number(payment.amount)).toFixed(2));
-      const newPending = Number((Number(sale.reservationAmount) - newPaid).toFixed(2));
+      const newPaid = Number(
+        (
+          Number(sale.reservationAmountPaid || 0) + Number(payment.amount)
+        ).toFixed(2),
+      );
+      const newPending = Number(
+        (Number(sale.reservationAmount) - newPaid).toFixed(2),
+      );
 
-      await queryRunner.manager.update('sales',
+      await queryRunner.manager.update(
+        'sales',
         { id: sale.id },
         {
           reservationAmountPaid: newPaid,
-          reservationAmountPending: newPending > 0 ? newPending : 0
-        }
+          reservationAmountPending: newPending > 0 ? newPending : 0,
+        },
       );
 
       // Determinar nuevo estado
@@ -797,22 +961,34 @@ export class PaymentsService {
       sale = await this.salesService.findOneById(payment.relatedEntityId);
 
       // Validar estado
-      if (sale.status !== StatusSale.PENDING_APPROVAL && sale.status !== StatusSale.IN_PAYMENT)
-        throw new BadRequestException(`El pago no puede ser aprobado porque la venta no tiene aprobación de pago pendiente.`);
+      if (
+        sale.status !== StatusSale.PENDING_APPROVAL &&
+        sale.status !== StatusSale.IN_PAYMENT
+      )
+        throw new BadRequestException(
+          `El pago no puede ser aprobado porque la venta no tiene aprobación de pago pendiente.`,
+        );
 
       // Calcular monto total a pagar (totalAmount - reservationAmount si existe)
-      const totalToPay = Number((Number(sale.totalAmount) - Number(sale.reservationAmount || 0)).toFixed(2));
+      const totalToPay = Number(
+        (
+          Number(sale.totalAmount) - Number(sale.reservationAmount || 0)
+        ).toFixed(2),
+      );
 
       // Actualizar montos
-      const newPaid = Number((Number(sale.totalAmountPaid || 0) + Number(payment.amount)).toFixed(2));
+      const newPaid = Number(
+        (Number(sale.totalAmountPaid || 0) + Number(payment.amount)).toFixed(2),
+      );
       const newPending = Number((totalToPay - newPaid).toFixed(2));
 
-      await queryRunner.manager.update('sales',
+      await queryRunner.manager.update(
+        'sales',
         { id: sale.id },
         {
           totalAmountPaid: newPaid,
-          totalAmountPending: newPending > 0 ? newPending : 0
-        }
+          totalAmountPending: newPending > 0 ? newPending : 0,
+        },
       );
 
       // Determinar nuevo estado
@@ -834,33 +1010,51 @@ export class PaymentsService {
 
     // ========== PAGO INICIAL DE FINANCIAMIENTO ==========
     if (payment.relatedEntityType === 'financing' && payment.relatedEntityId) {
-      sale = await this.salesService.findOneByIdFinancing(payment.relatedEntityId);
+      sale = await this.salesService.findOneByIdFinancing(
+        payment.relatedEntityId,
+      );
 
       // Validar estado
-      if (sale.status !== StatusSale.PENDING_APPROVAL && sale.status !== StatusSale.IN_PAYMENT)
-        throw new BadRequestException(`El pago no puede ser aprobado porque la venta no tiene aprobación de pago pendiente.`);
+      if (
+        sale.status !== StatusSale.PENDING_APPROVAL &&
+        sale.status !== StatusSale.IN_PAYMENT
+      )
+        throw new BadRequestException(
+          `El pago no puede ser aprobado porque la venta no tiene aprobación de pago pendiente.`,
+        );
 
       // Obtener financing entity
       const financing = await queryRunner.manager.findOne('financing', {
-        where: { id: payment.relatedEntityId }
+        where: { id: payment.relatedEntityId },
       } as any);
 
       if (!financing)
-        throw new BadRequestException(`No se encontró el financiamiento con ID ${payment.relatedEntityId}`);
+        throw new BadRequestException(
+          `No se encontró el financiamiento con ID ${payment.relatedEntityId}`,
+        );
 
       // Calcular monto inicial a pagar (initialAmount - reservationAmount si existe)
-      const initialToPay = Number((Number(financing.initialAmount) - Number(sale.reservationAmount || 0)).toFixed(2));
+      const initialToPay = Number(
+        (
+          Number(financing.initialAmount) - Number(sale.reservationAmount || 0)
+        ).toFixed(2),
+      );
 
       // Actualizar montos
-      const newPaid = Number((Number(financing.initialAmountPaid || 0) + Number(payment.amount)).toFixed(2));
+      const newPaid = Number(
+        (
+          Number(financing.initialAmountPaid || 0) + Number(payment.amount)
+        ).toFixed(2),
+      );
       const newPending = Number((initialToPay - newPaid).toFixed(2));
 
-      await queryRunner.manager.update('financing',
+      await queryRunner.manager.update(
+        'financing',
         { id: financing.id },
         {
           initialAmountPaid: newPaid,
-          initialAmountPending: newPending > 0 ? newPending : 0
-        }
+          initialAmountPending: newPending > 0 ? newPending : 0,
+        },
       );
 
       // Determinar nuevo estado
@@ -873,20 +1067,19 @@ export class PaymentsService {
         newStatus = StatusSale.IN_PAYMENT;
       }
 
-      await this.salesService.updateStatusSale(
-        sale.id,
-        newStatus,
-        queryRunner,
-      );
+      await this.salesService.updateStatusSale(sale.id, newStatus, queryRunner);
     }
   }
 
-  private async notifyNexusPaymentApproved(payment: Payment, reviewedById: string): Promise<void> {
+  private async notifyNexusPaymentApproved(
+    payment: Payment,
+    reviewedById: string,
+  ): Promise<void> {
     try {
       // Obtener información del usuario que aprobó el pago
       const reviewer = await this.paymentRepository.manager.findOne('User', {
         where: { id: reviewedById },
-        select: ['firstName', 'lastName', 'email']
+        select: ['firstName', 'lastName', 'email'],
       } as any);
 
       const saleId = await this.extractSaleId(payment);
@@ -904,7 +1097,7 @@ export class PaymentsService {
 
       const metadata = {
         'Aprobación realizada por': `${reviewerName} (${reviewerEmail})`,
-        'Fecha': new Date().toLocaleString('es-PE', { timeZone: 'America/Lima' }),
+        Fecha: new Date().toLocaleString('es-PE', { timeZone: 'America/Lima' }),
         'Monto del pago': payment.amount,
       };
 
@@ -930,17 +1123,28 @@ export class PaymentsService {
       return payment.relatedEntityId;
     }
 
-    if (payment.relatedEntityType === 'reservation' && payment.relatedEntityId) {
+    if (
+      payment.relatedEntityType === 'reservation' &&
+      payment.relatedEntityId
+    ) {
       return payment.relatedEntityId;
     }
 
     if (payment.relatedEntityType === 'financing' && payment.relatedEntityId) {
-      const sale = await this.salesService.findOneByIdFinancing(payment.relatedEntityId);
+      const sale = await this.salesService.findOneByIdFinancing(
+        payment.relatedEntityId,
+      );
       return sale?.id || null;
     }
 
-    if (payment.relatedEntityType === 'financingInstallments' && payment.relatedEntityId) {
-      const installment = await this.financingInstallmentsService.findOneWithPayments(payment.relatedEntityId);
+    if (
+      payment.relatedEntityType === 'financingInstallments' &&
+      payment.relatedEntityId
+    ) {
+      const installment =
+        await this.financingInstallmentsService.findOneWithPayments(
+          payment.relatedEntityId,
+        );
       return installment?.financing?.sale?.id || null;
     }
 

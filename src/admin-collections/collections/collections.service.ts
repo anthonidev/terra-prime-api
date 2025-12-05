@@ -68,13 +68,23 @@ export class CollectionsService {
     userId: string,
     filters?: ClientFiltersDto,
   ): Promise<Paginated<ClientCollectionResponse>> {
-    const { departamentoId, provinciaId, distritoId, search, ...paginationDto } = filters;
-    const clients = await this.clientService.findAllByUser(
+    const {
+      departamentoId,
+      provinciaId,
+      distritoId,
+      search,
+      page = 1,
+      limit = 10,
+      ...paginationDto
+    } = filters;
+    const { clients, total } = await this.clientService.findAllByUser(
       userId,
       departamentoId,
       provinciaId,
       distritoId,
       search,
+      page,
+      limit,
     );
 
     // Obtener IDs de clientes con mora activa (cuotas con lateFeeAmount > 0)
@@ -101,21 +111,19 @@ export class CollectionsService {
       clientsWithLatePayment.map((row: any) => row.id),
     );
 
-    const clientsFormatted = clients
-      .map(formatClientResponse)
-      .map((client) => {
-        const { collector, ...rest } = client;
-        return {
-          ...rest,
-          hasActiveLatePayment: clientIdsWithLatePayment.has(client.id),
-        };
-      });
+    const clientsFormatted = clients.map(formatClientResponse).map((client) => {
+      const { collector, ...rest } = client;
+      return {
+        ...rest,
+        hasActiveLatePayment: clientIdsWithLatePayment.has(client.id),
+      };
+    });
 
-    return PaginationHelper.createPaginatedResponse(
-      clientsFormatted,
-      clientsFormatted.length,
-      paginationDto,
-    );
+    return PaginationHelper.createPaginatedResponse(clientsFormatted, total, {
+      ...paginationDto,
+      page,
+      limit,
+    });
   }
 
   async findAllClientsWithCollection(
@@ -127,15 +135,21 @@ export class CollectionsService {
       distritoId,
       collectorId,
       search,
+      page = 1,
+      limit = 20,
       ...paginationDto
     } = filters;
-    const clients = await this.clientService.findAllClientsWithCollection(
-      departamentoId,
-      provinciaId,
-      distritoId,
-      collectorId,
-      search,
-    );
+    console.log('Filters received:', filters);
+    const { clients, total } =
+      await this.clientService.findAllClientsWithCollection(
+        departamentoId,
+        provinciaId,
+        distritoId,
+        collectorId,
+        search,
+        page,
+        limit,
+      );
 
     // Obtener IDs de clientes con mora activa (cuotas con lateFeeAmount > 0)
     const clientsWithLatePayment = await this.dataSource.query(
@@ -166,11 +180,11 @@ export class CollectionsService {
         hasActiveLatePayment: clientIdsWithLatePayment.has(client.id),
       }));
 
-    return PaginationHelper.createPaginatedResponse(
-      clientsFormatted,
-      clientsFormatted.length,
-      paginationDto,
-    );
+    return PaginationHelper.createPaginatedResponse(clientsFormatted, total, {
+      ...paginationDto,
+      page,
+      limit,
+    });
   }
 
   async findAllSalesByClient(clientId: number): Promise<SalesByClientResponse> {
@@ -230,7 +244,8 @@ export class CollectionsService {
         };
       } else if (codeLength === 6) {
         return {
-          departamento: ubigeo.parent?.parent?.name || ubigeo.parent?.name || null,
+          departamento:
+            ubigeo.parent?.parent?.name || ubigeo.parent?.name || null,
           provincia: ubigeo.parent?.name || null,
           distrito: ubigeo.name,
         };
@@ -273,12 +288,14 @@ export class CollectionsService {
         },
         radicationPdfUrl: sale.radicationPdfUrl,
         paymentAcordPdfUrl: sale.paymentAcordPdfUrl,
-        financing: sale.financing ? {
-          id: sale.financing.id,
-          initialAmount: sale.financing.initialAmount?.toString(),
-          interestRate: sale.financing.interestRate?.toString(),
-          quantityCoutes: sale.financing.quantityCoutes?.toString(),
-        } : null,
+        financing: sale.financing
+          ? {
+              id: sale.financing.id,
+              initialAmount: sale.financing.initialAmount?.toString(),
+              interestRate: sale.financing.interestRate?.toString(),
+              quantityCoutes: sale.financing.quantityCoutes?.toString(),
+            }
+          : null,
         vendor: {
           document: sale.vendor.document,
           firstName: sale.vendor.firstName,
@@ -307,9 +324,15 @@ export class CollectionsService {
       .leftJoinAndSelect('stage.project', 'project')
       .leftJoinAndSelect('sale.guarantor', 'guarantor')
       .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
-      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
+      .leftJoinAndSelect(
+        'secondaryClientSales.secondaryClient',
+        'secondaryClient',
+      )
       .leftJoinAndSelect('sale.financing', 'financing')
-      .leftJoinAndSelect('financing.financingInstallments', 'financingInstallments')
+      .leftJoinAndSelect(
+        'financing.financingInstallments',
+        'financingInstallments',
+      )
       .where('sale.id = :saleId', { saleId })
       .getOne();
 
@@ -337,7 +360,7 @@ export class CollectionsService {
           AND p."relatedEntityType" = 'financingInstallment'
         ORDER BY p."createdAt" ASC
         `,
-        [installmentId]
+        [installmentId],
       );
       return payments.map((payment: any) => ({
         id: payment.id,
@@ -357,22 +380,47 @@ export class CollectionsService {
         return { departamento: ubigeo.name, provincia: null, distrito: null };
       }
       if (ubigeo.parent && !ubigeo.parent.parent && !ubigeo.parent.parentId) {
-        return { departamento: ubigeo.parent.name, provincia: ubigeo.name, distrito: null };
+        return {
+          departamento: ubigeo.parent.name,
+          provincia: ubigeo.name,
+          distrito: null,
+        };
       }
       if (ubigeo.parent && ubigeo.parent.parent) {
-        return { departamento: ubigeo.parent.parent.name, provincia: ubigeo.parent.name, distrito: ubigeo.name };
+        return {
+          departamento: ubigeo.parent.parent.name,
+          provincia: ubigeo.parent.name,
+          distrito: ubigeo.name,
+        };
       }
 
       const codeLength = ubigeo.code?.length || 0;
-      if (codeLength === 2) return { departamento: ubigeo.name, provincia: null, distrito: null };
-      if (codeLength === 4) return { departamento: ubigeo.parent?.name || null, provincia: ubigeo.name, distrito: null };
-      if (codeLength === 6) return { departamento: ubigeo.parent?.parent?.name || ubigeo.parent?.name || null, provincia: ubigeo.parent?.name || null, distrito: ubigeo.name };
+      if (codeLength === 2)
+        return { departamento: ubigeo.name, provincia: null, distrito: null };
+      if (codeLength === 4)
+        return {
+          departamento: ubigeo.parent?.name || null,
+          provincia: ubigeo.name,
+          distrito: null,
+        };
+      if (codeLength === 6)
+        return {
+          departamento:
+            ubigeo.parent?.parent?.name || ubigeo.parent?.name || null,
+          provincia: ubigeo.parent?.name || null,
+          distrito: ubigeo.name,
+        };
 
-      return { departamento: ubigeo.parent?.name || ubigeo.name, provincia: ubigeo.parentId ? ubigeo.name : null, distrito: null };
+      return {
+        departamento: ubigeo.parent?.name || ubigeo.name,
+        provincia: ubigeo.parentId ? ubigeo.name : null,
+        distrito: null,
+      };
     };
 
     // Procesar cuotas de financiamiento con pagos
-    const financingInstallmentsWithPayments = saleRaw.financing?.financingInstallments
+    const financingInstallmentsWithPayments = saleRaw.financing
+      ?.financingInstallments
       ? await Promise.all(
           saleRaw.financing.financingInstallments.map(async (installment) => ({
             id: installment.id,
@@ -384,7 +432,7 @@ export class CollectionsService {
             lateFeeAmountPaid: installment.lateFeeAmountPaid,
             status: installment.status,
             payments: await getPaymentsForInstallment(installment.id),
-          }))
+          })),
         )
       : [];
 
@@ -392,17 +440,19 @@ export class CollectionsService {
     let urbanDevelopmentFormatted = null;
     if (urbanDevelopment?.financing?.financingInstallments) {
       const huInstallmentsWithPayments = await Promise.all(
-        urbanDevelopment.financing.financingInstallments.map(async (installment) => ({
-          id: installment.id,
-          couteAmount: installment.couteAmount.toString(),
-          coutePaid: installment.coutePaid,
-          coutePending: installment.coutePending.toString(),
-          expectedPaymentDate: installment.expectedPaymentDate,
-          lateFeeAmountPending: installment.lateFeeAmountPending.toString(),
-          lateFeeAmountPaid: installment.lateFeeAmountPaid,
-          status: installment.status,
-          payments: await getPaymentsForInstallment(installment.id),
-        }))
+        urbanDevelopment.financing.financingInstallments.map(
+          async (installment) => ({
+            id: installment.id,
+            couteAmount: installment.couteAmount.toString(),
+            coutePaid: installment.coutePaid,
+            coutePending: installment.coutePending.toString(),
+            expectedPaymentDate: installment.expectedPaymentDate,
+            lateFeeAmountPending: installment.lateFeeAmountPending.toString(),
+            lateFeeAmountPaid: installment.lateFeeAmountPaid,
+            status: installment.status,
+            payments: await getPaymentsForInstallment(installment.id),
+          }),
+        ),
       );
 
       urbanDevelopmentFormatted = {
@@ -444,23 +494,26 @@ export class CollectionsService {
         maximumHoldPeriod: saleRaw.maximumHoldPeriod || null,
         fromReservation: saleRaw.fromReservation || false,
         currency: saleRaw.currency,
-        guarantor: saleRaw.guarantor ? {
-          id: saleRaw.guarantor.id,
-          firstName: saleRaw.guarantor.firstName,
-          lastName: saleRaw.guarantor.lastName,
-          email: saleRaw.guarantor.email,
-          phone: saleRaw.guarantor.phone,
-          documentType: saleRaw.guarantor.documentType,
-          document: saleRaw.guarantor.document,
-        } : null,
-        secondaryClients: saleRaw.secondaryClientSales?.map(scs => ({
-          firstName: scs.secondaryClient.firstName,
-          lastName: scs.secondaryClient.lastName,
-          email: scs.secondaryClient.email,
-          phone: scs.secondaryClient.phone,
-          documentType: scs.secondaryClient.documentType,
-          document: scs.secondaryClient.document,
-        })) || null,
+        guarantor: saleRaw.guarantor
+          ? {
+              id: saleRaw.guarantor.id,
+              firstName: saleRaw.guarantor.firstName,
+              lastName: saleRaw.guarantor.lastName,
+              email: saleRaw.guarantor.email,
+              phone: saleRaw.guarantor.phone,
+              documentType: saleRaw.guarantor.documentType,
+              document: saleRaw.guarantor.document,
+            }
+          : null,
+        secondaryClients:
+          saleRaw.secondaryClientSales?.map((scs) => ({
+            firstName: scs.secondaryClient.firstName,
+            lastName: scs.secondaryClient.lastName,
+            email: scs.secondaryClient.email,
+            phone: scs.secondaryClient.phone,
+            documentType: scs.secondaryClient.documentType,
+            document: scs.secondaryClient.document,
+          })) || null,
         lot: {
           id: saleRaw.lot.id,
           name: saleRaw.lot.name,
@@ -471,13 +524,15 @@ export class CollectionsService {
         },
         radicationPdfUrl: saleRaw.radicationPdfUrl,
         paymentAcordPdfUrl: saleRaw.paymentAcordPdfUrl,
-        financing: saleRaw.financing ? {
-          id: saleRaw.financing.id,
-          initialAmount: saleRaw.financing.initialAmount.toString(),
-          interestRate: saleRaw.financing.interestRate.toString(),
-          quantityCoutes: saleRaw.financing.quantityCoutes.toString(),
-          financingInstallments: financingInstallmentsWithPayments,
-        } : null,
+        financing: saleRaw.financing
+          ? {
+              id: saleRaw.financing.id,
+              initialAmount: saleRaw.financing.initialAmount.toString(),
+              interestRate: saleRaw.financing.interestRate.toString(),
+              quantityCoutes: saleRaw.financing.quantityCoutes.toString(),
+              financingInstallments: financingInstallmentsWithPayments,
+            }
+          : null,
         urbanDevelopment: urbanDevelopmentFormatted,
         vendor: {
           document: saleRaw.vendor.document,
