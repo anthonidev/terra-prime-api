@@ -47,10 +47,11 @@ export function formatSaleCollectionResponse(sale: Sale) {
       initialAmount: sale.financing.initialAmount,
       interestRate: sale.financing.interestRate,
       quantityCoutes: sale.financing.quantityCoutes,
-      financingInstallments: sale.financing.financingInstallments
-        .map((installment) => {
+      financingInstallments: (() => {
+        const mappedInstallments = sale.financing.financingInstallments.map((installment) => {
           return {
             id: installment.id,
+            numberCuote: installment.numberCuote,
             couteAmount: installment.couteAmount,
             coutePending: installment.coutePending,
             coutePaid: installment.coutePaid,
@@ -59,23 +60,31 @@ export function formatSaleCollectionResponse(sale: Sale) {
             lateFeeAmountPaid: installment.lateFeeAmountPaid,
             status: installment.status,
           };
-        })
-        .sort((a, b) => { // <-- ¡Aquí aplicamos el ordenamiento!
-          // Convertir las fechas ISO string a objetos Date para compararlas
-          const dateA = a.expectedPaymentDate ? new Date(a.expectedPaymentDate) : null;
-          const dateB = b.expectedPaymentDate ? new Date(b.expectedPaymentDate) : null;
+        });
 
-          // Manejar casos donde la fecha sea nula (opcional, decide tu lógica)
-          // Si dateA es nula y dateB no, b va primero (más grande)
-          if (dateA === null && dateB !== null) return 1;
-          // Si dateB es nula y dateA no, a va primero (más pequeño)
-          if (dateB === null && dateA !== null) return -1;
-          // Si ambas son nulas o iguales, mantener el orden
-          if (dateA === null && dateB === null) return 0;
+        // ✅ Verificar si TODAS las cuotas tienen numberCuote
+        const allHaveNumberCuote = mappedInstallments.every(
+          (inst) => inst.numberCuote !== null && inst.numberCuote !== undefined
+        );
 
-          // Comparar las fechas: a - b para orden ascendente (más antiguo primero)
-          return dateA.getTime() - dateB.getTime();
-        }),
+        // ✅ Ordenar según el criterio
+        return mappedInstallments.sort((a, b) => {
+          if (allHaveNumberCuote) {
+            // Si todas tienen numberCuote, ordenar por numberCuote
+            return a.numberCuote - b.numberCuote;
+          } else {
+            // Si al menos una tiene null, ordenar por fecha (ascendente)
+            const dateA = a.expectedPaymentDate ? new Date(a.expectedPaymentDate) : null;
+            const dateB = b.expectedPaymentDate ? new Date(b.expectedPaymentDate) : null;
+
+            if (dateA === null && dateB !== null) return 1;
+            if (dateB === null && dateA !== null) return -1;
+            if (dateA === null && dateB === null) return 0;
+
+            return dateA.getTime() - dateB.getTime();
+          }
+        });
+      })(),
     } : null,
     guarantor: sale.guarantor ? {
       firstName: sale.guarantor.firstName,

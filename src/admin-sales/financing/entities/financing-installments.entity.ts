@@ -9,6 +9,12 @@ export class FinancingInstallments extends Timestamped {
   id: string;
 
   @Column({
+    type: 'int',
+    nullable: true,
+  })
+  numberCuote: number | null;
+
+  @Column({
     type: 'numeric',
     nullable: false,
     precision: 10,

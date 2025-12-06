@@ -21,4 +21,8 @@ export class PaymentByCuoteDto {
   @IsString({ message: 'La observación debe ser un texto' })
   @IsOptional()
   observation?: string;
+
+  @IsString({ message: 'El número de ticket debe ser un texto' })
+  @IsOptional()
+  numberTicket?: string;
 }
