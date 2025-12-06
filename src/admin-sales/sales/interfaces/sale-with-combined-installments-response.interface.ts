@@ -9,6 +9,7 @@ export interface SaleWithCombinedInstallmentsResponse {
   totalAmount: number;
   totalAmountPaid?: number;
   totalAmountPending?: number;
+  totalToPay?: number;
   contractDate: string;
   status: string;
   currency: CurrencyType;
@@ -50,6 +51,7 @@ export interface SaleWithCombinedInstallmentsResponse {
       initialAmount: number;
       initialAmountPaid?: number;
       initialAmountPending?: number;
+      initialToPay?: number;
       interestRate: number;
       quantityCoutes: number;
     };

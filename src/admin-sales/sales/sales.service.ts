@@ -376,15 +376,20 @@ export class SalesService {
       fromReservation: createSaleDto.isReservation,
       reservationAmount: createSaleDto.isReservation ? reservationAmount : null,
       reservationAmountPaid: 0,
-      reservationAmountPending: createSaleDto.isReservation ? reservationAmount : null,
+      reservationAmountPending: createSaleDto.isReservation
+        ? reservationAmount
+        : null,
       maximumHoldPeriod: createSaleDto.maximumHoldPeriod || null,
       // Campos de pago total (para venta directa)
       totalAmountPaid: 0,
-      totalAmountPending: createSaleDto.saleType === SaleType.DIRECT_PAYMENT && !createSaleDto.isReservation
-        ? totalAmount
-        : (createSaleDto.saleType === SaleType.DIRECT_PAYMENT && createSaleDto.isReservation
-          ? totalAmount - reservationAmount
-          : null),
+      totalAmountPending:
+        createSaleDto.saleType === SaleType.DIRECT_PAYMENT &&
+        !createSaleDto.isReservation
+          ? totalAmount
+          : createSaleDto.saleType === SaleType.DIRECT_PAYMENT &&
+              createSaleDto.isReservation
+            ? totalAmount - reservationAmount
+            : null,
       status: createSaleDto.isReservation
         ? StatusSale.RESERVATION_PENDING
         : StatusSale.PENDING,
@@ -485,7 +490,10 @@ export class SalesService {
     let paymentDto: CreatePaymentDto;
 
     // Calcular monto total del pago basado en los detalles
-    const totalPaymentAmount = paymentDetails.reduce((sum, detail) => sum + detail.amount, 0);
+    const totalPaymentAmount = paymentDetails.reduce(
+      (sum, detail) => sum + detail.amount,
+      0,
+    );
 
     // Validar que el monto sea positivo
     if (totalPaymentAmount <= 0) {
@@ -493,17 +501,27 @@ export class SalesService {
     }
 
     // ========== PAGO DE RESERVA ==========
-    if (sale.status === StatusSale.RESERVATION_PENDING || sale.status === StatusSale.RESERVATION_IN_PAYMENT) {
+    if (
+      sale.status === StatusSale.RESERVATION_PENDING ||
+      sale.status === StatusSale.RESERVATION_IN_PAYMENT
+    ) {
       if (!sale.reservationAmount)
-        throw new BadRequestException('No se encontró monto de reserva para esta venta');
+        throw new BadRequestException(
+          'No se encontró monto de reserva para esta venta',
+        );
 
       // Calcular monto pendiente
-      const amountPending = Number((Number(sale.reservationAmount) - Number(sale.reservationAmountPaid || 0)).toFixed(2));
+      const amountPending = Number(
+        (
+          Number(sale.reservationAmount) -
+          Number(sale.reservationAmountPaid || 0)
+        ).toFixed(2),
+      );
 
       // Validar que el pago no exceda el pendiente
       if (totalPaymentAmount > amountPending) {
         throw new BadRequestException(
-          `El monto del pago ($${totalPaymentAmount.toFixed(2)}) excede el monto pendiente de reserva ($${amountPending.toFixed(2)})`
+          `El monto del pago ($${totalPaymentAmount.toFixed(2)}) excede el monto pendiente de reserva ($${amountPending.toFixed(2)})`,
         );
       }
 
@@ -517,25 +535,36 @@ export class SalesService {
           'Fecha de pago': new Date().toISOString(),
           'Monto de pago': totalPaymentAmount,
           'Monto pendiente antes de pago': amountPending,
+          'Monto de reserva': sale.reservationAmount,
+          'Monto pagado de reserva': sale.reservationAmountPaid || 0,
         },
         paymentDetails,
       };
     }
     // ========== PAGO DE VENTA DIRECTA ==========
     else if (
-      (sale.status === StatusSale.RESERVED || sale.status === StatusSale.PENDING || sale.status === StatusSale.IN_PAYMENT) &&
+      (sale.status === StatusSale.RESERVED ||
+        sale.status === StatusSale.PENDING ||
+        sale.status === StatusSale.IN_PAYMENT) &&
       sale.type === SaleType.DIRECT_PAYMENT
     ) {
-      const reservationAmount = sale.fromReservation && sale.reservationAmount ? sale.reservationAmount : 0;
-      const totalToPay = Number((Number(sale.totalAmount) - Number(reservationAmount)).toFixed(2));
+      const reservationAmount =
+        sale.fromReservation && sale.reservationAmount
+          ? sale.reservationAmount
+          : 0;
+      const totalToPay = Number(
+        (Number(sale.totalAmount) - Number(reservationAmount)).toFixed(2),
+      );
 
       // Calcular monto pendiente
-      const amountPending = Number((totalToPay - Number(sale.totalAmountPaid || 0)).toFixed(2));
+      const amountPending = Number(
+        (totalToPay - Number(sale.totalAmountPaid || 0)).toFixed(2),
+      );
 
       // Validar que el pago no exceda el pendiente
       if (totalPaymentAmount > amountPending) {
         throw new BadRequestException(
-          `El monto del pago ($${totalPaymentAmount.toFixed(2)}) excede el monto pendiente de la venta ($${amountPending.toFixed(2)})`
+          `El monto del pago ($${totalPaymentAmount.toFixed(2)}) excede el monto pendiente de la venta ($${amountPending.toFixed(2)})`,
         );
       }
 
@@ -549,25 +578,42 @@ export class SalesService {
           'Fecha de pago': new Date().toISOString(),
           'Monto de pago': totalPaymentAmount,
           'Monto pendiente antes de pago': amountPending,
+          'Monto total de la venta': sale.totalAmount,
+          'Monto total a pagar': totalToPay,
+          'Monto total pagado': sale.totalAmountPaid || 0,
+          'Monto de reserva': reservationAmount,
         },
         paymentDetails,
       };
     }
     // ========== PAGO INICIAL DE FINANCIAMIENTO ==========
     else if (
-      (sale.status === StatusSale.RESERVED || sale.status === StatusSale.PENDING || sale.status === StatusSale.IN_PAYMENT) &&
+      (sale.status === StatusSale.RESERVED ||
+        sale.status === StatusSale.PENDING ||
+        sale.status === StatusSale.IN_PAYMENT) &&
       sale.type === SaleType.FINANCED
     ) {
-      const reservationAmount = sale.fromReservation && sale.reservationAmount ? sale.reservationAmount : 0;
-      const initialToPay = Number((Number(sale.financing.lot.initialAmount) - Number(reservationAmount)).toFixed(2));
+      const reservationAmount =
+        sale.fromReservation && sale.reservationAmount
+          ? sale.reservationAmount
+          : 0;
+      const initialToPay = Number(
+        (
+          Number(sale.financing.lot.initialAmount) - Number(reservationAmount)
+        ).toFixed(2),
+      );
 
       // Calcular monto pendiente
-      const amountPending = Number((initialToPay - Number(sale.financing.lot.initialAmountPaid || 0)).toFixed(2));
+      const amountPending = Number(
+        (
+          initialToPay - Number(sale.financing.lot.initialAmountPaid || 0)
+        ).toFixed(2),
+      );
 
       // Validar que el pago no exceda el pendiente
       if (totalPaymentAmount > amountPending) {
         throw new BadRequestException(
-          `El monto del pago ($${totalPaymentAmount.toFixed(2)}) excede el monto pendiente de la inicial ($${amountPending.toFixed(2)})`
+          `El monto del pago ($${totalPaymentAmount.toFixed(2)}) excede el monto pendiente de la inicial ($${amountPending.toFixed(2)})`,
         );
       }
 
@@ -581,6 +627,10 @@ export class SalesService {
           'Fecha de pago': new Date().toISOString(),
           'Monto de pago': totalPaymentAmount,
           'Monto pendiente antes de pago': amountPending,
+          'Monto inicial': sale.financing.lot.initialAmount,
+          'Monto inicial a pagar': initialToPay,
+          'Monto inicial pagado': sale.financing.lot.initialAmountPaid || 0,
+          'Monto de reserva': reservationAmount,
         },
         paymentDetails,
       };
@@ -791,15 +841,55 @@ export class SalesService {
 
     const formattedSale = formatSaleResponse(sale);
 
+    // Calcular campos adicionales
+    const reservationAmount =
+      sale.fromReservation && sale.reservationAmount
+        ? Number(sale.reservationAmount)
+        : 0;
+    const reservationAmountPaid = sale.reservationAmountPaid
+      ? Number(sale.reservationAmountPaid)
+      : 0;
+    const totalAmountPaid = sale.totalAmountPaid
+      ? Number(sale.totalAmountPaid)
+      : 0;
+
+    // totalToPay: para venta directa es totalAmount - reservationAmount, para financiada es el total del financiamiento
+    let totalToPay = 0;
+    if (sale.type === 'DIRECT_PAYMENT') {
+      totalToPay = Number(sale.totalAmount) - reservationAmount;
+    } else if (sale.type === 'FINANCED' && sale.financing) {
+      // Para financiada, totalToPay es la suma de todas las cuotas más el inicial
+      totalToPay = Number(sale.totalAmount) - reservationAmount;
+    }
+
+    // initialToPay: monto inicial menos la reserva (si viene de reserva)
+    let initialToPay = 0;
+    let initialAmountPaid = 0;
+    if (sale.financing) {
+      initialToPay = Number(sale.financing.initialAmount) - reservationAmount;
+      initialAmountPaid = sale.financing.initialAmountPaid
+        ? Number(sale.financing.initialAmountPaid)
+        : 0;
+    }
+
     return {
       id: formattedSale.id,
       type: formattedSale.type,
       totalAmount: formattedSale.totalAmount,
+      totalAmountPaid,
+      totalAmountPending: sale.totalAmountPending
+        ? Number(sale.totalAmountPending)
+        : null,
+      totalToPay,
       contractDate: formattedSale.contractDate,
       status: formattedSale.status,
       currency: formattedSale.currency,
       createdAt: formattedSale.createdAt,
       reservationAmount: formattedSale.reservationAmount,
+      reservationAmountPaid,
+      reservationAmountPending: sale.reservationAmountPending
+        ? Number(sale.reservationAmountPending)
+        : null,
       maximumHoldPeriod: formattedSale.maximumHoldPeriod,
       fromReservation: formattedSale.fromReservation,
       client: formattedSale.client,
@@ -813,6 +903,11 @@ export class SalesService {
             lot: {
               id: sale.financing.id,
               initialAmount: sale.financing.initialAmount,
+              initialAmountPaid,
+              initialAmountPending: sale.financing.initialAmountPending
+                ? Number(sale.financing.initialAmountPending)
+                : null,
+              initialToPay,
               interestRate: sale.financing.interestRate,
               quantityCoutes: sale.financing.quantityCoutes,
             },

@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  Query,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { UpdatePaymentDto } from './dto/update-payment.dto';
 import { UpdateDetailPaymentDto } from './dto/update-detail-payment.dto';
 import { UpdateCodeOperationDto } from './dto/update-code-operation.dto';
@@ -39,22 +50,22 @@ export class PaymentsController {
     @Body() rejectionDto: RejectionDto,
     @GetUser() user: User,
   ) {
-    return this.paymentsService.rejectPayment(id, rejectionDto.rejectionReason, user.id);
+    return this.paymentsService.rejectPayment(
+      id,
+      rejectionDto.rejectionReason,
+      user.id,
+    );
   }
 
   @Get('list')
   @Roles('FAC')
-  async findAllPayments(
-    @Query() filters: FindPaymentsDto,
-  ) {
+  async findAllPayments(@Query() filters: FindPaymentsDto) {
     return this.paymentsService.findAllPayments(filters);
   }
 
   @Get('details/:id')
   @Roles('FAC')
-  async findOnePayment(
-    @Param('id') id: number,
-  ) {
+  async findOnePayment(@Param('id') id: number) {
     return this.paymentsService.findOne(id);
   }
 
@@ -83,9 +94,7 @@ export class PaymentsController {
 
   @Patch('details/:id/deactivate')
   @Roles('FAC')
-  async deactivatePaymentDetail(
-    @Param('id', ParseIntPipe) id: number,
-  ) {
+  async deactivatePaymentDetail(@Param('id', ParseIntPipe) id: number) {
     return this.paymentsDetailService.deactivate(id);
   }
 

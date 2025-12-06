@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateClientDto } from './dto/create-client.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Client } from './entities/client.entity';
@@ -91,7 +95,9 @@ export class ClientsService {
       relations: ['lead'],
     });
     if (!client)
-      throw new NotFoundException(`El cliente con ID ${id} no se encuentra registrado`);
+      throw new NotFoundException(
+        `El cliente con ID ${id} no se encuentra registrado`,
+      );
     return client;
   }
 
@@ -108,11 +114,11 @@ export class ClientsService {
   async isValidClient(clientId: number): Promise<Client> {
     const client = await this.clientRepository.findOne({
       where: { id: clientId, isActive: true },
-      relations: ['lead']
+      relations: ['lead'],
     });
     if (!client)
       throw new NotFoundException(
-        `El cliente con ID ${clientId} no se encuentra registrado`
+        `El cliente con ID ${clientId} no se encuentra registrado`,
       );
     return client;
   }
@@ -141,7 +147,9 @@ export class ClientsService {
     distritoId?: number,
     collectorId?: string,
     search?: string,
-  ): Promise<Client[]> {
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{ clients: Client[]; total: number }> {
     const queryBuilder = this.clientRepository
       .createQueryBuilder('client')
       .leftJoinAndSelect('client.lead', 'lead')
@@ -154,7 +162,7 @@ export class ClientsService {
         'client.sales',
         'sales',
         'sales.type = :type AND sales.status = :status',
-        { type: SaleType.FINANCED, status: StatusSale.IN_PAYMENT_PROCESS }
+        { type: SaleType.FINANCED, status: StatusSale.IN_PAYMENT_PROCESS },
       );
 
     // Aplicar filtro de distrito (más específico)
@@ -162,12 +170,15 @@ export class ClientsService {
       queryBuilder.andWhere('ubigeo.id = :distritoId', { distritoId });
     } else if (provinciaId) {
       // Aplicar filtro de provincia (incluye todos los distritos de la provincia)
-      queryBuilder.andWhere('(ubigeo.id = :provinciaId OR ubigeo.parentId = :provinciaId)', { provinciaId });
+      queryBuilder.andWhere(
+        '(ubigeo.id = :provinciaId OR ubigeo.parentId = :provinciaId)',
+        { provinciaId },
+      );
     } else if (departamentoId) {
       // Aplicar filtro de departamento (incluye todas las provincias y distritos)
       queryBuilder.andWhere(
         '(ubigeo.id = :departamentoId OR ubigeo.parentId = :departamentoId OR ubigeoParent.parentId = :departamentoId)',
-        { departamentoId }
+        { departamentoId },
       );
     }
 
@@ -180,11 +191,15 @@ export class ClientsService {
     if (search) {
       queryBuilder.andWhere(
         '(LOWER(lead.firstName) LIKE LOWER(:search) OR LOWER(lead.lastName) LIKE LOWER(:search) OR lead.document LIKE :search)',
-        { search: `%${search}%` }
+        { search: `%${search}%` },
       );
     }
 
-    return await queryBuilder.getMany();
+    // Aplicar paginación
+    queryBuilder.skip((page - 1) * limit).take(limit);
+
+    const [clients, total] = await queryBuilder.getManyAndCount();
+    return { clients, total };
   }
 
   async findOneClientByIdWithCollections(id: number): Promise<Client> {
@@ -198,22 +213,26 @@ export class ClientsService {
         'client.sales',
         'sales',
         'sales.type = :type AND sales.status = :status',
-        { type: SaleType.FINANCED, status: StatusSale.IN_PAYMENT_PROCESS }
+        { type: SaleType.FINANCED, status: StatusSale.IN_PAYMENT_PROCESS },
       )
       .where('client.id = :id', { id })
       .getOne();
-    
+
     if (!client)
-      throw new NotFoundException(`Cliente con ID ${id} no disponible para asignar cobrador`);
+      throw new NotFoundException(
+        `Cliente con ID ${id} no disponible para asignar cobrador`,
+      );
     return client;
   }
 
   async assignClientsToCollector(
     clientsId: number[],
-    collectorId: string
+    collectorId: string,
   ): Promise<Client[]> {
     const collector = await this.userService.findOneCollector(collectorId);
-    const clients = await Promise.all(clientsId.map((id) => this.findOneClientByIdWithCollections(id)));
+    const clients = await Promise.all(
+      clientsId.map((id) => this.findOneClientByIdWithCollections(id)),
+    );
 
     const updatedClients = clients.map((client) => {
       client.collector = collector;
@@ -229,8 +248,11 @@ export class ClientsService {
     provinciaId?: number,
     distritoId?: number,
     search?: string,
-  ): Promise<Client[]> {
-    const queryBuilder = this.clientRepository.createQueryBuilder('client')
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<{ clients: Client[]; total: number }> {
+    const queryBuilder = this.clientRepository
+      .createQueryBuilder('client')
       .leftJoinAndSelect('client.lead', 'lead')
       .leftJoinAndSelect('lead.source', 'source')
       .leftJoinAndSelect('lead.ubigeo', 'ubigeo')
@@ -244,12 +266,15 @@ export class ClientsService {
       queryBuilder.andWhere('ubigeo.id = :distritoId', { distritoId });
     } else if (provinciaId) {
       // Aplicar filtro de provincia (incluye todos los distritos de la provincia)
-      queryBuilder.andWhere('(ubigeo.id = :provinciaId OR ubigeo.parentId = :provinciaId)', { provinciaId });
+      queryBuilder.andWhere(
+        '(ubigeo.id = :provinciaId OR ubigeo.parentId = :provinciaId)',
+        { provinciaId },
+      );
     } else if (departamentoId) {
       // Aplicar filtro de departamento (incluye todas las provincias y distritos)
       queryBuilder.andWhere(
         '(ubigeo.id = :departamentoId OR ubigeo.parentId = :departamentoId OR ubigeoParent.parentId = :departamentoId)',
-        { departamentoId }
+        { departamentoId },
       );
     }
 
@@ -257,12 +282,16 @@ export class ClientsService {
     if (search) {
       queryBuilder.andWhere(
         '(LOWER(lead.firstName) LIKE LOWER(:search) OR LOWER(lead.lastName) LIKE LOWER(:search) OR lead.document LIKE :search)',
-        { search: `%${search}%` }
+        { search: `%${search}%` },
       );
     }
 
     queryBuilder.orderBy('client.createdAt', 'DESC');
 
-    return await queryBuilder.getMany();
+    // Aplicar paginación
+    queryBuilder.skip((page - 1) * limit).take(limit);
+
+    const [clients, total] = await queryBuilder.getManyAndCount();
+    return { clients, total };
   }
 }
