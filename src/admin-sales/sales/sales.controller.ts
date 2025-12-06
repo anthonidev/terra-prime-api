@@ -26,6 +26,7 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { FindAllLotsDto } from './dto/find-all-lots.dto';
+import { FindAllSalesDto } from './dto/find-all-sales.dto';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/user/entities/user.entity';
 import { CalculateAmortizationDto } from '../financing/dto/calculate-amortizacion-dto';
@@ -74,14 +75,14 @@ export class SalesController {
 
   @Get('all/list')
   @Roles('JVE', 'FAC')
-  findAllActives(@GetUser() user: User, @Query() paginationDto: PaginationDto) {
-    return this.salesService.findAll(paginationDto);
+  findAllActives(@GetUser() user: User, @Query() findAllSalesDto: FindAllSalesDto) {
+    return this.salesService.findAllWithFilters(findAllSalesDto);
   }
 
   @Get('all/list/vendor')
   @Roles('JVE', 'VEN')
-  findAll(@GetUser() user: User, @Query() paginationDto: PaginationDto) {
-    return this.salesService.findAll(paginationDto, user.id);
+  findAll(@GetUser() user: User, @Query() findAllSalesDto: FindAllSalesDto) {
+    return this.salesService.findAllVendorWithFilters(findAllSalesDto, user.id);
   }
 
   @Get(':id')
