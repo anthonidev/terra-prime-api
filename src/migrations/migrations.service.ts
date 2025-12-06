@@ -257,10 +257,10 @@ export class MigrationsService {
       }
 
       // 6. Crear financiamiento y cuotas
-      const { financing, installmentMap } = await this.createFinancing(data, sale, manager);
+      const { financing } = await this.createFinancing(data, sale, manager);
 
       // 7. Crear pagos y detalles
-      await this.createPayments(data, sale, financing, installmentMap, vendorId, manager);
+      await this.createPayments(data, sale, financing, vendorId, manager);
 
       // 8. Actualizar montos de reserva (si aplica)
       await this.updateReservationAmounts(sale.id, manager);
@@ -520,7 +520,7 @@ export class MigrationsService {
     data: SaleImportDto,
     sale: Sale,
     manager: EntityManager,
-  ): Promise<{ financing: Financing; installmentMap: Map<number, string> }> {
+  ): Promise<{ financing: Financing }> {
     // Solo procesar cuotas regulares (1, 2, 3... N)
     const regularInstallments = data.financing.installments.filter(
       (inst) => inst.couteNumber > 0,
@@ -538,12 +538,12 @@ export class MigrationsService {
 
     // Crear financiamiento
     const financing = manager.create(Financing, {
-      financingType: data.financing.financingType || FinancingType.CREDITO, // ✅ CREDITO por defecto
-      initialAmount: data.financing.initialAmount, // ✅ Ya calculado desde Excel
-      initialAmountPaid: 0, // ✅ Se actualizará con pagos
-      initialAmountPending: data.financing.initialAmount, // ✅ Pendiente = total inicial
-      interestRate: data.financing.interestRate || 0, // ✅ 0 por defecto si no viene del Excel
-      quantityCoutes: regularInstallments.length, // ✅ Solo cuotas regulares
+      financingType: data.financing.financingType || FinancingType.CREDITO,
+      initialAmount: data.financing.initialAmount,
+      initialAmountPaid: 0,
+      initialAmountPending: data.financing.initialAmount,
+      interestRate: data.financing.interestRate || 0,
+      quantityCoutes: regularInstallments.length,
       sale: sale,
     });
 
@@ -552,37 +552,29 @@ export class MigrationsService {
       `  🏦 Financiamiento creado - Inicial: $${data.financing.initialAmount}`,
     );
 
-    // ✅ NO ordenar - mantener orden secuencial del Excel
-    // Las cuotas ya vienen renumeradas correctamente de processInstallmentsAndPayments
-
-    // Crear solo cuotas regulares (1, 2, 3... N) y mapear número de cuota → ID
-    const installmentMap = new Map<number, string>();
-
+    // Crear cuotas regulares (1, 2, 3... N)
     for (const installmentData of regularInstallments) {
       const installment = manager.create(FinancingInstallments, {
-        numberCuote: installmentData.couteNumber, // ✅ Número secuencial para ordenamiento
+        numberCuote: installmentData.couteNumber,
         couteAmount: installmentData.couteAmount,
         expectedPaymentDate: new Date(installmentData.expectedPaymentDate),
         lateFeeAmount: installmentData.lateFeeAmount,
-        coutePaid: 0, // Se actualizará con los pagos
+        coutePaid: 0,
         coutePending: installmentData.couteAmount,
         lateFeeAmountPaid: 0,
         lateFeeAmountPending: installmentData.lateFeeAmount,
-        status: StatusFinancingInstallments.PENDING, // Se actualizará después
+        status: StatusFinancingInstallments.PENDING,
         financing: financing,
       });
 
-      const savedInstallment = await manager.save(installment);
-
-      // Guardar mapeo: número de cuota → ID de la cuota creada
-      installmentMap.set(installmentData.couteNumber, savedInstallment.id);
+      await manager.save(installment);
     }
 
     this.logger.log(
-      `  📋 ${regularInstallments.length} cuotas regulares creadas (sin contar inicial)`,
+      `  📋 ${regularInstallments.length} cuotas regulares creadas`,
     );
 
-    return { financing, installmentMap };
+    return { financing };
   }
 
   /**
@@ -592,7 +584,6 @@ export class MigrationsService {
     data: SaleImportDto,
     sale: Sale,
     financing: Financing,
-    installmentMap: Map<number, string>,
     vendorId: string,
     manager: EntityManager,
   ): Promise<void> {
@@ -605,12 +596,12 @@ export class MigrationsService {
 
       let relatedEntityType: string;
       let relatedEntityId: string;
-      const observation = paymentGroup.observation || null; // ✅ Observation viene del paymentGroup
-      const numberTicket = paymentGroup.numberTicket || null; // ✅ Number ticket viene del paymentGroup
+      const observation = paymentGroup.observation || null;
+      const numberTicket = paymentGroup.numberTicket || null;
 
       // Determinar tipo de pago
       if (paymentGroup.couteNumber === 0) {
-        // ✅ Pago de cuota 0 → clasificar por observation
+        // Pago de cuota 0 → clasificar por observation
         const cuota0Type = this.classifyCuota0(observation);
 
         if (cuota0Type === 'reservation') {
@@ -621,17 +612,10 @@ export class MigrationsService {
           relatedEntityId = financing.id;
         }
       } else {
-        // ✅ Pago de cuota regular → va a la cuota específica
-        const installmentId = installmentMap.get(paymentGroup.couteNumber);
-
-        if (!installmentId) {
-          throw new BadRequestException(
-            `Cuota ${paymentGroup.couteNumber} no encontrada en el mapeo`,
-          );
-        }
-
-        relatedEntityType = 'financingInstallment';
-        relatedEntityId = installmentId;
+        // ✅ UNIFORMIZADO: Pago de cuotas regulares → apunta al financing (NO a cuota individual)
+        // El sistema distribuirá automáticamente el pago entre las cuotas pendientes
+        relatedEntityType = 'financingInstallments';
+        relatedEntityId = financing.id;
       }
 
       // Crear payment
@@ -639,18 +623,19 @@ export class MigrationsService {
         user: { id: vendorId } as any,
         paymentConfig: { id: paymentGroup.paymentConfigId } as any,
         amount: totalAmount,
-        status: StatusPayment.APPROVED, // ✅ Directo aprobado
+        status: StatusPayment.APPROVED,
         methodPayment: MethodPayment.VOUCHER,
         relatedEntityType: relatedEntityType,
         relatedEntityId: relatedEntityId,
-        observation: observation, // ✅ Observación del Excel (campo DETALLE)
-        numberTicket: numberTicket, // ✅ Número de ticket del Excel (columna NUMERO)
+        observation: observation,
+        numberTicket: numberTicket,
         metadata: {
           'Concepto de pago':
             paymentGroup.couteNumber === 0
               ? (relatedEntityType === 'reservation' ? 'Pago de reserva' : 'Pago de cuota inicial')
-              : `Pago de cuota ${paymentGroup.couteNumber}`,
+              : 'Pago de cuotas de financiación',
           'Migración histórica': true,
+          'Cuota referencia Excel': paymentGroup.couteNumber > 0 ? paymentGroup.couteNumber : undefined,
         },
         reviewedBy: { id: vendorId } as any,
         reviewedAt: new Date(),
@@ -665,7 +650,7 @@ export class MigrationsService {
           amount: detailData.amount,
           bankName: detailData.bankName || null,
           transactionReference: detailData.transactionReference,
-          codeOperation: detailData.transactionReference, // ✅ Código de operación en detalle
+          codeOperation: detailData.transactionReference,
           transactionDate: new Date(detailData.transactionDate),
           url: detailData.url,
           urlKey: detailData.urlKey,
@@ -676,46 +661,99 @@ export class MigrationsService {
       }
 
       this.logger.log(
-        `  💳 Pago creado para cuota ${paymentGroup.couteNumber}: $${totalAmount}`,
+        `  💳 Pago creado ${paymentGroup.couteNumber === 0 ? 'inicial/reserva' : 'de cuotas'}: $${totalAmount}`,
       );
     }
   }
 
   /**
    * Actualizar estado de las cuotas según los pagos realizados
+   * ✅ ENFOQUE INTERMEDIO: Pagos apuntan a financing, pero se aplican a cuota específica del Excel
+   * NO hay distribución automática - cada pago va solo a su cuota asignada
    */
   private async updateInstallmentsStatus(
     financingId: string,
     manager: EntityManager,
   ): Promise<void> {
+    // 1. Obtener cuotas ordenadas por número
     const installments = await manager.find(FinancingInstallments, {
       where: { financing: { id: financingId } },
       relations: ['financing'],
+      order: { numberCuote: 'ASC' },
     });
 
+    if (installments.length === 0) return;
+
+    // 2. Obtener pagos aprobados del financiamiento ordenados cronológicamente
+    const payments = await manager
+      .createQueryBuilder(Payment, 'payment')
+      .where('payment.relatedEntityType = :type', {
+        type: 'financingInstallments',
+      })
+      .andWhere('payment.relatedEntityId = :id', { id: financingId })
+      .andWhere('payment.status = :status', { status: StatusPayment.APPROVED })
+      .orderBy('payment.createdAt', 'ASC')
+      .getMany();
+
+    // 3. Crear un mapa de acumulado de pagos por cuota (para calcular pendiente progresivo)
+    const installmentPaidAccumulator = new Map<number, number>();
+
+    // Inicializar acumuladores en 0
     for (const installment of installments) {
-      // Calcular pagos realizados para esta cuota
-      const payments = await manager
-        .createQueryBuilder(Payment, 'payment')
-        .where('payment.relatedEntityType = :type', {
-          type: 'financingInstallment',
-        })
-        .andWhere('payment.relatedEntityId = :id', { id: installment.id })
-        .andWhere('payment.status = :status', { status: StatusPayment.APPROVED })
-        .getMany();
+      installmentPaidAccumulator.set(installment.numberCuote, 0);
+    }
 
-      const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
-      const pending = Number(installment.couteAmount) - totalPaid;
+    // 4. Procesar cada pago en orden cronológico
+    for (const payment of payments) {
+      const cuotaReferencia = payment.metadata?.['Cuota referencia Excel'];
 
-      installment.coutePaid = totalPaid;
-      installment.coutePending = pending > 0 ? pending : 0;
+      if (!cuotaReferencia) continue;
+
+      const cuotaNumber = Number(cuotaReferencia);
+      const installment = installments.find(inst => inst.numberCuote === cuotaNumber);
+
+      if (!installment) continue;
+
+      // Acumular el pago para esta cuota
+      const currentPaid = installmentPaidAccumulator.get(cuotaNumber) || 0;
+      const newPaid = currentPaid + Number(payment.amount);
+      installmentPaidAccumulator.set(cuotaNumber, newPaid);
+
+      // Calcular pendiente DESPUÉS de este pago específico
+      const pendingAfterThisPayment = Number(
+        (Number(installment.couteAmount) - newPaid).toFixed(2)
+      );
+
+      // Determinar modo basado en el pendiente después de este pago
+      const mode = pendingAfterThisPayment <= 0 ? 'Total' : 'Parcial';
+
+      // Actualizar metadata del pago con pendiente progresivo
+      payment.metadata = {
+        ...(payment.metadata || {}),
+        'Cuotas afectadas': {
+          [`Cuota ${installment.numberCuote}`]: {
+            'Modo': mode,
+            'Monto aplicado': Number(payment.amount),
+            'Pendiente después de este pago': pendingAfterThisPayment > 0 ? pendingAfterThisPayment : 0,
+          },
+        },
+      };
+      await manager.save(payment);
+    }
+
+    // 5. Actualizar estados finales de las cuotas
+    for (const installment of installments) {
+      const totalPaid = installmentPaidAccumulator.get(installment.numberCuote) || 0;
+
+      installment.coutePaid = Number(totalPaid.toFixed(2));
+      installment.coutePending = Number(
+        (Number(installment.couteAmount) - totalPaid).toFixed(2)
+      );
 
       // Actualizar estado
-      if (pending <= 0) {
+      if (installment.coutePending <= 0) {
         installment.status = StatusFinancingInstallments.PAID;
       } else if (totalPaid > 0) {
-        installment.status = StatusFinancingInstallments.PENDING;
-      } else if (new Date(installment.expectedPaymentDate) < new Date()) {
         installment.status = StatusFinancingInstallments.PENDING;
       } else {
         installment.status = StatusFinancingInstallments.PENDING;
@@ -724,7 +762,7 @@ export class MigrationsService {
       await manager.save(installment);
     }
 
-    this.logger.log(`  ✅ Estados de cuotas actualizados`);
+    this.logger.log(`  ✅ Estados de ${installments.length} cuotas actualizados (aplicación directa según Excel)`);
   }
 
   /**
