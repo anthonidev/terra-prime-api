@@ -58,6 +58,8 @@ import { formatClientAndGuarantorResponse } from './helpers/format-client-and-gu
 import { ClientAndGuarantorResponse } from './interfaces/client-and-guarantor-response.interface';
 import { StatusReservation } from '../reservations/enums/status-reservation.enum';
 import { formatSaleResponse } from './helpers/format-sale-response.helper';
+import { formatSaleListResponse } from './helpers/format-sale-list-response.helper';
+import { formatSaleVendorResponse } from './helpers/format-sale-vendor-response.helper';
 import { SaleResponse } from './interfaces/sale-response.interface';
 import { SaleWithCombinedInstallmentsResponse } from './interfaces/sale-with-combined-installments-response.interface';
 import { CombinedInstallmentWithPayments } from './interfaces/combined-installment-with-payments.interface';
@@ -412,7 +414,6 @@ export class SalesService {
     return await repository.save(sale);
   }
 
-  // ACTUALIZAR QUERIES - ELIMINAR JOINS CON RESERVATION
   async findAll(
     paginationDto: PaginationDto,
     userId?: string,
@@ -430,7 +431,6 @@ export class SalesService {
       .leftJoinAndSelect('block.stage', 'stage')
       .leftJoinAndSelect('stage.project', 'project')
       .leftJoinAndSelect('sale.guarantor', 'guarantor')
-      // ELIMINAR: .leftJoinAndSelect('sale.reservation', 'reservation')
       .leftJoinAndSelect('sale.financing', 'financing')
       .leftJoinAndSelect(
         'financing.financingInstallments',
@@ -479,6 +479,151 @@ export class SalesService {
       formattedSales,
       totalCount,
       paginationDto,
+    );
+  }
+
+  async findAllWithFilters(
+    findAllSalesDto: any,
+    userId?: string,
+  ): Promise<Paginated<any>> {
+    const {
+      page = 1,
+      limit = 10,
+      order = 'DESC',
+      status,
+      type,
+      projectId,
+      clientName,
+    } = findAllSalesDto;
+    const skip = (page - 1) * limit;
+
+    let queryBuilder = this.saleRepository
+      .createQueryBuilder('sale')
+      .leftJoinAndSelect('sale.client', 'client')
+      .leftJoinAndSelect('client.lead', 'lead')
+      .leftJoinAndSelect('sale.leadVisit', 'leadVisit')
+      .leftJoinAndSelect('sale.vendor', 'vendor')
+      .leftJoinAndSelect('sale.lot', 'lot')
+      .leftJoinAndSelect('lot.block', 'block')
+      .leftJoinAndSelect('block.stage', 'stage')
+      .leftJoinAndSelect('stage.project', 'project')
+      .leftJoinAndSelect('sale.financing', 'financing')
+      .leftJoinAndSelect('sale.urbanDevelopment', 'urbanDevelopment')
+      .leftJoinAndSelect('urbanDevelopment.financing', 'urbanDevelopmentFinancing')
+      .leftJoinAndSelect('sale.liner', 'liner')
+      .leftJoinAndSelect('sale.telemarketingSupervisor', 'telemarketingSupervisor')
+      .leftJoinAndSelect('sale.telemarketingConfirmer', 'telemarketingConfirmer')
+      .leftJoinAndSelect('sale.telemarketer', 'telemarketer')
+      .leftJoinAndSelect('sale.fieldManager', 'fieldManager')
+      .leftJoinAndSelect('sale.fieldSupervisor', 'fieldSupervisor')
+      .leftJoinAndSelect('sale.fieldSeller', 'fieldSeller')
+      .leftJoinAndSelect('sale.salesGeneralManager', 'salesGeneralManager')
+      .leftJoinAndSelect('sale.salesManager', 'salesManager')
+      .leftJoinAndSelect('sale.postSale', 'postSale')
+      .leftJoinAndSelect('sale.closer', 'closer');
+
+    if (userId) {
+      queryBuilder.andWhere('vendor.id = :userId', { userId });
+    } else {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      queryBuilder.andWhere('sale.createdAt >= :thirtyDaysAgo', { thirtyDaysAgo });
+    }
+
+    if (status) {
+      queryBuilder.andWhere('sale.status = :status', { status });
+    }
+
+    if (type) {
+      queryBuilder.andWhere('sale.type = :type', { type });
+    }
+
+    if (projectId) {
+      queryBuilder.andWhere('project.id = :projectId', { projectId });
+    }
+
+    if (clientName) {
+      queryBuilder.andWhere(
+        '(LOWER(lead.firstName) LIKE LOWER(:clientName) OR LOWER(lead.lastName) LIKE LOWER(:clientName) OR LOWER(lead.document) LIKE LOWER(:clientName))',
+        { clientName: `%${clientName}%` }
+      );
+    }
+
+    const totalCount = await queryBuilder.getCount();
+    const sales = await queryBuilder
+      .orderBy('sale.createdAt', order)
+      .skip(skip)
+      .take(limit)
+      .getMany();
+
+    const formattedSales = sales.map((sale) => formatSaleListResponse(sale));
+    return PaginationHelper.createPaginatedResponse(
+      formattedSales,
+      totalCount,
+      findAllSalesDto,
+    );
+  }
+
+  async findAllVendorWithFilters(
+    findAllSalesDto: any,
+    userId: string,
+  ): Promise<Paginated<any>> {
+    const {
+      page = 1,
+      limit = 10,
+      order = 'DESC',
+      status,
+      type,
+      projectId,
+      clientName,
+    } = findAllSalesDto;
+    const skip = (page - 1) * limit;
+
+    let queryBuilder = this.saleRepository
+      .createQueryBuilder('sale')
+      .leftJoinAndSelect('sale.client', 'client')
+      .leftJoinAndSelect('client.lead', 'lead')
+      .leftJoinAndSelect('sale.leadVisit', 'leadVisit')
+      .leftJoinAndSelect('sale.lot', 'lot')
+      .leftJoinAndSelect('lot.block', 'block')
+      .leftJoinAndSelect('block.stage', 'stage')
+      .leftJoinAndSelect('stage.project', 'project')
+      .leftJoinAndSelect('sale.financing', 'financing')
+      .leftJoinAndSelect('sale.urbanDevelopment', 'urbanDevelopment')
+      .leftJoinAndSelect('urbanDevelopment.financing', 'urbanDevelopmentFinancing')
+      .andWhere('sale.vendor = :userId', { userId });
+
+    if (status) {
+      queryBuilder.andWhere('sale.status = :status', { status });
+    }
+
+    if (type) {
+      queryBuilder.andWhere('sale.type = :type', { type });
+    }
+
+    if (projectId) {
+      queryBuilder.andWhere('project.id = :projectId', { projectId });
+    }
+
+    if (clientName) {
+      queryBuilder.andWhere(
+        '(LOWER(lead.firstName) LIKE LOWER(:clientName) OR LOWER(lead.lastName) LIKE LOWER(:clientName) OR LOWER(lead.document) LIKE LOWER(:clientName))',
+        { clientName: `%${clientName}%` }
+      );
+    }
+
+    const totalCount = await queryBuilder.getCount();
+    const sales = await queryBuilder
+      .orderBy('sale.createdAt', order)
+      .skip(skip)
+      .take(limit)
+      .getMany();
+
+    const formattedSales = sales.map((sale) => formatSaleVendorResponse(sale));
+    return PaginationHelper.createPaginatedResponse(
+      formattedSales,
+      totalCount,
+      findAllSalesDto,
     );
   }
 
