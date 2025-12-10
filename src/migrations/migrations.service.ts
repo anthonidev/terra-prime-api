@@ -532,6 +532,7 @@ export class MigrationsService {
         reservationAmount: data.sale.reservationAmount,
         reservationAmountPaid: 0,
         reservationAmountPending: data.sale.reservationAmount,
+        fromReservation: true, // Se establece en true si hay monto de reserva
       });
       this.logger.log(`  💵 Reserva configurada: $${data.sale.reservationAmount}`);
     }

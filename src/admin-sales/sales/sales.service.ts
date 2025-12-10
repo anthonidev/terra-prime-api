@@ -671,13 +671,14 @@ export class SalesService {
 
   // ACTUALIZAR MÉTODO getPaymentsSummaryForSale
   private async getPaymentsSummaryForSale(saleId: string): Promise<any[]> {
-    // Obtener la venta (sin reservation join)
+    // Obtener la venta con todas las relaciones de financiamiento
     const sale = await this.saleRepository
       .createQueryBuilder('sale')
       .leftJoinAndSelect('sale.financing', 'financing')
+      .leftJoinAndSelect('sale.urbanDevelopment', 'urbanDevelopment')
       .leftJoinAndSelect(
-        'financing.financingInstallments',
-        'financingInstallments',
+        'urbanDevelopment.financing',
+        'urbanDevelopmentFinancing',
       )
       .where('sale.id = :saleId', { saleId })
       .getOne();
@@ -691,7 +692,7 @@ export class SalesService {
       saleId,
     );
 
-    // 2. Pagos de financiación (si existe)
+    // 2. Pagos de financiación (inicial)
     let financingPayments = [];
     if (sale.financing) {
       financingPayments =
@@ -701,11 +702,28 @@ export class SalesService {
         );
     }
 
-    // 3. Si es una reserva, incluir pagos de reserva
+    // 3. Pagos de cuotas (regulares y de HU)
+    const installmentPayments = [];
+    if (sale.financing) {
+      const financingInstallmentPayments =
+        await this.paymentsService.findPaymentsByRelatedEntity(
+          'financingInstallments',
+          sale.financing.id,
+        );
+      installmentPayments.push(...financingInstallmentPayments);
+    }
+    if (sale.urbanDevelopment?.financing) {
+      const huInstallmentPayments =
+        await this.paymentsService.findPaymentsByRelatedEntity(
+          'financingInstallments',
+          sale.urbanDevelopment.financing.id,
+        );
+      installmentPayments.push(...huInstallmentPayments);
+    }
+
+    // 4. Pagos de reserva
     let reservationPayments = [];
-    if (sale.fromReservation) {
-      // Los pagos de reserva ahora están asociados directamente a la venta
-      // Usando un campo relatedEntityType específico para reservas
+    if (sale.fromReservation || sale.reservationAmount > 0) {
       reservationPayments =
         await this.paymentsService.findPaymentsByRelatedEntity(
           'reservation',
@@ -718,6 +736,7 @@ export class SalesService {
       ...salePayments,
       ...financingPayments,
       ...reservationPayments,
+      ...installmentPayments,
     ].sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -740,6 +759,7 @@ export class SalesService {
       numberTicket: payment.numberTicket,
       paymentConfig: payment.paymentConfig.name,
       reason: payment?.rejectionReason ? payment.rejectionReason : null,
+      metadata: payment.metadata, // Agregar metadata
     }));
   }
 

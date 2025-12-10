@@ -345,32 +345,6 @@ export class CollectionsService {
 
     const client = saleRaw.client;
 
-    // Función helper para obtener pagos de una cuota
-    const getPaymentsForInstallment = async (installmentId: string) => {
-      const payments = await this.dataSource.query(
-        `
-        SELECT
-          p.id,
-          p.amount,
-          p.status,
-          p."numberTicket",
-          p."rejectionReason"
-        FROM payments p
-        WHERE p."relatedEntityId" = $1
-          AND p."relatedEntityType" = 'financingInstallments'
-        ORDER BY p."createdAt" ASC
-        `,
-        [installmentId],
-      );
-      return payments.map((payment: any) => ({
-        id: payment.id,
-        amount: payment.amount,
-        status: payment.status,
-        numberTicket: payment.numberTicket,
-        rejectionReason: payment.rejectionReason,
-      }));
-    };
-
     // Formatear ubigeo (reutilizando lógica anterior)
     const getUbigeoFromLead = (lead: any) => {
       if (!lead?.ubigeo) return null;
@@ -418,7 +392,7 @@ export class CollectionsService {
       };
     };
 
-    // Procesar cuotas de financiamiento con pagos
+    // Procesar cuotas de financiamiento sin pagos
     const financingInstallmentsWithPayments = saleRaw.financing
       ?.financingInstallments
       ? await Promise.all(
@@ -431,12 +405,11 @@ export class CollectionsService {
             lateFeeAmountPending: installment.lateFeeAmountPending.toString(),
             lateFeeAmountPaid: installment.lateFeeAmountPaid,
             status: installment.status,
-            payments: await getPaymentsForInstallment(installment.id),
           })),
         )
       : [];
 
-    // Procesar cuotas de habilitación urbana con pagos
+    // Procesar cuotas de habilitación urbana sin pagos
     let urbanDevelopmentFormatted = null;
     if (urbanDevelopment?.financing?.financingInstallments) {
       const huInstallmentsWithPayments = await Promise.all(
@@ -450,7 +423,6 @@ export class CollectionsService {
             lateFeeAmountPending: installment.lateFeeAmountPending.toString(),
             lateFeeAmountPaid: installment.lateFeeAmountPaid,
             status: installment.status,
-            payments: await getPaymentsForInstallment(installment.id),
           }),
         ),
       );
@@ -469,6 +441,74 @@ export class CollectionsService {
         },
       };
     }
+
+    // Obtener resumen de pagos
+    const salePayments = await this.paymentsService.findPaymentsByRelatedEntity(
+      'sale',
+      saleId,
+    );
+
+    let financingPayments = [];
+    if (saleRaw.financing) {
+      financingPayments =
+        await this.paymentsService.findPaymentsByRelatedEntity(
+          'financing',
+          saleRaw.financing.id,
+        );
+    }
+
+    let reservationPayments = [];
+    if (saleRaw.reservationAmount > 0) {
+      reservationPayments =
+        await this.paymentsService.findPaymentsByRelatedEntity(
+          'reservation',
+          saleId,
+        );
+    }
+
+    const installmentPayments = [];
+    if (saleRaw.financing) {
+      const financingInstallmentPayments =
+        await this.paymentsService.findPaymentsByRelatedEntity(
+          'financingInstallments',
+          saleRaw.financing.id,
+        );
+      installmentPayments.push(...financingInstallmentPayments);
+    }
+
+    if (urbanDevelopment?.financing) {
+      const huInstallmentPayments =
+        await this.paymentsService.findPaymentsByRelatedEntity(
+          'financingInstallments',
+          urbanDevelopment.financing.id,
+        );
+      installmentPayments.push(...huInstallmentPayments);
+    }
+
+    const allPayments = [
+      ...salePayments,
+      ...financingPayments,
+      ...reservationPayments,
+      ...installmentPayments,
+    ].sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+
+    const paymentsSummary = allPayments.map((payment) => ({
+      id: payment.id,
+      amount: payment.amount,
+      status: payment.status,
+      createdAt: payment.createdAt,
+      reviewedAt: payment.reviewedAt,
+      codeOperation: payment.codeOperation,
+      banckName: payment.banckName,
+      dateOperation: payment.dateOperation,
+      numberTicket: payment.numberTicket,
+      paymentConfig: payment.paymentConfig.name,
+      reason: payment?.rejectionReason ? payment.rejectionReason : null,
+      metadata: payment.metadata,
+    }));
 
     // Construir response
     return {
@@ -540,6 +580,7 @@ export class CollectionsService {
           lastName: saleRaw.vendor.lastName,
         },
       },
+      paymentsSummary: paymentsSummary,
     };
   }
 

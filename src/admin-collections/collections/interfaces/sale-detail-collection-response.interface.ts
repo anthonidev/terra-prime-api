@@ -1,6 +1,21 @@
 import { StatusFinancingInstallments } from "src/admin-sales/financing/enums/status-financing-installments.enum";
 import { StatusPayment } from "src/admin-payments/payments/enums/status-payments.enum";
 
+interface PaymentSummary {
+  id: number;
+  amount: number;
+  status: StatusPayment;
+  createdAt: string;
+  reviewedAt: string;
+  codeOperation: string;
+  banckName: string;
+  dateOperation: string;
+  numberTicket: string;
+  paymentConfig: string;
+  reason: string;
+  metadata: Record<string, any>;
+}
+
 export interface SaleDetailCollectionResponse {
   client: {
     id: number;
@@ -69,13 +84,6 @@ export interface SaleDetailCollectionResponse {
         lateFeeAmountPending: string;
         lateFeeAmountPaid: number;
         status: StatusFinancingInstallments;
-        payments: {
-          id: number;
-          amount: string;
-          status: StatusPayment;
-          numberTicket: string | null;
-          rejectionReason: string | null;
-        }[];
       }[];
     } | null;
     urbanDevelopment?: {
@@ -97,13 +105,6 @@ export interface SaleDetailCollectionResponse {
           lateFeeAmountPending: string;
           lateFeeAmountPaid: number;
           status: StatusFinancingInstallments;
-          payments: {
-            id: number;
-            amount: string;
-            status: StatusPayment;
-            numberTicket: string | null;
-            rejectionReason: string | null;
-          }[];
         }[];
       };
     };
@@ -113,4 +114,5 @@ export interface SaleDetailCollectionResponse {
       lastName: string;
     };
   };
+  paymentsSummary: PaymentSummary[];
 }

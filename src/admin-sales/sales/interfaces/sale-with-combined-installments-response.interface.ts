@@ -119,5 +119,6 @@ export interface SaleWithCombinedInstallmentsResponse {
     numberTicket: string | null;
     paymentConfig: string;
     reason: string | null;
+    metadata: Record<string, any>;
   }[];
 }

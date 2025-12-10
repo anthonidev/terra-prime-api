@@ -16,6 +16,11 @@ import { ClientSaleResponse } from './interfaces/client-sale-response.interface'
 import { UsersService } from 'src/user/user.service';
 import { SaleType } from '../sales/enums/sale-type.enum';
 import { StatusSale } from '../sales/enums/status-sale.enum';
+import { FindAllClientsDto } from './dto/find-all-clients.dto';
+import { Paginated } from 'src/common/interfaces/paginated.interface';
+import { ClientListItem } from './interfaces/client-list-item.interface';
+import { PaginationHelper } from 'src/common/helpers/pagination.helper';
+import { formatClientListItem } from './helpers/format-client-list-item.helper';
 
 @Injectable()
 export class ClientsService {
@@ -293,5 +298,50 @@ export class ClientsService {
 
     const [clients, total] = await queryBuilder.getManyAndCount();
     return { clients, total };
+  }
+
+  async findAll(
+    findAllClientsDto: FindAllClientsDto,
+  ): Promise<Paginated<ClientListItem>> {
+    const {
+      page = 1,
+      limit = 10,
+      order = 'DESC',
+      term,
+      isActive,
+    } = findAllClientsDto;
+    const queryBuilder = this.clientRepository
+      .createQueryBuilder('client')
+      .leftJoinAndSelect('client.lead', 'lead')
+      .orderBy('client.createdAt', order)
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    let whereClauseApplied = false;
+
+    if (term) {
+      queryBuilder.where(
+        '(LOWER(lead.document) LIKE LOWER(:term) OR LOWER(lead.firstName) LIKE LOWER(:term) OR LOWER(lead.lastName) LIKE LOWER(:term) OR LOWER(lead.email) LIKE LOWER(:term))',
+        { term: `%${term}%` },
+      );
+      whereClauseApplied = true;
+    }
+    if (typeof isActive === 'boolean') {
+      const condition = 'client.isActive = :isActive';
+      if (whereClauseApplied) {
+        queryBuilder.andWhere(condition, { isActive });
+      } else {
+        queryBuilder.where(condition, { isActive });
+      }
+    }
+    const [clients, total] = await queryBuilder.getManyAndCount();
+
+    const formattedClients = clients.map(formatClientListItem);
+
+    return PaginationHelper.createPaginatedResponse(
+      formattedClients,
+      total,
+      findAllClientsDto,
+    );
   }
 }
