@@ -1,8 +1,0 @@
-En la  api de  @Get('clients/list') que esta ubicado en el archivo  src/admin-collections/collections/collections.controller.ts
-quiero que hagas las siguientes modificaciones:
-- debe haber un filtro que liste los clientes por  cobrador asignado y debe ser un parametro opcional
-- Actualmente esta el filtro de ubigeoId, quiero que cambiemos este filtro por 3 filtros nuevos: departamentoId, provinciaId y distritoId todos opcionales
-
-el response se mantiene igual solo cambiaria un lead.ubigeo que ahora debe retornar un objeto con los 3 nuevos campos: departamentoId, provinciaId y distritoId
-recomiendo crear una funcion para obtener el ubigeo a traves del codigo del distrito y retornar el objeto con los 3 campos
-

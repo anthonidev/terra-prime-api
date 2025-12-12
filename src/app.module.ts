@@ -14,7 +14,6 @@ import { FilesModule } from './files/files.module';
 import { LeadModule } from './lead/lead.module';
 import { ProjectModule } from './project/project.module';
 import { ReportsModule } from './reports/reports.module';
-import { SeedModule } from './seed/seed.module';
 import { SystemsModule } from './systems/systems.module';
 import { UsersModule } from './user/user.module';
 import { ExternalApiModule } from './external-api/external-api.module';
@@ -38,7 +37,6 @@ import { json, urlencoded } from 'express';
     ScheduleModule.forRoot(),
     AuthModule,
     UsersModule,
-    SeedModule,
     ProjectModule,
     DashboardModule,
     LeadModule,
@@ -58,7 +56,10 @@ import { json, urlencoded } from 'express';
 export class AppModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
-      .apply(json({ limit: '50mb' }), urlencoded({ extended: true, limit: '50mb' }))
+      .apply(
+        json({ limit: '50mb' }),
+        urlencoded({ extended: true, limit: '50mb' }),
+      )
       .forRoutes('*'); // Aplica a todas las rutas
   }
 }
