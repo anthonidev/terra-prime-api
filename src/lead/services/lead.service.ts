@@ -18,7 +18,7 @@ import {
   PaginatedResult,
   PaginationHelper,
 } from 'src/common/helpers/pagination.helper';
-import { UsersService } from 'src/user/user.service';
+import { UserService } from 'src/user/services/user.service';
 import { TransactionService } from 'src/common/services/transaction.service';
 import { CutsResponse } from 'src/cuts/interfaces/cuts-response.interface';
 import { AssignParticipantsToLeadVisitDto } from '../dto/assign-participants-to-lead-visit.dto';
@@ -39,7 +39,7 @@ export class LeadService {
     private readonly leadSourceRepository: Repository<LeadSource>,
     @InjectRepository(LeadVisit)
     private readonly leadVisitRepository: Repository<LeadVisit>,
-    private readonly userService: UsersService,
+    private readonly userService: UserService,
     private readonly transactionService: TransactionService,
     private readonly participantsService: ParticipantsService,
   ) { }

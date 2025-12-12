@@ -26,91 +26,74 @@ export class PasswordResetService {
     @InjectRepository(PasswordResetToken)
     private readonly resetTokenRepository: Repository<PasswordResetToken>,
     private readonly emailService: EmailService,
-  ) { }
+  ) {}
 
   async requestPasswordReset(email: string) {
-    try {
-      const user = await this.userRepository.findOne({
-        where: { email: email.toLowerCase() },
-      });
+    const user = await this.userRepository.findOne({
+      where: { email: email.toLowerCase() },
+    });
 
-      if (!user) {
-        this.logger.warn(
-          `Password reset requested for non-existent email: ${email}`,
-        );
-        return {
-          success: true,
-          message:
-            'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña',
-        };
-      }
-
-      const token = uuidv4();
-
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + this.TOKEN_EXPIRY_HOURS);
-
-      const resetToken = this.resetTokenRepository.create({
-        token,
-        user,
-        expiresAt,
-      });
-      await this.resetTokenRepository.save(resetToken);
-
-      await this.sendPasswordResetEmail(user.email, token);
-
+    if (!user) {
+      this.logger.warn(
+        `Password reset requested for non-existent email: ${email}`,
+      );
       return {
         success: true,
         message:
           'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña',
       };
-    } catch (error) {
-      this.logger.error(`Error in password reset request: ${error.message}`);
-      throw new BadRequestException(
-        'No se pudo procesar la solicitud de restablecimiento de contraseña',
-      );
     }
+
+    const token = uuidv4();
+
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + this.TOKEN_EXPIRY_HOURS);
+
+    const resetToken = this.resetTokenRepository.create({
+      token,
+      user,
+      expiresAt,
+    });
+    await this.resetTokenRepository.save(resetToken);
+
+    await this.sendPasswordResetEmail(user.email, token);
+
+    return {
+      success: true,
+      message:
+        'Si el correo está registrado, recibirás un enlace para restablecer tu contraseña',
+    };
   }
 
   async verifyResetToken(token: string) {
-    try {
-      const resetToken = await this.getValidToken(token);
+    const resetToken = await this.getValidToken(token);
 
-      return {
-        success: true,
-        message: 'Token válido',
-        email: resetToken.user.email,
-      };
-    } catch (error) {
-      this.logger.error(`Token verification failed: ${error.message}`);
-      throw error;
-    }
+    return {
+      success: true,
+      message: 'Token válido',
+      email: resetToken.user.email,
+    };
   }
 
   async resetPassword(token: string, newPassword: string) {
-    try {
-      const resetToken = await this.getValidToken(token);
+    const resetToken = await this.getValidToken(token);
 
-      const hashedPassword = await this.hashPassword(newPassword);
+    const hashedPassword = await this.hashPassword(newPassword);
 
-      await this.userRepository.update(
-        { id: resetToken.user.id },
-        { password: hashedPassword },
-      );
+    await this.userRepository.update(
+      { id: resetToken.user.id },
+      { password: hashedPassword },
+    );
 
-      resetToken.isUsed = true;
-      await this.resetTokenRepository.save(resetToken);
+    resetToken.isUsed = true;
+    await this.resetTokenRepository.save(resetToken);
 
-      await this.sendPasswordChangeConfirmationEmail(resetToken.user.email);
+    await this.sendPasswordChangeConfirmationEmail(resetToken.user.email);
 
-      return {
-        success: true,
-        message: 'Contraseña actualizada correctamente',
-      };
-    } catch (error) {
-      this.logger.error(`Password reset failed: ${error.message}`);
-      throw error;
-    }
+    return {
+      success: true,
+      message: 'Contraseña actualizada correctamente',
+    };
   }
 
   private async getValidToken(token: string): Promise<PasswordResetToken> {

@@ -18,61 +18,47 @@ export class ChangePasswordService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-  ) { }
+  ) {}
 
   async changePassword(
     userId: string,
     currentPassword: string,
     newPassword: string,
   ) {
-    try {
-      const user = await this.userRepository.findOne({
-        where: { id: userId },
-        select: ['id', 'password'],
-      });
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      select: ['id', 'password'],
+    });
 
-      if (!user) {
-        throw new NotFoundException(`Usuario no encontrado`);
-      }
-
-      const isPasswordValid = await this.verifyPassword(
-        currentPassword,
-        user.password,
-      );
-      if (!isPasswordValid) {
-        throw new UnauthorizedException('La contraseña actual es incorrecta');
-      }
-
-      if (await this.verifyPassword(newPassword, user.password)) {
-        throw new BadRequestException(
-          'La nueva contraseña debe ser diferente a la actual',
-        );
-      }
-
-      const hashedPassword = await this.hashPassword(newPassword);
-
-      await this.userRepository.update(
-        { id: userId },
-        { password: hashedPassword },
-      );
-
-      return {
-        success: true,
-        message: 'Contraseña actualizada correctamente',
-      };
-    } catch (error) {
-      this.logger.error(`Error al cambiar contraseña: ${error.message}`);
-
-      if (
-        error instanceof NotFoundException ||
-        error instanceof UnauthorizedException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
-
-      throw new BadRequestException('No se pudo actualizar la contraseña');
+    if (!user) {
+      throw new NotFoundException(`Usuario no encontrado`);
     }
+
+    const isPasswordValid = await this.verifyPassword(
+      currentPassword,
+      user.password,
+    );
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('La contraseña actual es incorrecta');
+    }
+
+    if (await this.verifyPassword(newPassword, user.password)) {
+      throw new BadRequestException(
+        'La nueva contraseña debe ser diferente a la actual',
+      );
+    }
+
+    const hashedPassword = await this.hashPassword(newPassword);
+
+    await this.userRepository.update(
+      { id: userId },
+      { password: hashedPassword },
+    );
+
+    return {
+      success: true,
+      message: 'Contraseña actualizada correctamente',
+    };
   }
 
   private async verifyPassword(

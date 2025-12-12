@@ -13,7 +13,7 @@ import { ClientResponse } from './interfaces/client-response.interface';
 import { formatClientResponse } from './helpers/format-client-response.helper';
 import { formatClientResponseSale } from './helpers/format-client-response-sale.helper';
 import { ClientSaleResponse } from './interfaces/client-sale-response.interface';
-import { UsersService } from 'src/user/user.service';
+import { UserService } from 'src/user/services/user.service';
 import { SaleType } from '../sales/enums/sale-type.enum';
 import { StatusSale } from '../sales/enums/status-sale.enum';
 import { FindAllClientsDto } from './dto/find-all-clients.dto';
@@ -29,7 +29,7 @@ export class ClientsService {
     private readonly clientRepository: Repository<Client>,
     private readonly leadService: LeadService,
     private readonly guarantorService: GuarantorsService,
-    private readonly userService: UsersService,
+    private readonly userService: UserService,
   ) {}
   // Methods for endpoints
   async create(

@@ -5,7 +5,6 @@ import { AdminCollectionsModule } from './admin-collections/admin-collections.mo
 import { AdminPaymentsModule } from './admin-payments/admin-payments.module';
 import { AdminSalesModule } from './admin-sales/admin-sales.module';
 import { AuthModule } from './auth/auth.module';
-import { ChatbotModule } from './chatbot/chatbot.module';
 import { envs } from './config/envs';
 import { CutsModule } from './cuts/cuts.module';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -48,7 +47,6 @@ import { json, urlencoded } from 'express';
     AdminCollectionsModule,
     CutsModule,
     ReportsModule,
-    ChatbotModule,
     ExternalApiModule,
     MigrationsModule,
   ],

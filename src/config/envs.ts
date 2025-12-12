@@ -2,6 +2,8 @@ import * as dotenv from 'dotenv';
 import * as joi from 'joi';
 dotenv.config();
 interface Envvars {
+  NODE_ENV: string;
+  LOG_LEVEL: string;
   DB_HOST: string;
   DB_PORT: number;
   DB_NAME: string;
@@ -32,6 +34,14 @@ interface Envvars {
 }
 const envVarsSchema = joi
   .object({
+    NODE_ENV: joi
+      .string()
+      .valid('development', 'production', 'test')
+      .default('development'),
+    LOG_LEVEL: joi
+      .string()
+      .valid('error', 'warn', 'info', 'debug')
+      .default('info'),
     PORT: joi.number().default(3000),
     DB_HOST: joi.string().required(),
     DB_PORT: joi.number().required(),
@@ -70,6 +80,8 @@ if (error) {
 }
 const envVars: Envvars = value;
 export const envs = {
+  nodeEnv: envVars.NODE_ENV,
+  logLevel: envVars.LOG_LEVEL,
   dbHost: envVars.DB_HOST,
   dbPort: envVars.DB_PORT,
   dbName: envVars.DB_NAME,

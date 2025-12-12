@@ -20,7 +20,7 @@ import { PaginationHelper } from 'src/common/helpers/pagination.helper';
 import { Paginated } from 'src/common/interfaces/paginated.interface';
 import { LeadsByDayResponse } from './interfaces/leads-by-day-response.interface';
 import { AssignLeadsToVendorDto } from './dto/assign-leads-to-vendor.dto';
-import { UsersService } from 'src/user/user.service';
+import { UserService } from 'src/user/services/user.service';
 import { AllVendorsActivesResponse } from './interfaces/all-vendors-actives-response.interface';
 import { formatFindAllVendors } from './helpers/format-find-all-vendors.helper';
 import { ProjectService } from 'src/project/services/project.service';
@@ -97,7 +97,7 @@ export class SalesService {
     @InjectRepository(Sale)
     private readonly saleRepository: Repository<Sale>,
     private readonly leadService: LeadService,
-    private readonly userService: UsersService,
+    private readonly userService: UserService,
     private readonly projectService: ProjectService,
     private readonly stageService: StageService,
     private readonly blockService: BlockService,

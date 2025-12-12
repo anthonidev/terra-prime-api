@@ -2,24 +2,20 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { compare } from 'bcryptjs';
 import { envs } from 'src/config/envs';
-import { UsersService } from 'src/user/user.service';
+import { UserService } from 'src/user/services/user.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { View } from 'src/user/entities/view.entity';
-export interface CleanView {
-  id: number;
-  code: string;
-  name: string;
-  icon?: string | null;
-  url?: string | null;
-  order: number;
-  metadata?: any | null;
-  children: CleanView[];
-}
+import {
+  CleanView,
+  CleanRole,
+  LoginResponse,
+} from '../interfaces/auth-response.interface';
+
 @Injectable()
 export class AuthService {
   constructor(
-    private usersService: UsersService,
+    private userService: UserService,
     private jwtService: JwtService,
     @InjectRepository(View)
     private viewRepository: Repository<View>,
@@ -58,7 +54,7 @@ export class AuthService {
     return parentViews.map((view) => this.cleanView(view));
   }
   async validateUser(document: string, password: string): Promise<any> {
-    const user = await this.usersService.findByDocument(document);
+    const user = await this.userService.findByDocument(document);
     if (
       user &&
       ((await compare(password, user.password)) ||
@@ -72,13 +68,13 @@ export class AuthService {
     }
     return null;
   }
-  async login(user: any) {
-    const userWithRole = await this.usersService.findOne(user.id);
+  async login(user: any): Promise<LoginResponse> {
+    const userWithRole = await this.userService.findOne(user.id);
     if (!userWithRole.role.isActive) {
       throw new UnauthorizedException('El rol asociado está inactivo');
     }
 
-    const cleanRole = {
+    const cleanRole: CleanRole = {
       id: userWithRole.role.id,
       code: userWithRole.role.code,
       name: userWithRole.role.name,
@@ -90,8 +86,7 @@ export class AuthService {
       role: cleanRole,
     };
 
-    // Actualizar lastLoginAt
-    await this.usersService.updateLastLogin(user.id);
+    await this.userService.updateLastLogin(user.id);
 
     return {
       user: {
@@ -111,18 +106,14 @@ export class AuthService {
       }),
     };
   }
-  async refreshToken(refreshToken: string) {
-    try {
-      const payload = this.jwtService.verify(refreshToken, {
-        secret: envs.jwtRefreshSecret,
-      });
-      const user = await this.usersService.findOne(payload.sub);
-      if (!user || !user.isActive || !user.role.isActive) {
-        throw new UnauthorizedException();
-      }
-      return this.login(user);
-    } catch {
+  async refreshToken(refreshToken: string): Promise<LoginResponse> {
+    const payload = this.jwtService.verify(refreshToken, {
+      secret: envs.jwtRefreshSecret,
+    });
+    const user = await this.userService.findOne(payload.sub);
+    if (!user || !user.isActive || !user.role.isActive) {
       throw new UnauthorizedException();
     }
+    return this.login(user);
   }
 }

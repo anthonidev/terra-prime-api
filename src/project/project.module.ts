@@ -16,7 +16,6 @@ import { ProjectService } from './services/project.service';
 import { StageService } from './services/stage.service';
 import { AdminToken } from './entities/admin-token.entity';
 import { AdminTokenService } from './services/admin-token.service';
-import { UsersService } from 'src/user/user.service';
 import { UsersModule } from 'src/user/user.module';
 @Module({
   imports: [

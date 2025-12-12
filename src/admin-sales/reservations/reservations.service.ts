@@ -11,7 +11,7 @@ import { TransactionService } from 'src/common/services/transaction.service';
 import { LotStatus } from 'src/project/entities/lot.entity';
 import { ReservationResponse } from './interfaces/reservation-response.interface';
 import { formatReservationResponse } from './helpers/format-reservation-response.helper';
-import { UsersService } from 'src/user/user.service';
+import { UserService } from 'src/user/services/user.service';
 
 @Injectable()
 export class ReservationsService {
@@ -21,7 +21,7 @@ export class ReservationsService {
     private readonly clientService: ClientsService,
     private readonly lotService: LotService,
     private readonly transactionService: TransactionService,
-    private readonly userService: UsersService,
+    private readonly userService: UserService,
   ) {}
 
   async getAmountReservation(reservationId: string): Promise<number> {
