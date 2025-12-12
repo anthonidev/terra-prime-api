@@ -72,7 +72,7 @@ export class CollectionsController {
   }
 
   @Get('clients/sales/:saleId')
-  @Roles('COB', 'SCO')
+  @Roles('COB', 'SCO', 'FAC')
   findOneSaleByIdForClient(@Param('saleId') saleId: string) {
     return this.collectionsService.findOneSaleByIdForClient(saleId);
   }
