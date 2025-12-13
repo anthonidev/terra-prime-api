@@ -1,9 +1,9 @@
+import { Client } from '@commercial/sales/stakeholders/clients/entities/client.entity';
+import { Timestamped } from '@common/entities/timestamped.entity';
+import { User } from '@iam/users/entities/user.entity';
+import { Lot } from '@inventory/lots/entities/lot.entity';
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 
-import { Timestamped } from '../../../../../common/entities/timestamped.entity';
-import { User } from '../../../../../iam/users/entities/user.entity';
-import { Lot } from '../../../../../inventory/lots/entities/lot.entity';
-import { Client } from '../../../stakeholders/clients/entities/client.entity';
 import { StatusReservation } from '../enums/status-reservation.enum';
 
 @Entity()

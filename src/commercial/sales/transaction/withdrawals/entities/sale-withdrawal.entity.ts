@@ -1,8 +1,7 @@
+import { Sale } from '@commercial/sales/transaction/contract/entities/sale.entity';
+import { Timestamped } from '@common/entities/timestamped.entity';
+import { User } from '@iam/users/entities/user.entity';
 import { Column, Entity, JoinColumn, ManyToOne, OneToOne, PrimaryGeneratedColumn } from 'typeorm';
-
-import { Timestamped } from '../../../../../common/entities/timestamped.entity';
-import { User } from '../../../../../iam/users/entities/user.entity';
-import { Sale } from '../../contract/entities/sale.entity';
 
 @Entity('sale_withdrawals')
 export class SaleWithdrawal extends Timestamped {

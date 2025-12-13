@@ -1,3 +1,14 @@
+import { LeadVisit } from '@commercial/leads/entities/lead-visit.entity';
+import { Client } from '@commercial/sales/stakeholders/clients/entities/client.entity';
+import { Guarantor } from '@commercial/sales/stakeholders/guarantors/entities/guarantor.entity';
+import { Participant } from '@commercial/sales/stakeholders/participants/entities/participant.entity';
+import { SecondaryClientSale } from '@commercial/sales/stakeholders/secondary-client/entities/secondary-client-sale.entity';
+import { Financing } from '@commercial/sales/terms/financing/entities/financing.entity';
+import { UrbanDevelopment } from '@commercial/sales/terms/urban-development/entities/urban-development.entity';
+import { SaleWithdrawal } from '@commercial/sales/transaction/withdrawals/entities/sale-withdrawal.entity';
+import { Timestamped } from '@common/entities/timestamped.entity';
+import { User } from '@iam/users/entities/user.entity';
+import { Lot } from '@inventory/lots/entities/lot.entity';
 import {
   Column,
   Entity,
@@ -8,17 +19,6 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
-import { Timestamped } from '../../../../../common/entities/timestamped.entity';
-import { User } from '../../../../../iam/users/entities/user.entity';
-import { Lot } from '../../../../../inventory/lots/entities/lot.entity';
-import { LeadVisit } from '../../../../leads/entities/lead-visit.entity';
-import { Client } from '../../../stakeholders/clients/entities/client.entity';
-import { Guarantor } from '../../../stakeholders/guarantors/entities/guarantor.entity';
-import { Participant } from '../../../stakeholders/participants/entities/participant.entity';
-import { SecondaryClientSale } from '../../../stakeholders/secondary-client/entities/secondary-client-sale.entity';
-import { Financing } from '../../../terms/financing/entities/financing.entity';
-import { UrbanDevelopment } from '../../../terms/urban-development/entities/urban-development.entity';
-import { SaleWithdrawal } from '../../withdrawals/entities/sale-withdrawal.entity';
 import { SaleType } from '../enums/sale-type.enum';
 import { StatusSale } from '../enums/status-sale.enum';
 

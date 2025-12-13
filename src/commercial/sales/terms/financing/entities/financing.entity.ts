@@ -1,8 +1,8 @@
+import { UrbanDevelopment } from '@commercial/sales/terms/urban-development/entities/urban-development.entity';
+import { Sale } from '@commercial/sales/transaction/contract/entities/sale.entity';
+import { Timestamped } from '@common/entities/timestamped.entity';
 import { Column, Entity, OneToMany, OneToOne, PrimaryGeneratedColumn } from 'typeorm';
 
-import { Timestamped } from '../../../../../common/entities/timestamped.entity';
-import { Sale } from '../../../transaction/contract/entities/sale.entity';
-import { UrbanDevelopment } from '../../urban-development/entities/urban-development.entity';
 import { FinancingType } from '../enums/financing-type.enum';
 
 import { FinancingInstallments } from './financing-installments.entity';

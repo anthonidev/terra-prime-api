@@ -1,3 +1,5 @@
+import { Timestamped } from '@common/entities/timestamped.entity';
+import { User } from '@iam/users/entities/user.entity';
 import {
   BeforeInsert,
   BeforeUpdate,
@@ -9,9 +11,6 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
-import { Timestamped } from 'src/common/entities/timestamped.entity';
-
-import { User } from '../../../../iam/users/entities/user.entity';
 import { MethodPayment } from '../enums/method-payment.enum';
 import { StatusPayment } from '../enums/status-payments.enum';
 

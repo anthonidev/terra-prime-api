@@ -1,6 +1,5 @@
+import { DocumentType } from '@common/enum/document-type.enum';
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
-
-import { DocumentType } from '../../../../leads/enums/document-type.enum';
 
 import { SecondaryClientSale } from './secondary-client-sale.entity';
 

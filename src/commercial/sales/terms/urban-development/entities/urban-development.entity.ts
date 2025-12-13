@@ -1,8 +1,8 @@
+import { Financing } from '@commercial/sales/terms/financing/entities/financing.entity';
+import { Sale } from '@commercial/sales/transaction/contract/entities/sale.entity';
+import { Timestamped } from '@common/entities/timestamped.entity';
 import { Column, Entity, JoinColumn, OneToOne, PrimaryGeneratedColumn } from 'typeorm';
 
-import { Timestamped } from '../../../../../common/entities/timestamped.entity';
-import { Sale } from '../../../transaction/contract/entities/sale.entity';
-import { Financing } from '../../financing/entities/financing.entity';
 import { StatusUrbanDevelopment } from '../enums/status-urban-development.enum';
 
 @Entity('urban_development')

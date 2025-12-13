@@ -1,6 +1,5 @@
+import { Sale } from '@commercial/sales/transaction/contract/entities/sale.entity';
 import { Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
-
-import { Sale } from '../../../transaction/contract/entities/sale.entity';
 
 import { SecondaryClient } from './secondary-client.entity';
 

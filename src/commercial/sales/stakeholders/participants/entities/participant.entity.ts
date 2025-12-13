@@ -1,9 +1,9 @@
+import { LeadVisit } from '@commercial/leads/entities/lead-visit.entity';
+import { Sale } from '@commercial/sales/transaction/contract/entities/sale.entity';
+import { Timestamped } from '@common/entities/timestamped.entity';
+import { DocumentType } from '@common/enum/document-type.enum';
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 
-import { Timestamped } from '../../../../../common/entities/timestamped.entity';
-import { LeadVisit } from '../../../../leads/entities/lead-visit.entity';
-import { DocumentType } from '../../../../leads/enums/document-type.enum';
-import { Sale } from '../../../transaction/contract/entities/sale.entity';
 import { ParticipantType } from '../enum/participant-type.enum';
 
 @Entity('participants')

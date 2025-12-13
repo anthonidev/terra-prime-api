@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
-import { TreasuryService } from './treasury.service';
-import { TreasuryController } from './treasury.controller';
+
 import { PaymentsModule } from './payments/payments.module';
+import { TreasuryController } from './treasury.controller';
+import { TreasuryService } from './treasury.service';
 
 @Module({
   controllers: [TreasuryController],

@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { apiReference } from '@scalar/nestjs-api-reference';
+import { apiReference, NestJSReferenceConfiguration } from '@scalar/nestjs-api-reference';
 
 import { envs } from './envs';
 
@@ -39,7 +39,7 @@ export function setupSwagger(app: INestApplication): void {
       spec: {
         content: document,
       },
-    }),
+    } as NestJSReferenceConfiguration),
   );
 }
 

@@ -1,3 +1,8 @@
+import { Lead } from '@commercial/leads/entities/lead.entity';
+import { Sale } from '@commercial/sales/transaction/contract/entities/sale.entity';
+import { Reservation } from '@commercial/sales/transaction/reservation/entities/reservation.entity';
+import { Timestamped } from '@common/entities/timestamped.entity';
+import { User } from '@iam/users/entities/user.entity';
 import {
   Column,
   Entity,
@@ -7,12 +12,6 @@ import {
   OneToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-
-import { Timestamped } from '../../../../../common/entities/timestamped.entity';
-import { User } from '../../../../../iam/users/entities/user.entity';
-import { Lead } from '../../../../leads/entities/lead.entity';
-import { Sale } from '../../../transaction/contract/entities/sale.entity';
-import { Reservation } from '../../../transaction/reservation/entities/reservation.entity';
 
 @Entity('clients')
 export class Client extends Timestamped {

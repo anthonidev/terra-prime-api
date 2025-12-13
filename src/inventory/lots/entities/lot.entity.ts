@@ -1,3 +1,6 @@
+import { Sale } from '@commercial/sales/transaction/contract/entities/sale.entity';
+import { Reservation } from '@commercial/sales/transaction/reservation/entities/reservation.entity';
+import { CurrencyType } from '@common/enum/currency-type.enum';
 import {
   BeforeInsert,
   BeforeUpdate,
@@ -12,14 +15,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-import { Sale } from '../../../commercial/sales/transaction/contract/entities/sale.entity';
-import { Reservation } from '../../../commercial/sales/transaction/reservation/entities/reservation.entity';
 import { Block } from '../../bloks/entities/block.entity';
-
-export enum CurrencyType {
-  USD = 'USD',
-  PEN = 'PEN',
-}
 
 export enum LotStatus {
   ACTIVE = 'Activo',

@@ -1,3 +1,6 @@
+import { Client } from '@commercial/sales/stakeholders/clients/entities/client.entity';
+import { DocumentType } from '@common/enum/document-type.enum';
+import { User } from '@iam/users/entities/user.entity';
 import {
   Column,
   CreateDateColumn,
@@ -9,10 +12,6 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-
-import { User } from '../../../iam/users/entities/user.entity';
-import { Client } from '../../sales/stakeholders/clients/entities/client.entity';
-import { DocumentType } from '../enums/document-type.enum';
 
 import { LeadSource } from './lead-source.entity';
 import { LeadVisit } from './lead-visit.entity';

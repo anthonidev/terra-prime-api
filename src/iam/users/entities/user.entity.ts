@@ -1,3 +1,7 @@
+import { Lead } from '@commercial/leads/entities/lead.entity';
+import { Sale } from '@commercial/sales/transaction/contract/entities/sale.entity';
+import { Reservation } from '@commercial/sales/transaction/reservation/entities/reservation.entity';
+import { SaleWithdrawal } from '@commercial/sales/transaction/withdrawals/entities/sale-withdrawal.entity';
 import {
   BeforeInsert,
   BeforeUpdate,
@@ -11,10 +15,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-import { Lead } from '../../../commercial/leads/entities/lead.entity';
-import { Sale } from '../../../commercial/sales/transaction/contract/entities/sale.entity';
-import { Reservation } from '../../../commercial/sales/transaction/reservation/entities/reservation.entity';
-import { SaleWithdrawal } from '../../../commercial/sales/transaction/withdrawals/entities/sale-withdrawal.entity';
 import { AdminToken } from '../../approvals/entities/admin-token.entity';
 
 import { Role } from './role.entity';

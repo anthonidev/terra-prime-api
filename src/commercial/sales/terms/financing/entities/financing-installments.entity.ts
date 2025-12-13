@@ -1,6 +1,6 @@
+import { Timestamped } from '@common/entities/timestamped.entity';
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 
-import { Timestamped } from '../../../../../common/entities/timestamped.entity';
 import { StatusFinancingInstallments } from '../enums/status-financing-installments.enum';
 
 import { Financing } from './financing.entity';

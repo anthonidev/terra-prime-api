@@ -1,3 +1,4 @@
+import { Participant } from '@commercial/sales/stakeholders/participants/entities/participant.entity';
 import {
   Column,
   CreateDateColumn,
@@ -7,8 +8,6 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-
-import { Participant } from '../../sales/stakeholders/participants/entities/participant.entity';
 
 import { Lead } from './lead.entity';
 
