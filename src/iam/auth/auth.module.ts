@@ -5,9 +5,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { envs } from '@config/envs';
 import { UsersModule } from '@iam/users/users.module';
 
+import { AuthController } from './controllers/auth.controller';
 import { PasswordResetToken } from './entities/password-reset-token.entity';
-import { AuthController } from './auth.controller';
-import { AuthService } from './auth.service';
+import { AuthService } from './services/auth.service';
 
 @Module({
   imports: [
