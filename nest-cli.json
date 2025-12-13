@@ -3,10 +3,6 @@
   "collection": "@nestjs/schematics",
   "sourceRoot": "src",
   "compilerOptions": {
-    "assets": [
-      "src/chatbot/context/*.json"
-    ],
-    "watchAssets": true,
     "deleteOutDir": true
   }
 }

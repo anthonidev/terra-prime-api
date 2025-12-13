@@ -1,2 +1,0 @@
-export const NATS_SERVICE = 'NATS_SERVICE';
-export const CHATBOT_SERVICE = 'CHATBOT_SERVICE';
