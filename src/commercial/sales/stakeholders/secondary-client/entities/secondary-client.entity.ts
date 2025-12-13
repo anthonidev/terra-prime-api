@@ -1,7 +1,8 @@
-import { Sale } from "src/admin-sales/sales/entities/sale.entity";
-import { Column, Entity, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+
+import { DocumentType } from '../../../../leads/enums/document-type.enum';
+
 import { SecondaryClientSale } from './secondary-client-sale.entity';
-import { DocumentType } from "src/lead/enums/document-type.enum";
 
 @Entity('secondary_clients')
 export class SecondaryClient {
@@ -25,7 +26,7 @@ export class SecondaryClient {
   @Column({
     type: 'varchar',
     length: 70,
-    nullable: true
+    nullable: true,
   })
   email: string;
 
@@ -33,7 +34,7 @@ export class SecondaryClient {
     type: 'varchar',
     length: 12,
     nullable: false,
-    unique: true
+    unique: true,
   })
   document: string;
 
@@ -47,14 +48,14 @@ export class SecondaryClient {
   @Column({
     type: 'varchar',
     length: 20,
-    nullable: true
+    nullable: true,
   })
   phone: string;
 
   @Column({
     type: 'varchar',
     length: 70,
-    nullable: true
+    nullable: true,
   })
   address: string;
 

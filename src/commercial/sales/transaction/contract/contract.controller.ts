@@ -1,4 +1,5 @@
 import { Controller } from '@nestjs/common';
+
 import { ContractService } from './contract.service';
 
 @Controller('contract')

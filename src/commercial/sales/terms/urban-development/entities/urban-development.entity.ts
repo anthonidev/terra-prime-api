@@ -1,5 +1,6 @@
 import { Column, Entity, JoinColumn, OneToOne, PrimaryGeneratedColumn } from 'typeorm';
 
+import { Timestamped } from '../../../../../common/entities/timestamped.entity';
 import { Sale } from '../../../transaction/contract/entities/sale.entity';
 import { Financing } from '../../financing/entities/financing.entity';
 import { StatusUrbanDevelopment } from '../enums/status-urban-development.enum';

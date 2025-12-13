@@ -20,9 +20,6 @@ export class Reservation extends Timestamped {
   @ManyToOne(() => Lot, (lot) => lot.reservations)
   lot: Lot;
 
-  // @OneToOne(() => Sale, (sale) => sale.reservation)
-  // sale: Sale;
-
   @Column({
     type: 'decimal',
     nullable: false,

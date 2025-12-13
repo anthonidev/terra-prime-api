@@ -4,20 +4,7 @@ import { Timestamped } from '../../../../../common/entities/timestamped.entity';
 import { LeadVisit } from '../../../../leads/entities/lead-visit.entity';
 import { DocumentType } from '../../../../leads/enums/document-type.enum';
 import { Sale } from '../../../transaction/contract/entities/sale.entity';
-
-export enum ParticipantType {
-  LINER = 'LINER',
-  TELEMARKETING_SUPERVISOR = 'TELEMARKETING_SUPERVISOR',
-  TELEMARKETING_CONFIRMER = 'TELEMARKETING_CONFIRMER',
-  TELEMARKETER = 'TELEMARKETER',
-  FIELD_MANAGER = 'FIELD_MANAGER',
-  FIELD_SUPERVISOR = 'FIELD_SUPERVISOR',
-  FIELD_SELLER = 'FIELD_SELLER',
-  SALES_MANAGER = 'SALES_MANAGER',
-  SALES_GENERAL_MANAGER = 'SALES_GENERAL_MANAGER',
-  POST_SALE = 'POST_SALE',
-  CLOSER = 'CLOSER',
-}
+import { ParticipantType } from '../enum/participant-type.enum';
 
 @Entity('participants')
 export class Participant extends Timestamped {

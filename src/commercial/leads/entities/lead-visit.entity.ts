@@ -39,16 +39,12 @@ export class LeadVisit {
   @UpdateDateColumn({ select: false })
   updatedAt: Date;
 
-  // ========== REPORTE PDF ==========
-
   @Column({
     type: 'varchar',
     length: 500,
     nullable: true,
   })
   reportPdfUrl?: string;
-
-  // ========== PARTICIPANTES ==========
 
   @ManyToOne(() => Participant, (participant) => participant.leadVisitLiner, { nullable: true })
   @JoinColumn({ name: 'liner_participant_id' })
