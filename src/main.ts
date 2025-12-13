@@ -1,5 +1,8 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { JSendExceptionFilter } from '@common/filters/jsend-exception.filter';
+import { JSendResponseInterceptor } from '@common/interceptors/jsend-response.interceptor';
+import { LoggingInterceptor } from '@common/interceptors/logging.interceptor';
 import { json, urlencoded } from 'express';
 
 import { envs } from './config/envs';
@@ -13,6 +16,16 @@ async function bootstrap() {
 
   setupSwagger(app);
 
+  // Global logging interceptor (logs all requests and responses)
+  app.useGlobalInterceptors(new LoggingInterceptor());
+
+  // Global JSend response interceptor (wraps all successful responses)
+  app.useGlobalInterceptors(new JSendResponseInterceptor());
+
+  // Global exception filter for JSend format (handles errors)
+  app.useGlobalFilters(new JSendExceptionFilter());
+
+  // Global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -32,4 +45,5 @@ async function bootstrap() {
   logger.log(`Server running on port ${envs.port}`);
   logger.log(`📚 API Docs: ${getSwaggerUrl()}`);
 }
-bootstrap();
+
+void bootstrap();
