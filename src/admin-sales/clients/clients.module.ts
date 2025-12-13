@@ -8,7 +8,12 @@ import { GuarantorsModule } from '../guarantors/guarantors.module';
 import { UsersModule } from 'src/user/user.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Client]), LeadModule, GuarantorsModule, UsersModule],
+  imports: [
+    TypeOrmModule.forFeature([Client]),
+    LeadModule,
+    GuarantorsModule,
+    UsersModule,
+  ],
   controllers: [ClientsController],
   providers: [ClientsService],
   exports: [ClientsService],

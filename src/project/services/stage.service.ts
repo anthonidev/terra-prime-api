@@ -27,119 +27,83 @@ export class StageService {
     private readonly stageRepository: Repository<Stage>,
   ) {}
   async createStage(createStageDto: CreateStageDto): Promise<StageResponseDto> {
-    try {
-      const project = await this.projectRepository.findOne({
-        where: { id: createStageDto.projectId },
-      });
-      if (!project) {
-        throw new NotFoundException(
-          `Proyecto con ID ${createStageDto.projectId} no encontrado`,
-        );
-      }
-      const existingStage = await this.stageRepository.findOne({
-        where: {
-          name: createStageDto.name,
-          project: { id: createStageDto.projectId },
-        },
-      });
-      if (existingStage) {
-        throw new ConflictException(
-          `Ya existe una etapa con el nombre "${createStageDto.name}" en este proyecto`,
-        );
-      }
-      const stage = this.stageRepository.create({
-        name: createStageDto.name,
-        isActive: createStageDto.isActive ?? true,
-        project: { id: createStageDto.projectId },
-      });
-      const savedStage = await this.stageRepository.save(stage);
-      const stageWithRelations = await this.stageRepository.findOne({
-        where: { id: savedStage.id },
-        relations: ['project', 'blocks', 'blocks.lots'],
-      });
-      return this.transformStageToDto(stageWithRelations);
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof ConflictException
-      ) {
-        throw error;
-      }
-      this.logger.error(`Error al crear etapa: ${error.message}`, error.stack);
-      throw new InternalServerErrorException('Error al crear la etapa');
+    const project = await this.projectRepository.findOne({
+      where: { id: createStageDto.projectId },
+    });
+    if (!project) {
+      throw new NotFoundException(
+        `Proyecto con ID ${createStageDto.projectId} no encontrado`,
+      );
     }
+    const existingStage = await this.stageRepository.findOne({
+      where: {
+        name: createStageDto.name,
+        project: { id: createStageDto.projectId },
+      },
+    });
+    if (existingStage) {
+      throw new ConflictException(
+        `Ya existe una etapa con el nombre "${createStageDto.name}" en este proyecto`,
+      );
+    }
+    const stage = this.stageRepository.create({
+      name: createStageDto.name,
+      isActive: createStageDto.isActive ?? true,
+      project: { id: createStageDto.projectId },
+    });
+    const savedStage = await this.stageRepository.save(stage);
+    const stageWithRelations = await this.stageRepository.findOne({
+      where: { id: savedStage.id },
+      relations: ['project', 'blocks', 'blocks.lots'],
+    });
+    return this.transformStageToDto(stageWithRelations);
   }
   async updateStage(
     id: string,
     updateStageDto: UpdateStageDto,
   ): Promise<StageResponseDto> {
-    try {
-      const stage = await this.stageRepository.findOne({
-        where: { id },
-        relations: ['project'],
-      });
-      if (!stage) {
-        throw new NotFoundException(`Etapa con ID ${id} no encontrada`);
-      }
-      if (updateStageDto.name && updateStageDto.name !== stage.name) {
-        const existingStage = await this.stageRepository.findOne({
-          where: {
-            name: updateStageDto.name,
-            project: { id: stage.project.id },
-          },
-        });
-        if (existingStage) {
-          throw new ConflictException(
-            `Ya existe una etapa con el nombre "${updateStageDto.name}" en este proyecto`,
-          );
-        }
-      }
-      if (updateStageDto.name !== undefined) {
-        stage.name = updateStageDto.name;
-      }
-      if (updateStageDto.isActive !== undefined) {
-        stage.isActive = updateStageDto.isActive;
-      }
-      await this.stageRepository.save(stage);
-      const updatedStage = await this.stageRepository.findOne({
-        where: { id },
-        relations: ['project', 'blocks', 'blocks.lots'],
-      });
-      return this.transformStageToDto(updatedStage);
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof ConflictException
-      ) {
-        throw error;
-      }
-      this.logger.error(
-        `Error al actualizar etapa ${id}: ${error.message}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException('Error al actualizar la etapa');
+    const stage = await this.stageRepository.findOne({
+      where: { id },
+      relations: ['project'],
+    });
+    if (!stage) {
+      throw new NotFoundException(`Etapa con ID ${id} no encontrada`);
     }
+    if (updateStageDto.name && updateStageDto.name !== stage.name) {
+      const existingStage = await this.stageRepository.findOne({
+        where: {
+          name: updateStageDto.name,
+          project: { id: stage.project.id },
+        },
+      });
+      if (existingStage) {
+        throw new ConflictException(
+          `Ya existe una etapa con el nombre "${updateStageDto.name}" en este proyecto`,
+        );
+      }
+    }
+    if (updateStageDto.name !== undefined) {
+      stage.name = updateStageDto.name;
+    }
+    if (updateStageDto.isActive !== undefined) {
+      stage.isActive = updateStageDto.isActive;
+    }
+    await this.stageRepository.save(stage);
+    const updatedStage = await this.stageRepository.findOne({
+      where: { id },
+      relations: ['project', 'blocks', 'blocks.lots'],
+    });
+    return this.transformStageToDto(updatedStage);
   }
   async findStageById(id: string): Promise<StageResponseDto> {
-    try {
-      const stage = await this.stageRepository.findOne({
-        where: { id },
-        relations: ['project', 'blocks', 'blocks.lots'],
-      });
-      if (!stage) {
-        throw new NotFoundException(`Etapa con ID ${id} no encontrada`);
-      }
-      return this.transformStageToDto(stage);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      this.logger.error(
-        `Error al obtener etapa ${id}: ${error.message}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException('Error al obtener la etapa');
+    const stage = await this.stageRepository.findOne({
+      where: { id },
+      relations: ['project', 'blocks', 'blocks.lots'],
+    });
+    if (!stage) {
+      throw new NotFoundException(`Etapa con ID ${id} no encontrada`);
     }
+    return this.transformStageToDto(stage);
   }
   private transformStageToDto(stage: Stage): StageResponseDto {
     let lotCount = 0;
@@ -173,7 +137,9 @@ export class StageService {
       .getMany();
 
     if (!stages || stages.length === 0)
-      throw new NotFoundException(`No se encontraron etapas con lotes activos para este proyecto`);
+      throw new NotFoundException(
+        `No se encontraron etapas con lotes activos para este proyecto`,
+      );
     return stages.map(formatStageResponse);
   }
 }

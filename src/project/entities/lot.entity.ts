@@ -4,14 +4,13 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
   Unique,
   UpdateDateColumn,
 } from 'typeorm';
-
-import { Transform } from 'class-transformer';
 import { Reservation } from 'src/admin-sales/reservations/entities/reservation.entity';
 import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
 import { Block } from './block.entity';
@@ -25,11 +24,13 @@ export enum LotStatus {
 }
 @Entity('lots')
 @Unique(['name', 'block'])
+@Index(['status'])
+@Index(['name'])
+@Index(['area'])
 export class Lot {
   @PrimaryGeneratedColumn('uuid')
   id: string;
   @Column()
-  @Transform(({ value }) => value?.trim())
   name: string;
   @Column('decimal', { precision: 10, scale: 2 })
   area: number;
@@ -48,7 +49,7 @@ export class Lot {
     type: 'enum',
     enum: CurrencyType,
     default: CurrencyType.PEN,
-    comment: 'Moneda del lote, heredada del proyecto pero modificable'
+    comment: 'Moneda del lote, heredada del proyecto pero modificable',
   })
   currency: CurrencyType;
 

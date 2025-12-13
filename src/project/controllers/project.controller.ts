@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   InternalServerErrorException,
   Logger,
   Param,
@@ -14,6 +15,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags } from '@nestjs/swagger';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
@@ -24,6 +26,16 @@ import { UpdateProjectDto } from '../dto/update-project.dto';
 import { ExcelService } from '../services/excel.service';
 import { LotService } from '../services/lot.service';
 import { ProjectService } from '../services/project.service';
+import {
+  ApiValidateExcel,
+  ApiUploadProject,
+  ApiFindAllProjects,
+  ApiFindProjectById,
+  ApiFindProjectLots,
+  ApiUpdateProject,
+} from '../decorators/project-api.decorators';
+
+@ApiTags('Proyectos')
 @Controller('projects')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ProjectController {
@@ -34,7 +46,9 @@ export class ProjectController {
     private readonly lotService: LotService,
     private readonly awsS3Service: AwsS3Service,
   ) {}
+  @ApiValidateExcel()
   @Post('validate-excel')
+  @HttpCode(200)
   @Roles('SYS', 'JVE')
   @UseInterceptors(FileInterceptor('file'))
   async validateExcel(
@@ -66,10 +80,6 @@ export class ProjectController {
         );
       }
 
-      this.logger.log(
-        `📁 Validando archivo Excel: ${file.originalname} (${(file.size / 1024).toFixed(2)} KB)`,
-      );
-
       // Procesar el archivo
       const result = await this.excelService.validateProjectExcel(file);
 
@@ -78,36 +88,32 @@ export class ProjectController {
         this.logger.log(
           `✅ Validación exitosa - ${result.summary?.totalLots} lotes procesados`,
         );
-      } else {
-        this.logger.warn(
-          `❌ Validación fallida - ${result.errors?.length} errores encontrados`,
-        );
+        return result;
+      }
 
-        // Log resumen de errores
-        if (result.summary) {
-          const {
-            duplicateGroups,
-            totalDuplicates,
-            formatErrors,
-            validationErrors,
-          } = result.summary;
-          this.logger.warn(`   📊 Resumen de errores:`);
-          if (totalDuplicates > 0) {
-            this.logger.warn(
-              `      🔄 Duplicados: ${totalDuplicates} lotes en ${duplicateGroups} grupos`,
-            );
-          }
-          if (formatErrors > 0) {
-            this.logger.warn(`      📝 Formato: ${formatErrors} errores`);
-          }
-          if (validationErrors > 0) {
-            this.logger.warn(
-              `      ⚠️  Validación: ${validationErrors} errores`,
-            );
-          }
+      // Log resumen de errores
+      if (result.summary) {
+        const {
+          duplicateGroups,
+          totalDuplicates,
+          formatErrors,
+          validationErrors,
+        } = result.summary;
+        this.logger.warn(`   📊 Resumen de errores:`);
+        if (totalDuplicates > 0) {
+          this.logger.warn(
+            `      🔄 Duplicados: ${totalDuplicates} lotes en ${duplicateGroups} grupos`,
+          );
+        }
+        if (formatErrors > 0) {
+          this.logger.warn(`      📝 Formato: ${formatErrors} errores`);
+        }
+        if (validationErrors > 0) {
+          this.logger.warn(`      ⚠️  Validación: ${validationErrors} errores`);
         }
       }
 
+      // Retornar el resultado completo con los errores detallados
       return result;
     } catch (error) {
       this.logger.error(
@@ -125,6 +131,7 @@ export class ProjectController {
     }
   }
 
+  @ApiUploadProject()
   @Post('bulk-create')
   @Roles('SYS', 'JVE')
   @UseInterceptors(FileInterceptor('file'))
@@ -236,16 +243,21 @@ export class ProjectController {
       );
     }
   }
+  @ApiFindAllProjects()
   @Get()
   @Roles('SYS', 'JVE', 'VEN')
   async findAll() {
     return this.projectService.findAll();
   }
+
+  @ApiFindProjectById()
   @Get(':id')
   @Roles('SYS', 'JVE', 'VEN')
   async findOne(@Param('id') id: string) {
     return this.projectService.findOne(id);
   }
+
+  @ApiUpdateProject()
   @Patch(':id/with-image')
   @Roles('SYS', 'JVE')
   @UseInterceptors(FileInterceptor('logo'))
@@ -279,6 +291,7 @@ export class ProjectController {
     }
     return this.projectService.updateProject(id, updateProjectDto);
   }
+  @ApiFindProjectLots()
   @Get(':id/lots')
   @Roles('SYS', 'JVE', 'VEN')
   async findProjectLots(

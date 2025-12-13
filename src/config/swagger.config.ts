@@ -39,6 +39,10 @@ export function setupSwagger(app: INestApplication): void {
       'Restablecimiento de contraseña',
       'Recuperación de contraseña olvidada',
     )
+    .addTag('Proyectos', 'Gestión de proyectos inmobiliarios')
+    .addTag('Etapas', 'Gestión de etapas dentro de proyectos')
+    .addTag('Manzanas', 'Gestión de manzanas dentro de etapas')
+    .addTag('Lotes', 'Gestión de lotes y tokens administrativos')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
@@ -47,6 +51,10 @@ export function setupSwagger(app: INestApplication): void {
     '/docs',
     apiReference({
       theme: 'purple',
+      showDeveloperTools: false,
+      hiddenClients: true,
+      hideModels: true,
+      hideDownloadButton: true,
       spec: {
         content: document,
       },

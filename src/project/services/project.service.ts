@@ -159,147 +159,127 @@ export class ProjectService {
     });
   }
   async findAll(): Promise<ProjectListResponseDto> {
-    try {
-      const projects = await this.projectRepository.find({
-        relations: ['stages', 'stages.blocks', 'stages.blocks.lots'],
-        order: {
-          updatedAt: 'DESC',
-        },
-      });
-      const projectDtos: ProjectListItemDto[] = projects.map((project) => {
-        let blockCount = 0;
-        let lotCount = 0;
-        let activeLotCount = 0;
-        project.stages.forEach((stage) => {
-          blockCount += stage.blocks.length;
-          stage.blocks.forEach((block) => {
-            lotCount += block.lots.length;
-            activeLotCount += block.lots.filter(
-              (lot) => lot.status === LotStatus.ACTIVE,
-            ).length;
-          });
+    const projects = await this.projectRepository.find({
+      relations: ['stages', 'stages.blocks', 'stages.blocks.lots'],
+      order: {
+        updatedAt: 'DESC',
+      },
+    });
+
+    const projectDtos: ProjectListItemDto[] = projects.map((project) => {
+      let blockCount = 0;
+      let lotCount = 0;
+      let activeLotCount = 0;
+
+      project.stages.forEach((stage) => {
+        blockCount += stage.blocks.length;
+        stage.blocks.forEach((block) => {
+          lotCount += block.lots.length;
+          activeLotCount += block.lots.filter(
+            (lot) => lot.status === LotStatus.ACTIVE,
+          ).length;
         });
-        return {
-          id: project.id,
-          name: project.name,
-          currency: project.currency,
-          isActive: project.isActive,
-          logo: project.logo,
-          stageCount: project.stages.length,
-          blockCount,
-          lotCount,
-          activeLotCount,
-          createdAt: project.createdAt,
-          updatedAt: project.updatedAt,
-        };
       });
+
       return {
-        projects: projectDtos,
-        total: projectDtos.length,
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error al obtener proyectos: ${error.message}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException('Error al obtener los proyectos');
-    }
-  }
-  async findOne(id: string): Promise<ProjectDetailDto> {
-    try {
-      const project = await this.projectRepository.findOne({
-        where: { id },
-        relations: ['stages', 'stages.blocks', 'stages.blocks.lots'],
-      });
-      if (!project) {
-        throw new NotFoundException(`Proyecto con ID ${id} no encontrado`);
-      }
-      const stages: StageDetailDto[] = project.stages.map((stage) => {
-        const blocks: BlockDetailDto[] = stage.blocks.map((block) => {
-          return {
-            id: block.id,
-            name: block.name,
-            isActive: block.isActive,
-            lotCount: block.lots.length,
-            stageId: stage.id,
-            activeLots: block.lots.filter((lot) => lot.status === 'Activo')
-              .length,
-            reservedLots: block.lots.filter((lot) => lot.status === 'Separado')
-              .length,
-            soldLots: block.lots.filter((lot) => lot.status === 'Vendido')
-              .length,
-            inactiveLots: block.lots.filter((lot) => lot.status === 'Inactivo')
-              .length,
-          };
-        });
-        return {
-          id: stage.id,
-          name: stage.name,
-          isActive: stage.isActive,
-          blocks,
-        };
-      });
-      const projectDetail: ProjectDetailDto = {
         id: project.id,
         name: project.name,
         currency: project.currency,
         isActive: project.isActive,
         logo: project.logo,
-        logoKey: project.logoKey,
-        stages,
+        stageCount: project.stages.length,
+        blockCount,
+        lotCount,
+        activeLotCount,
         createdAt: project.createdAt,
         updatedAt: project.updatedAt,
       };
-      return projectDetail;
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      this.logger.error(
-        `Error al obtener proyecto ${id}: ${error.message}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException('Error al obtener el proyecto');
+    });
+
+    return {
+      projects: projectDtos,
+      total: projectDtos.length,
+    };
+  }
+  async findOne(id: string): Promise<ProjectDetailDto> {
+    const project = await this.projectRepository.findOne({
+      where: { id },
+      relations: ['stages', 'stages.blocks', 'stages.blocks.lots'],
+    });
+
+    if (!project) {
+      throw new NotFoundException(`Proyecto con ID ${id} no encontrado`);
     }
+
+    const stages: StageDetailDto[] = project.stages.map((stage) => {
+      const blocks: BlockDetailDto[] = stage.blocks.map((block) => {
+        return {
+          id: block.id,
+          name: block.name,
+          isActive: block.isActive,
+          lotCount: block.lots.length,
+          stageId: stage.id,
+          activeLots: block.lots.filter((lot) => lot.status === 'Activo')
+            .length,
+          reservedLots: block.lots.filter((lot) => lot.status === 'Separado')
+            .length,
+          soldLots: block.lots.filter((lot) => lot.status === 'Vendido').length,
+          inactiveLots: block.lots.filter((lot) => lot.status === 'Inactivo')
+            .length,
+        };
+      });
+
+      return {
+        id: stage.id,
+        name: stage.name,
+        isActive: stage.isActive,
+        blocks,
+      };
+    });
+
+    const projectDetail: ProjectDetailDto = {
+      id: project.id,
+      name: project.name,
+      currency: project.currency,
+      isActive: project.isActive,
+      logo: project.logo,
+      logoKey: project.logoKey,
+      stages,
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt,
+    };
+
+    return projectDetail;
   }
   async updateProject(
     id: string,
     updateProjectDto: UpdateProjectDto,
   ): Promise<ProjectDetailDto> {
-    try {
-      const project = await this.projectRepository.findOne({
-        where: { id },
-        relations: ['stages', 'stages.blocks', 'stages.blocks.lots'],
-      });
-      if (!project) {
-        throw new NotFoundException(`Proyecto con ID ${id} no encontrado`);
-      }
-      if (updateProjectDto.name && updateProjectDto.name !== project.name) {
-        const existingProject = await this.projectRepository.findOne({
-          where: { name: updateProjectDto.name },
-        });
-        if (existingProject) {
-          throw new ConflictException(
-            `Ya existe un proyecto con el nombre ${updateProjectDto.name}`,
-          );
-        }
-      }
-      Object.assign(project, updateProjectDto);
-      await this.projectRepository.save(project);
-      return this.findOne(id);
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof ConflictException
-      ) {
-        throw error;
-      }
-      this.logger.error(
-        `Error al actualizar proyecto ${id}: ${error.message}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException('Error al actualizar el proyecto');
+    const project = await this.projectRepository.findOne({
+      where: { id },
+      relations: ['stages', 'stages.blocks', 'stages.blocks.lots'],
+    });
+
+    if (!project) {
+      throw new NotFoundException(`Proyecto con ID ${id} no encontrado`);
     }
+
+    if (updateProjectDto.name && updateProjectDto.name !== project.name) {
+      const existingProject = await this.projectRepository.findOne({
+        where: { name: updateProjectDto.name },
+      });
+
+      if (existingProject) {
+        throw new ConflictException(
+          `Ya existe un proyecto con el nombre ${updateProjectDto.name}`,
+        );
+      }
+    }
+
+    Object.assign(project, updateProjectDto);
+    await this.projectRepository.save(project);
+
+    return this.findOne(id);
   }
 
   // Internal helpers methods
