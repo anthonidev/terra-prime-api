@@ -86,7 +86,7 @@ export class SalesController {
   }
 
   @Get(':id')
-  @Roles('JVE', 'VEN')
+  @Roles('JVE', 'VEN', 'FAC')
   async findOneById(@Param('id', ParseUUIDPipe) id: string) {
     return this.salesService.findOneById(id);
   }
