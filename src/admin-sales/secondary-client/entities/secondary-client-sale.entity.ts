@@ -6,7 +6,7 @@ export class SecondaryClientSale {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => Sale, (sale) => sale.secondaryClientSales)
+  @ManyToOne(() => Sale, (sale) => sale.secondaryClientSales, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'sale_id' })
   sale: Sale;
 

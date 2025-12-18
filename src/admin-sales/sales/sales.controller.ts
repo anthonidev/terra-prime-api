@@ -16,6 +16,9 @@ import {
   ValidationPipe,
   UseInterceptors,
   UsePipes,
+  Res,
+  StreamableFile,
+  Header,
 } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
@@ -39,6 +42,7 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { CreatePaymentSaleDto } from './dto/create-payment-sale.dto';
 import { AssignParticipantsToSaleDto } from './dto/assign-participants-to-sale.dto';
 import { UpdateReservationPeriodDto } from './dto/update-reservation-period.dto';
+import { Response } from 'express';
 
 @Controller('sales')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -83,6 +87,20 @@ export class SalesController {
   @Roles('JVE', 'VEN')
   findAll(@GetUser() user: User, @Query() findAllSalesDto: FindAllSalesDto) {
     return this.salesService.findAllVendorWithFilters(findAllSalesDto, user.id);
+  }
+
+  @Get(':id/export-excel')
+  @Roles('JVE', 'VEN', 'FAC', 'ADM', 'SYS')
+  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  async exportSaleToExcel(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const buffer = await this.salesService.exportSaleToExcel(id);
+    res.set({
+      'Content-Disposition': `attachment; filename="venta-${id}.xlsx"`,
+    });
+    return new StreamableFile(buffer);
   }
 
   @Get(':id')
@@ -234,8 +252,7 @@ export class SalesController {
   @Roles('JVE', 'ADM')
   async deleteSale(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body('token') token: string,
   ) {
-    return this.salesService.deleteSale(id, token);
+    return this.salesService.deleteSale(id);
   }
 }

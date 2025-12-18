@@ -11,7 +11,7 @@ import { CreateSaleDto } from './dto/create-sale.dto';
 import { UpdateSaleDto } from './dto/update-sale.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Sale } from './entities/sale.entity';
-import { MoreThanOrEqual, QueryRunner, Repository } from 'typeorm';
+import { In, MoreThanOrEqual, QueryRunner, Repository } from 'typeorm';
 import { LeadService } from 'src/lead/services/lead.service';
 import { LeadVisit } from 'src/lead/entities/lead-visit.entity';
 import { FindAllLeadsByDayDto } from './dto/find-all-leads-by-day.dto';
@@ -88,14 +88,21 @@ import { LeadWithParticipantsResponse } from 'src/lead/interfaces/lead-formatted
 import { Lead } from 'src/lead/entities/lead.entity';
 import { AdminTokenService } from 'src/project/services/admin-token.service';
 import { CombinedAmortizationResponse } from '../financing/interfaces/combined-amortization-response.interface';
+import * as XLSX from 'xlsx';
+import { transformSaleToExcelRows } from './helpers/sale-to-excel.helper';
+import { Payment } from 'src/admin-payments/payments/entities/payment.entity';
 
 // SERVICIO ACTUALIZADO - UN SOLO ENDPOINT PARA VENTA/RESERVA
 
 @Injectable()
 export class SalesService {
+  private readonly logger = new Logger(SalesService.name);
+
   constructor(
     @InjectRepository(Sale)
     private readonly saleRepository: Repository<Sale>,
+    @InjectRepository(Payment)
+    private readonly paymentRepository: Repository<Payment>,
     private readonly leadService: LeadService,
     private readonly userService: UsersService,
     private readonly projectService: ProjectService,
@@ -2305,53 +2312,43 @@ export class SalesService {
 
   async deleteSale(
     saleId: string,
-    token: string,
   ): Promise<{ message: string }> {
     try {
-      // 1. Validar el token
-      await this.adminTokenService.validateToken(token);
-      // 2. Buscar la venta con todas sus relaciones
+      // Buscar la venta con sus relaciones
       const sale = await this.saleRepository.findOne({
         where: { id: saleId },
         relations: [
           'lot',
           'financing',
-          'financing.financingInstallments',
-          'urbanDevelopment',
-          'urbanDevelopment.financing',
-          'secondaryClientSales',
         ],
       });
+
       if (!sale)
         throw new NotFoundException(`La venta con ID ${saleId} no existe`);
-      // 3. Validar que la venta esté en estado PENDING o RESERVATION_PENDING
-      if (
-        sale.status !== StatusSale.PENDING &&
-        sale.status !== StatusSale.RESERVATION_PENDING
-      )
-        throw new BadRequestException(
-          'Solo se pueden eliminar ventas en estado PENDING o RESERVATION_PENDING',
-        );
-      // 4. Eliminar la venta y todas sus relaciones en una transacción
+
+      // Eliminar la venta y todas sus relaciones en una transacción
       await this.transactionService.runInTransaction(
         async (queryRunner: QueryRunner) => {
-          // Eliminar urban development si existe
-          if (sale.urbanDevelopment)
-            await this.urbanDevelopmentService.remove(
-              sale.urbanDevelopment.id,
-              queryRunner,
-            );
-          // Eliminar financing si existe
-          if (sale.financing)
-            await this.financingService.remove(sale.financing.id, queryRunner);
-          // Eliminar secondary clients sale relations
-          if (sale.secondaryClientSales && sale.secondaryClientSales.length > 0)
-            for (const secondaryClientSale of sale.secondaryClientSales) {
-              await this.secondaryClientService.removeSecondaryClientSale(
-                secondaryClientSale.id,
-                queryRunner,
-              );
-            }
+          // Eliminar pagos relacionados a la venta
+          await queryRunner.manager
+            .createQueryBuilder()
+            .delete()
+            .from('payments')
+            .where('relatedEntityId = :saleId', { saleId })
+            .andWhere('relatedEntityType = :type', { type: 'Sale' })
+            .execute();
+
+          // Eliminar pagos relacionados al financiamiento si existe
+          if (sale.financing) {
+            await queryRunner.manager
+              .createQueryBuilder()
+              .delete()
+              .from('payments')
+              .where('relatedEntityId = :financingId', { financingId: sale.financing.id })
+              .andWhere('relatedEntityType = :type', { type: 'Financing' })
+              .execute();
+          }
+
           // Liberar el lote (cambiar estado a ACTIVE)
           if (sale.lot) {
             await this.lotService.updateStatus(
@@ -2360,16 +2357,101 @@ export class SalesService {
               queryRunner,
             );
           }
-          // Finalmente, eliminar la venta
+
+          // Eliminar la venta
+          // Las cascadas en DB se encargan de: financing, urbanDevelopment, secondaryClientSales, financingInstallments
           const saleRepository = queryRunner.manager.getRepository(Sale);
           await saleRepository.remove(sale);
         },
       );
+
       return {
         message: `La venta con ID ${saleId} ha sido eliminada exitosamente`,
       };
     } catch (error) {
       throw error;
+    }
+  }
+
+  private async findOneByIdForExport(id: string): Promise<Sale> {
+    // Usar QueryBuilder para optimizar la carga con un solo query
+    const sale = await this.saleRepository
+      .createQueryBuilder('sale')
+      .leftJoinAndSelect('sale.client', 'client')
+      .leftJoinAndSelect('client.lead', 'lead')
+      .leftJoinAndSelect('sale.lot', 'lot')
+      .leftJoinAndSelect('lot.block', 'block')
+      .leftJoinAndSelect('block.stage', 'stage')
+      .leftJoinAndSelect('stage.project', 'project')
+      .leftJoinAndSelect('sale.financing', 'financing')
+      .leftJoinAndSelect('financing.financingInstallments', 'installments')
+      .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
+      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
+      .where('sale.id = :id', { id })
+      .getOne();
+
+    if (!sale) {
+      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrada`);
+    }
+
+    return sale;
+  }
+
+  private async findAllPaymentsForSale(saleId: string, financingId: string | null): Promise<Payment[]> {
+    // Usar QueryBuilder para optimizar la consulta con OR
+    const query = this.paymentRepository
+      .createQueryBuilder('payment')
+      .leftJoinAndSelect('payment.details', 'details')
+      .where(
+        '(payment.relatedEntityType = :reservationType AND payment.relatedEntityId = :saleId)',
+        { reservationType: 'reservation', saleId }
+      );
+
+    if (financingId) {
+      query
+        .orWhere(
+          '(payment.relatedEntityType = :financingType AND payment.relatedEntityId = :financingId)',
+          { financingType: 'financing', financingId }
+        )
+        .orWhere(
+          '(payment.relatedEntityType = :installmentsType AND payment.relatedEntityId = :financingId)',
+          { installmentsType: 'financingInstallments', financingId }
+        );
+    }
+
+    return query.orderBy('payment.createdAt', 'ASC').getMany();
+  }
+
+  async exportSaleToExcel(id: string): Promise<Buffer> {
+    try {
+      const startTime = Date.now();
+
+      // Primero obtener la venta para tener el financingId
+      const sale = await this.findOneByIdForExport(id);
+      this.logger.log(`✅ Sale loaded in ${Date.now() - startTime}ms`);
+
+      const paymentsStart = Date.now();
+      // Obtener pagos (ahora optimizado con QueryBuilder)
+      const payments = await this.findAllPaymentsForSale(sale.id, sale.financing?.id || null);
+      this.logger.log(`✅ Payments loaded in ${Date.now() - paymentsStart}ms (${payments.length} payments)`);
+
+      const transformStart = Date.now();
+      const rows = transformSaleToExcelRows(sale, payments);
+      this.logger.log(`✅ Rows transformed in ${Date.now() - transformStart}ms (${rows.length} rows)`);
+
+      const excelStart = Date.now();
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.aoa_to_sheet(rows);
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Venta');
+      const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+      this.logger.log(`✅ Excel generated in ${Date.now() - excelStart}ms`);
+
+      this.logger.log(`🎉 Total export time: ${Date.now() - startTime}ms`);
+      return buffer;
+    } catch (error) {
+      throw new InternalServerErrorException(
+        `Error al exportar la venta a Excel: ${error.message}`,
+      );
     }
   }
 }

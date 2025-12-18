@@ -15,11 +15,11 @@ import { ReservationsModule } from '../reservations/reservations.module';
 import { PaymentsModule } from 'src/admin-payments/payments/payments.module';
 import { SecondaryClientModule } from '../secondary-client/secondary-client.module';
 import { ParticipantsModule } from '../participants/participants.module';
-import { Financing } from '../financing/entities/financing.entity';
+import { Payment } from 'src/admin-payments/payments/entities/payment.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Sale]),
+    TypeOrmModule.forFeature([Sale, Payment]),
     LeadModule, UsersModule,
     ProjectModule,
     ClientsModule,
