@@ -102,6 +102,38 @@ export class AwsS3Service {
         }
     }
 
+    // NUEVA FUNCIÓN: Subir Excel desde Buffer
+    async uploadExcelFromBuffer(
+        excelBuffer: Buffer,
+        fileName: string,
+        folder: string = 'amendments'
+    ): Promise<string> {
+        try {
+            const key = `${folder}/${fileName}`;
+
+            const uploadCommand = new PutObjectCommand({
+                Bucket: this.bucketName,
+                Key: key,
+                Body: excelBuffer,
+                ContentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                Metadata: {
+                    generatedAt: new Date().toISOString(),
+                },
+            });
+
+            await this.s3Client.send(uploadCommand);
+
+            // Construir la URL pública
+            const url = `https://${this.bucketName}.s3.${envs.awsRegion}.amazonaws.com/${key}`;
+
+            this.logger.log(`Excel uploaded successfully: ${key}`);
+            return url;
+        } catch (error) {
+            this.logger.error(`Error uploading Excel buffer: ${error.message}`, error.stack);
+            throw new BadRequestException(`Error al subir el Excel: ${error.message}`);
+        }
+    }
+
     async deleteFile(key: string): Promise<S3DeleteResponse> {
         try {
             const deleteCommand = new DeleteObjectCommand({

@@ -78,4 +78,19 @@ export class Financing extends Timestamped {
     nullable: false,
   })
   quantityCoutes: number;
+
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+    default: null,
+  })
+  amendmentHistory: Array<{
+    date: string;
+    additionalAmount: number;
+    previousTotal: number;
+    newTotal: number;
+    previousInstallmentsCount: number;
+    newInstallmentsCount: number;
+    historyId: string;
+  }>;
 }

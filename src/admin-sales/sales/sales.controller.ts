@@ -42,6 +42,8 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { CreatePaymentSaleDto } from './dto/create-payment-sale.dto';
 import { AssignParticipantsToSaleDto } from './dto/assign-participants-to-sale.dto';
 import { UpdateReservationPeriodDto } from './dto/update-reservation-period.dto';
+import { UpdateFinancingInstallmentsDto } from './dto/update-financing-installments.dto';
+import { CreateFinancingAmendmentDto } from './dto/create-financing-amendment.dto';
 import { Response } from 'express';
 
 @Controller('sales')
@@ -56,7 +58,7 @@ export class SalesController {
   }
 
   @Patch(':id')
-  @Roles('JVE', 'VEN')
+  @Roles('JVE', 'VEN', 'ADM')
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateSaleDto: UpdateSaleDto,
@@ -78,8 +80,11 @@ export class SalesController {
   }
 
   @Get('all/list')
-  @Roles('JVE', 'FAC')
-  findAllActives(@GetUser() user: User, @Query() findAllSalesDto: FindAllSalesDto) {
+  @Roles('JVE', 'FAC', 'ADM')
+  findAllActives(
+    @GetUser() user: User,
+    @Query() findAllSalesDto: FindAllSalesDto,
+  ) {
     return this.salesService.findAllWithFilters(findAllSalesDto);
   }
 
@@ -91,7 +96,10 @@ export class SalesController {
 
   @Get(':id/export-excel')
   @Roles('JVE', 'VEN', 'FAC', 'ADM', 'SYS')
-  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+  @Header(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
   async exportSaleToExcel(
     @Param('id', ParseUUIDPipe) id: string,
     @Res({ passthrough: true }) res: Response,
@@ -103,8 +111,25 @@ export class SalesController {
     return new StreamableFile(buffer);
   }
 
+  @Get(':id/export-excel-smart')
+  @Roles('ADM')
+  @Header(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  )
+  async exportSaleToExcelSmart(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const buffer = await this.salesService.exportSaleToExcelSmart(id);
+    res.set({
+      'Content-Disposition': `attachment; filename="venta-detallada-${id}.xlsx"`,
+    });
+    return new StreamableFile(buffer);
+  }
+
   @Get(':id')
-  @Roles('JVE', 'VEN', 'FAC')
+  @Roles('JVE', 'VEN', 'FAC', 'ADM')
   async findOneById(@Param('id', ParseUUIDPipe) id: string) {
     return this.salesService.findOneById(id);
   }
@@ -250,9 +275,44 @@ export class SalesController {
 
   @Delete(':id')
   @Roles('JVE', 'ADM')
-  async deleteSale(
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
+  async deleteSale(@Param('id', ParseUUIDPipe) id: string) {
     return this.salesService.deleteSale(id);
+  }
+
+  @Patch(':saleId/financing/:financingId/installments')
+  @Roles('ADM')
+  async updateFinancingInstallments(
+    @Param('saleId', ParseUUIDPipe) saleId: string,
+    @Param('financingId', ParseUUIDPipe) financingId: string,
+    @Body() updateInstallmentsDto: UpdateFinancingInstallmentsDto,
+  ) {
+    return this.salesService.updateFinancingInstallments(
+      saleId,
+      financingId,
+      updateInstallmentsDto,
+    );
+  }
+
+  @Get(':saleId/financing/:financingId')
+  @Roles('ADM', 'JVE', 'FAC')
+  async getFinancingWithInstallments(
+    @Param('saleId', ParseUUIDPipe) saleId: string,
+    @Param('financingId', ParseUUIDPipe) financingId: string,
+  ) {
+    return this.salesService.getFinancingWithInstallments(saleId, financingId);
+  }
+
+  @Post(':saleId/financing/:financingId/amendment')
+  @Roles('ADM')
+  async createFinancingAmendment(
+    @Param('saleId', ParseUUIDPipe) saleId: string,
+    @Param('financingId', ParseUUIDPipe) financingId: string,
+    @Body() createAmendmentDto: CreateFinancingAmendmentDto,
+  ) {
+    return this.salesService.createFinancingAmendment(
+      saleId,
+      financingId,
+      createAmendmentDto,
+    );
   }
 }

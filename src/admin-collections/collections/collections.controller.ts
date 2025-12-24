@@ -51,7 +51,7 @@ export class CollectionsController {
   }
 
   @Get('clients/list')
-  @Roles('SCO')
+  @Roles('SCO', 'ADM')
   findAllClientsWithCollection(@Query() filters: ClientFiltersDto) {
     return this.collectionsService.findAllClientsWithCollection(filters);
   }
@@ -66,13 +66,13 @@ export class CollectionsController {
   }
 
   @Get('sales/list-by-client/:clientId')
-  @Roles('COB', 'SCO')
+  @Roles('COB', 'SCO', 'ADM')
   findAllSalesByClient(@Param('clientId') clientId: number) {
     return this.collectionsService.findAllSalesByClient(clientId);
   }
 
   @Get('clients/sales/:saleId')
-  @Roles('COB', 'SCO', 'FAC')
+  @Roles('COB', 'SCO', 'FAC', 'ADM')
   findOneSaleByIdForClient(@Param('saleId') saleId: string) {
     return this.collectionsService.findOneSaleByIdForClient(saleId);
   }
