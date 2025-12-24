@@ -307,12 +307,18 @@ export class ClientsService {
       page = 1,
       limit = 10,
       order = 'DESC',
+      departamentoId,
+      provinciaId,
+      distritoId,
       term,
       isActive,
     } = findAllClientsDto;
     const queryBuilder = this.clientRepository
       .createQueryBuilder('client')
       .leftJoinAndSelect('client.lead', 'lead')
+      .leftJoinAndSelect('lead.ubigeo', 'ubigeo')
+      .leftJoinAndSelect('ubigeo.parent', 'ubigeoParent')
+      .leftJoinAndSelect('ubigeoParent.parent', 'ubigeoGrandParent')
       .orderBy('client.createdAt', order)
       .skip((page - 1) * limit)
       .take(limit);
@@ -333,6 +339,21 @@ export class ClientsService {
       } else {
         queryBuilder.where(condition, { isActive });
       }
+    }
+
+    // Filtros de ubigeo (mismo criterio que findAllByUser)
+    if (distritoId) {
+      queryBuilder.andWhere('ubigeo.id = :distritoId', { distritoId });
+    } else if (provinciaId) {
+      queryBuilder.andWhere(
+        '(ubigeo.id = :provinciaId OR ubigeo.parentId = :provinciaId)',
+        { provinciaId },
+      );
+    } else if (departamentoId) {
+      queryBuilder.andWhere(
+        '(ubigeo.id = :departamentoId OR ubigeo.parentId = :departamentoId OR ubigeoParent.parentId = :departamentoId)',
+        { departamentoId },
+      );
     }
     const [clients, total] = await queryBuilder.getManyAndCount();
 

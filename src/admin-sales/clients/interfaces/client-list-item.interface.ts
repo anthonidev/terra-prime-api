@@ -8,4 +8,9 @@ export interface ClientListItem {
   phone: string;
   document: string;
   documentType: string;
+  ubigeo: {
+    departamento: string;
+    provincia: string | null;
+    distrito: string | null;
+  } | null;
 }
