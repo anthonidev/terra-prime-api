@@ -142,6 +142,120 @@ export class PaymentsService {
     }
   }
 
+  /**
+   * Crea un pago auto-aprobado (para uso de ADM)
+   * El pago se crea directamente con estado APPROVED
+   */
+  async createAutoApproved(
+    createPaymentDto: CreatePaymentDto,
+    files: Express.Multer.File[],
+    userId: string,
+    dateOperation: string,
+    numberTicket: string | undefined,
+    queryRunner: QueryRunner,
+  ): Promise<PaymentResponse> {
+    this.isValidPaymentsItems(
+      createPaymentDto.amount,
+      createPaymentDto.paymentDetails,
+      files,
+    );
+    const uploadedKeys: { detailId: number; urlKey: string }[] = [];
+    try {
+      const {
+        amount,
+        methodPayment,
+        relatedEntityType,
+        relatedEntityId,
+        paymentDetails,
+        metadata,
+      } = createPaymentDto;
+
+      const paymentConfig = await this.isValidPaymentConfig(
+        relatedEntityType,
+        relatedEntityId,
+      );
+
+      // Crear pago directamente como APPROVED
+      const payment = this.paymentRepository.create({
+        user: { id: userId },
+        paymentConfig: { id: paymentConfig.id },
+        amount: amount,
+        status: StatusPayment.APPROVED,
+        methodPayment: methodPayment,
+        relatedEntityType: relatedEntityType,
+        relatedEntityId: relatedEntityId,
+        metadata: metadata || {},
+        // Campos de aprobación
+        reviewedBy: { id: userId } as any,
+        reviewedAt: new Date(),
+        dateOperation: new Date(dateOperation),
+        numberTicket: numberTicket,
+      });
+
+      const savedPayment = await queryRunner.manager.save(payment);
+
+      // Actualizar estado de la venta
+      await this.updateStatusSale(
+        relatedEntityType,
+        relatedEntityId,
+        queryRunner,
+      );
+
+      // Crear detalles de pago (vouchers)
+      const createdVouchers = await Promise.all(
+        files.map(async (file, i) => {
+          const currentPaymentDetailDto = paymentDetails.find(
+            (detail) => detail.fileIndex === i,
+          );
+          if (!currentPaymentDetailDto)
+            throw new BadRequestException(
+              `No se encontró detalle de pago para el archivo en el índice ${i}.`,
+            );
+          const savedDetail = await this.paymentsDetailService.create(
+            savedPayment.id,
+            currentPaymentDetailDto,
+            file,
+            queryRunner,
+          );
+          uploadedKeys.push({
+            detailId: savedDetail.id,
+            urlKey: savedDetail.urlKey,
+          });
+          return {
+            id: savedDetail.id,
+            url: savedDetail.url,
+            amount: savedDetail.amount,
+            bankName: savedDetail.bankName,
+            transactionReference: savedDetail.transactionReference,
+            codeOperation: savedDetail.codeOperation,
+            transactionDate: savedDetail.transactionDate,
+            isActive: savedDetail.isActive,
+          };
+        }),
+      );
+
+      // Actualizar estado al aprobar el pago
+      savedPayment.details = createdVouchers as any;
+      await this.updateStatusApprovedPayment(savedPayment, queryRunner);
+
+      return {
+        ...formatPaymentsResponse(savedPayment),
+        vouchers: createdVouchers,
+      };
+    } catch (error) {
+      for (const { detailId, urlKey } of uploadedKeys) {
+        try {
+          await this.paymentsDetailService.delete(urlKey, detailId);
+        } catch (deleteErr) {
+          console.error(
+            `Error al eliminar detalle de pago ${detailId} y archivo S3 ${urlKey} durante el rollback: ${deleteErr.message}`,
+          );
+        }
+      }
+      throw error;
+    }
+  }
+
   async approvePayment(
     paymentId: number,
     reviewedById: string,
