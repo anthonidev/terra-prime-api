@@ -18,6 +18,7 @@ import { UsersModule } from './user/user.module';
 import { ExternalApiModule } from './external-api/external-api.module';
 import { MigrationsModule } from './migrations/migrations.module';
 import { json, urlencoded } from 'express';
+import { InvoicesModule } from './invoices/invoices.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { json, urlencoded } from 'express';
     ReportsModule,
     ExternalApiModule,
     MigrationsModule,
+    InvoicesModule,
   ],
 })
 export class AppModule {
