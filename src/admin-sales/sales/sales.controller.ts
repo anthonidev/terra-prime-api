@@ -44,6 +44,7 @@ import { AssignParticipantsToSaleDto } from './dto/assign-participants-to-sale.d
 import { UpdateReservationPeriodDto } from './dto/update-reservation-period.dto';
 import { UpdateFinancingInstallmentsDto } from './dto/update-financing-installments.dto';
 import { CreateFinancingAmendmentDto } from './dto/create-financing-amendment.dto';
+import { PaidInstallmentsAutoApprovedDto } from './dto/paid-installments-auto-approved.dto';
 import { Response } from 'express';
 
 @Controller('sales')
@@ -313,6 +314,40 @@ export class SalesController {
       saleId,
       financingId,
       createAmendmentDto,
+    );
+  }
+
+  @Post('financing/installments/paid-approved/:financingId')
+  @Roles('ADM')
+  @UseInterceptors(FilesInterceptor('files'))
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async paidInstallmentsAutoApproved(
+    @Param('financingId', ParseUUIDPipe) financingId: string,
+    @Body() paidInstallmentsDto: PaidInstallmentsAutoApprovedDto,
+    @GetUser() user: User,
+    @UploadedFiles(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({
+          fileType: /(jpg|jpeg|png|webp)$/,
+        })
+        .addMaxSizeValidator({
+          maxSize: 1024 * 1024 * 2,
+        })
+        .build({
+          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+          fileIsRequired: false,
+        }),
+    )
+    files: Array<Express.Multer.File>,
+  ) {
+    return this.salesService.paidInstallmentsAutoApproved(
+      financingId,
+      paidInstallmentsDto.amountPaid,
+      paidInstallmentsDto.payments,
+      files,
+      user.id,
+      paidInstallmentsDto.dateOperation,
+      paidInstallmentsDto.numberTicket,
     );
   }
 }

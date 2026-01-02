@@ -1,7 +1,7 @@
 import { CurrencyType } from 'src/project/entities/project.entity';
-import { CombinedInstallmentWithPayments } from './combined-installment-with-payments.interface';
 import { StatusPayment } from 'src/admin-payments/payments/enums/status-payments.enum';
 import { AmortizationMetadata } from 'src/admin-sales/financing/interfaces/combined-amortization-response.interface';
+import { InstallmentWithPayments } from 'src/admin-sales/financing/interfaces/installment-with-payments.interface';
 
 export interface SaleWithCombinedInstallmentsResponse {
   id: string;
@@ -67,7 +67,8 @@ export interface SaleWithCombinedInstallmentsResponse {
         quantityCoutes: number;
       };
     };
-    installments: CombinedInstallmentWithPayments[];
+    lotInstallments: Omit<InstallmentWithPayments, 'payments'>[];
+    huInstallments: Omit<InstallmentWithPayments, 'payments'>[];
     meta: AmortizationMetadata;
   };
 

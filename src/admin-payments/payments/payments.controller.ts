@@ -34,7 +34,7 @@ export class PaymentsController {
   ) {}
 
   @Post('approve/:id')
-  @Roles('FAC')
+  @Roles('FAC', 'ADM')
   async approvePayment(
     @Param('id') id: number,
     @GetUser() user: User,
@@ -44,7 +44,7 @@ export class PaymentsController {
   }
 
   @Post('reject/:id')
-  @Roles('FAC')
+  @Roles('FAC', 'ADM')
   async rejectPayment(
     @Param('id') id: number,
     @Body() rejectionDto: RejectionDto,
@@ -58,19 +58,19 @@ export class PaymentsController {
   }
 
   @Get('list')
-  @Roles('FAC')
+  @Roles('FAC', 'ADM')
   async findAllPayments(@Query() filters: FindPaymentsDto) {
     return this.paymentsService.findAllPayments(filters);
   }
 
   @Get('details/:id')
-  @Roles('FAC')
+  @Roles('FAC', 'ADM')
   async findOnePayment(@Param('id') id: number) {
     return this.paymentsService.findOne(id);
   }
 
   @Patch('complete-payment/:id')
-  @Roles('FAC')
+  @Roles('FAC', 'ADM')
   completePayment(
     @Param('id', ParseIntPipe) id: number,
     @GetUser() user: User,
@@ -84,7 +84,7 @@ export class PaymentsController {
   }
 
   @Patch('details/:id')
-  @Roles('FAC')
+  @Roles('FAC', 'ADM')
   async updatePaymentDetail(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateDetailPaymentDto: UpdateDetailPaymentDto,
@@ -93,13 +93,13 @@ export class PaymentsController {
   }
 
   @Patch('details/:id/deactivate')
-  @Roles('FAC')
+  @Roles('FAC', 'ADM')
   async deactivatePaymentDetail(@Param('id', ParseIntPipe) id: number) {
     return this.paymentsDetailService.deactivate(id);
   }
 
   @Patch('details/:id/code-operation')
-  @Roles('FAC')
+  @Roles('FAC', 'ADM')
   async updateCodeOperation(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateCodeOperationDto: UpdateCodeOperationDto,

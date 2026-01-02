@@ -97,7 +97,11 @@ import { StatusFinancingInstallments } from '../financing/enums/status-financing
 import { FinancingAmendmentHistory } from '../financing/entities/financing-amendment-history.entity';
 import { AwsS3Service } from 'src/files/aws-s3.service';
 import { createAmendmentHistoryExcel } from './helpers/amendment-history-excel.helper';
-import { CreateFinancingAmendmentDto, AmendmentInstallmentStatus } from './dto/create-financing-amendment.dto';
+import {
+  CreateFinancingAmendmentDto,
+  AmendmentInstallmentStatus,
+} from './dto/create-financing-amendment.dto';
+import Decimal from 'decimal.js';
 
 // SERVICIO ACTUALIZADO - UN SOLO ENDPOINT PARA VENTA/RESERVA
 
@@ -526,10 +530,19 @@ export class SalesService {
       .leftJoinAndSelect('stage.project', 'project')
       .leftJoinAndSelect('sale.financing', 'financing')
       .leftJoinAndSelect('sale.urbanDevelopment', 'urbanDevelopment')
-      .leftJoinAndSelect('urbanDevelopment.financing', 'urbanDevelopmentFinancing')
+      .leftJoinAndSelect(
+        'urbanDevelopment.financing',
+        'urbanDevelopmentFinancing',
+      )
       .leftJoinAndSelect('sale.liner', 'liner')
-      .leftJoinAndSelect('sale.telemarketingSupervisor', 'telemarketingSupervisor')
-      .leftJoinAndSelect('sale.telemarketingConfirmer', 'telemarketingConfirmer')
+      .leftJoinAndSelect(
+        'sale.telemarketingSupervisor',
+        'telemarketingSupervisor',
+      )
+      .leftJoinAndSelect(
+        'sale.telemarketingConfirmer',
+        'telemarketingConfirmer',
+      )
       .leftJoinAndSelect('sale.telemarketer', 'telemarketer')
       .leftJoinAndSelect('sale.fieldManager', 'fieldManager')
       .leftJoinAndSelect('sale.fieldSupervisor', 'fieldSupervisor')
@@ -544,7 +557,9 @@ export class SalesService {
     } else {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      queryBuilder.andWhere('sale.createdAt >= :thirtyDaysAgo', { thirtyDaysAgo });
+      queryBuilder.andWhere('sale.createdAt >= :thirtyDaysAgo', {
+        thirtyDaysAgo,
+      });
     }
 
     if (status) {
@@ -562,7 +577,7 @@ export class SalesService {
     if (clientName) {
       queryBuilder.andWhere(
         '(LOWER(lead.firstName) LIKE LOWER(:clientName) OR LOWER(lead.lastName) LIKE LOWER(:clientName) OR LOWER(lead.document) LIKE LOWER(:clientName))',
-        { clientName: `%${clientName}%` }
+        { clientName: `%${clientName}%` },
       );
     }
 
@@ -607,7 +622,10 @@ export class SalesService {
       .leftJoinAndSelect('stage.project', 'project')
       .leftJoinAndSelect('sale.financing', 'financing')
       .leftJoinAndSelect('sale.urbanDevelopment', 'urbanDevelopment')
-      .leftJoinAndSelect('urbanDevelopment.financing', 'urbanDevelopmentFinancing')
+      .leftJoinAndSelect(
+        'urbanDevelopment.financing',
+        'urbanDevelopmentFinancing',
+      )
       .andWhere('sale.vendor = :userId', { userId });
 
     if (status) {
@@ -625,7 +643,7 @@ export class SalesService {
     if (clientName) {
       queryBuilder.andWhere(
         '(LOWER(lead.firstName) LIKE LOWER(:clientName) OR LOWER(lead.lastName) LIKE LOWER(:clientName) OR LOWER(lead.document) LIKE LOWER(:clientName))',
-        { clientName: `%${clientName}%` }
+        { clientName: `%${clientName}%` },
       );
     }
 
@@ -996,12 +1014,6 @@ export class SalesService {
           sale.urbanDevelopment.financing.id,
         );
 
-    // Combinar cuotas por fecha
-    const combinedInstallments = this.combinInstallmentsByDate(
-      lotInstallmentsWithPayments,
-      huInstallmentsWithPayments,
-    );
-
     // Calcular metadata
     const lotTotalAmount = lotInstallmentsWithPayments.reduce(
       (sum, inst) => sum + Number(inst.couteAmount),
@@ -1017,7 +1029,8 @@ export class SalesService {
       lotTotalAmount: parseFloat(lotTotalAmount.toFixed(2)),
       huInstallmentsCount: huInstallmentsWithPayments.length,
       huTotalAmount: parseFloat(huTotalAmount.toFixed(2)),
-      totalInstallmentsCount: combinedInstallments.length,
+      totalInstallmentsCount:
+        lotInstallmentsWithPayments.length + huInstallmentsWithPayments.length,
       totalAmount: parseFloat((lotTotalAmount + huTotalAmount).toFixed(2)),
     };
 
@@ -1112,7 +1125,12 @@ export class SalesService {
                     : undefined,
                 }
               : undefined,
-            installments: combinedInstallments,
+            lotInstallments: lotInstallmentsWithPayments.map(
+              ({ payments, ...rest }) => rest,
+            ),
+            huInstallments: huInstallmentsWithPayments.map(
+              ({ payments, ...rest }) => rest,
+            ),
             meta,
           }
         : undefined,
@@ -2320,17 +2338,12 @@ export class SalesService {
     }
   }
 
-  async deleteSale(
-    saleId: string,
-  ): Promise<{ message: string }> {
+  async deleteSale(saleId: string): Promise<{ message: string }> {
     try {
       // Buscar la venta con sus relaciones
       const sale = await this.saleRepository.findOne({
         where: { id: saleId },
-        relations: [
-          'lot',
-          'financing',
-        ],
+        relations: ['lot', 'financing'],
       });
 
       if (!sale)
@@ -2354,7 +2367,9 @@ export class SalesService {
               .createQueryBuilder()
               .delete()
               .from('payments')
-              .where('relatedEntityId = :financingId', { financingId: sale.financing.id })
+              .where('relatedEntityId = :financingId', {
+                financingId: sale.financing.id,
+              })
               .andWhere('relatedEntityType = :type', { type: 'Financing' })
               .execute();
           }
@@ -2396,36 +2411,44 @@ export class SalesService {
       .leftJoinAndSelect('sale.financing', 'financing')
       .leftJoinAndSelect('financing.financingInstallments', 'installments')
       .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
-      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
+      .leftJoinAndSelect(
+        'secondaryClientSales.secondaryClient',
+        'secondaryClient',
+      )
       .where('sale.id = :id', { id })
       .getOne();
 
     if (!sale) {
-      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrada`);
+      throw new NotFoundException(
+        `La venta con ID ${id} no se encuentra registrada`,
+      );
     }
 
     return sale;
   }
 
-  private async findAllPaymentsForSale(saleId: string, financingId: string | null): Promise<Payment[]> {
+  private async findAllPaymentsForSale(
+    saleId: string,
+    financingId: string | null,
+  ): Promise<Payment[]> {
     // Usar QueryBuilder para optimizar la consulta con OR
     const query = this.paymentRepository
       .createQueryBuilder('payment')
       .leftJoinAndSelect('payment.details', 'details')
       .where(
         '(payment.relatedEntityType = :reservationType AND payment.relatedEntityId = :saleId)',
-        { reservationType: 'reservation', saleId }
+        { reservationType: 'reservation', saleId },
       );
 
     if (financingId) {
       query
         .orWhere(
           '(payment.relatedEntityType = :financingType AND payment.relatedEntityId = :financingId)',
-          { financingType: 'financing', financingId }
+          { financingType: 'financing', financingId },
         )
         .orWhere(
           '(payment.relatedEntityType = :installmentsType AND payment.relatedEntityId = :financingId)',
-          { installmentsType: 'financingInstallments', financingId }
+          { installmentsType: 'financingInstallments', financingId },
         );
     }
 
@@ -2442,12 +2465,19 @@ export class SalesService {
 
       const paymentsStart = Date.now();
       // Obtener pagos (ahora optimizado con QueryBuilder)
-      const payments = await this.findAllPaymentsForSale(sale.id, sale.financing?.id || null);
-      this.logger.log(`✅ Payments loaded in ${Date.now() - paymentsStart}ms (${payments.length} payments)`);
+      const payments = await this.findAllPaymentsForSale(
+        sale.id,
+        sale.financing?.id || null,
+      );
+      this.logger.log(
+        `✅ Payments loaded in ${Date.now() - paymentsStart}ms (${payments.length} payments)`,
+      );
 
       const transformStart = Date.now();
       const rows = transformSaleToExcelRows(sale, payments);
-      this.logger.log(`✅ Rows transformed in ${Date.now() - transformStart}ms (${rows.length} rows)`);
+      this.logger.log(
+        `✅ Rows transformed in ${Date.now() - transformStart}ms (${rows.length} rows)`,
+      );
 
       const excelStart = Date.now();
       const workbook = XLSX.utils.book_new();
@@ -2488,7 +2518,10 @@ export class SalesService {
       .leftJoinAndSelect('financing.financingInstallments', 'installments')
       // Clientes secundarios
       .leftJoinAndSelect('sale.secondaryClientSales', 'secondaryClientSales')
-      .leftJoinAndSelect('secondaryClientSales.secondaryClient', 'secondaryClient')
+      .leftJoinAndSelect(
+        'secondaryClientSales.secondaryClient',
+        'secondaryClient',
+      )
       // Garante
       .leftJoinAndSelect('sale.guarantor', 'guarantor')
       // Vendedor
@@ -2496,14 +2529,23 @@ export class SalesService {
       // Lead Visit con todos sus participantes
       .leftJoinAndSelect('sale.leadVisit', 'leadVisit')
       .leftJoinAndSelect('leadVisit.linerParticipant', 'visitLiner')
-      .leftJoinAndSelect('leadVisit.telemarketingSupervisor', 'visitTmkSupervisor')
-      .leftJoinAndSelect('leadVisit.telemarketingConfirmer', 'visitTmkConfirmer')
+      .leftJoinAndSelect(
+        'leadVisit.telemarketingSupervisor',
+        'visitTmkSupervisor',
+      )
+      .leftJoinAndSelect(
+        'leadVisit.telemarketingConfirmer',
+        'visitTmkConfirmer',
+      )
       .leftJoinAndSelect('leadVisit.telemarketer', 'visitTelemarketer')
       .leftJoinAndSelect('leadVisit.fieldManager', 'visitFieldManager')
       .leftJoinAndSelect('leadVisit.fieldSupervisor', 'visitFieldSupervisor')
       .leftJoinAndSelect('leadVisit.fieldSeller', 'visitFieldSeller')
       .leftJoinAndSelect('leadVisit.salesManager', 'visitSalesManager')
-      .leftJoinAndSelect('leadVisit.salesGeneralManager', 'visitSalesGeneralManager')
+      .leftJoinAndSelect(
+        'leadVisit.salesGeneralManager',
+        'visitSalesGeneralManager',
+      )
       .leftJoinAndSelect('leadVisit.postSale', 'visitPostSale')
       .leftJoinAndSelect('leadVisit.closer', 'visitCloser')
       // Participantes de la venta
@@ -2522,7 +2564,9 @@ export class SalesService {
       .getOne();
 
     if (!sale) {
-      throw new NotFoundException(`La venta con ID ${id} no se encuentra registrada`);
+      throw new NotFoundException(
+        `La venta con ID ${id} no se encuentra registrada`,
+      );
     }
 
     return sale;
@@ -2534,24 +2578,38 @@ export class SalesService {
 
       // Obtener la venta con TODAS las relaciones necesarias
       const sale = await this.findOneByIdForExportSmart(id);
-      this.logger.log(`✅ [Smart Export] Sale loaded in ${Date.now() - startTime}ms`);
+      this.logger.log(
+        `✅ [Smart Export] Sale loaded in ${Date.now() - startTime}ms`,
+      );
 
       const paymentsStart = Date.now();
       // Obtener pagos con detalles
-      const payments = await this.findAllPaymentsForSale(sale.id, sale.financing?.id || null);
-      this.logger.log(`✅ [Smart Export] Payments loaded in ${Date.now() - paymentsStart}ms (${payments.length} payments)`);
+      const payments = await this.findAllPaymentsForSale(
+        sale.id,
+        sale.financing?.id || null,
+      );
+      this.logger.log(
+        `✅ [Smart Export] Payments loaded in ${Date.now() - paymentsStart}ms (${payments.length} payments)`,
+      );
 
       const excelStart = Date.now();
       // Crear el workbook con múltiples tabs usando ExcelJS
       const workbook = await createSmartExcelWorkbook(sale, payments);
       const arrayBuffer = await workbook.xlsx.writeBuffer();
       const buffer = Buffer.from(arrayBuffer);
-      this.logger.log(`✅ [Smart Export] Excel generated in ${Date.now() - excelStart}ms`);
+      this.logger.log(
+        `✅ [Smart Export] Excel generated in ${Date.now() - excelStart}ms`,
+      );
 
-      this.logger.log(`🎉 [Smart Export] Total export time: ${Date.now() - startTime}ms`);
+      this.logger.log(
+        `🎉 [Smart Export] Total export time: ${Date.now() - startTime}ms`,
+      );
       return buffer;
     } catch (error) {
-      this.logger.error(`❌ [Smart Export] Error: ${error.message}`, error.stack);
+      this.logger.error(
+        `❌ [Smart Export] Error: ${error.message}`,
+        error.stack,
+      );
       throw new InternalServerErrorException(
         `Error al exportar la venta a Excel (Smart): ${error.message}`,
       );
@@ -2575,14 +2633,15 @@ export class SalesService {
         lateFeeAmount?: number;
       }>;
     },
-  ): Promise<{ message: string; financing: any; redistributedAmount?: number }> {
+  ): Promise<{
+    message: string;
+    financing: any;
+    redistributedAmount?: number;
+  }> {
     // 1. Validar que la venta existe y obtener datos
     const sale = await this.saleRepository.findOne({
       where: { id: saleId },
-      relations: [
-        'financing',
-        'financing.financingInstallments',
-      ],
+      relations: ['financing', 'financing.financingInstallments'],
     });
 
     if (!sale) {
@@ -2608,8 +2667,16 @@ export class SalesService {
     // 3. Verificar que no hay pagos PENDING en el sistema de pagos
     const pendingPayments = await this.paymentRepository.find({
       where: [
-        { relatedEntityType: 'financingInstallments', relatedEntityId: financingId, status: In(['PENDING']) },
-        { relatedEntityType: 'financing', relatedEntityId: financingId, status: In(['PENDING']) },
+        {
+          relatedEntityType: 'financingInstallments',
+          relatedEntityId: financingId,
+          status: In(['PENDING']),
+        },
+        {
+          relatedEntityType: 'financing',
+          relatedEntityId: financingId,
+          status: In(['PENDING']),
+        },
       ],
     });
 
@@ -2682,7 +2749,11 @@ export class SalesService {
 
     // 10. Calcular el monto que debe cubrir el financiamiento
     const amountToFinance = Number(
-      (Number(totalAmount) - Number(initialAmount) - Number(reservationAmount)).toFixed(2),
+      (
+        Number(totalAmount) -
+        Number(initialAmount) -
+        Number(reservationAmount)
+      ).toFixed(2),
     );
 
     // 11. Validar que la suma de cuotas coincida con el monto a financiar (con tolerancia de 1.0)
@@ -2690,8 +2761,8 @@ export class SalesService {
     if (difference > 1.0) {
       throw new BadRequestException(
         `La suma de las cuotas (${totalInstallmentsAmount.toFixed(2)}) no coincide con el monto a financiar (${amountToFinance.toFixed(2)}). ` +
-        `Diferencia: ${difference.toFixed(2)}. ` +
-        `Monto total: ${totalAmount}, Inicial: ${initialAmount}, Reserva: ${reservationAmount}`,
+          `Diferencia: ${difference.toFixed(2)}. ` +
+          `Monto total: ${totalAmount}, Inicial: ${initialAmount}, Reserva: ${reservationAmount}`,
       );
     }
 
@@ -2723,13 +2794,15 @@ export class SalesService {
             if (Number(existing.couteAmount) !== Number(inst.couteAmount)) {
               // Si el nuevo monto es menor que lo ya pagado, ese excedente se redistribuye
               if (previousCoutePaid > Number(inst.couteAmount)) {
-                amountToRedistribute += previousCoutePaid - Number(inst.couteAmount);
+                amountToRedistribute +=
+                  previousCoutePaid - Number(inst.couteAmount);
                 existing.coutePaid = inst.couteAmount;
                 existing.coutePending = 0;
               } else {
                 // Mantener lo pagado y ajustar el pendiente
                 existing.coutePaid = previousCoutePaid;
-                existing.coutePending = Number(inst.couteAmount) - previousCoutePaid;
+                existing.coutePending =
+                  Number(inst.couteAmount) - previousCoutePaid;
               }
             }
 
@@ -2740,14 +2813,17 @@ export class SalesService {
             // Actualizar mora si se proporciona
             if (inst.lateFeeAmount !== undefined) {
               existing.lateFeeAmount = inst.lateFeeAmount;
-              existing.lateFeeAmountPending = inst.lateFeeAmount - (Number(existing.lateFeeAmountPaid) || 0);
-              if (existing.lateFeeAmountPending < 0) existing.lateFeeAmountPending = 0;
+              existing.lateFeeAmountPending =
+                inst.lateFeeAmount - (Number(existing.lateFeeAmountPaid) || 0);
+              if (existing.lateFeeAmountPending < 0)
+                existing.lateFeeAmountPending = 0;
             }
 
             // Determinar estado: PAID si coutePaid >= couteAmount, sino PENDING
-            existing.status = Number(existing.coutePaid) >= Number(existing.couteAmount)
-              ? StatusFinancingInstallments.PAID
-              : StatusFinancingInstallments.PENDING;
+            existing.status =
+              Number(existing.coutePaid) >= Number(existing.couteAmount)
+                ? StatusFinancingInstallments.PAID
+                : StatusFinancingInstallments.PENDING;
 
             const saved = await financingInstallmentsRepo.save(existing);
             savedInstallments.push(saved);
@@ -2777,8 +2853,10 @@ export class SalesService {
         // Ordenar cuotas por fecha de vencimiento (más cercana primero)
         const sortedInstallments = savedInstallments
           .filter((inst) => inst.status !== StatusFinancingInstallments.PAID)
-          .sort((a, b) =>
-            new Date(a.expectedPaymentDate).getTime() - new Date(b.expectedPaymentDate).getTime()
+          .sort(
+            (a, b) =>
+              new Date(a.expectedPaymentDate).getTime() -
+              new Date(b.expectedPaymentDate).getTime(),
           );
 
         let remainingToDistribute = amountToRedistribute;
@@ -2789,17 +2867,26 @@ export class SalesService {
           const currentPending = Number(installment.coutePending) || 0;
 
           if (currentPending > 0) {
-            const amountToApply = Math.min(remainingToDistribute, currentPending);
+            const amountToApply = Math.min(
+              remainingToDistribute,
+              currentPending,
+            );
 
-            installment.coutePaid = Number((Number(installment.coutePaid) + amountToApply).toFixed(2));
-            installment.coutePending = Number((currentPending - amountToApply).toFixed(2));
+            installment.coutePaid = Number(
+              (Number(installment.coutePaid) + amountToApply).toFixed(2),
+            );
+            installment.coutePending = Number(
+              (currentPending - amountToApply).toFixed(2),
+            );
 
             // Si quedó completamente pagada, cambiar estado
             if (installment.coutePending <= 0) {
               installment.status = StatusFinancingInstallments.PAID;
             }
 
-            remainingToDistribute = Number((remainingToDistribute - amountToApply).toFixed(2));
+            remainingToDistribute = Number(
+              (remainingToDistribute - amountToApply).toFixed(2),
+            );
 
             await financingInstallmentsRepo.save(installment);
           }
@@ -2809,7 +2896,7 @@ export class SalesService {
         if (remainingToDistribute > 0) {
           this.logger.warn(
             `[updateFinancingInstallments] Quedó un excedente de ${remainingToDistribute.toFixed(2)} después de redistribuir pagos. ` +
-            `Este monto podría indicar un sobrepago.`
+              `Este monto podría indicar un sobrepago.`,
           );
         }
       }
@@ -2832,10 +2919,12 @@ export class SalesService {
     });
 
     return {
-      message: amountToRedistribute > 0
-        ? `Cuotas actualizadas correctamente. Se redistribuyó ${amountToRedistribute.toFixed(2)} de pagos previos.`
-        : 'Cuotas actualizadas correctamente',
-      redistributedAmount: amountToRedistribute > 0 ? amountToRedistribute : undefined,
+      message:
+        amountToRedistribute > 0
+          ? `Cuotas actualizadas correctamente. Se redistribuyó ${amountToRedistribute.toFixed(2)} de pagos previos.`
+          : 'Cuotas actualizadas correctamente',
+      redistributedAmount:
+        amountToRedistribute > 0 ? amountToRedistribute : undefined,
       financing: {
         id: updatedSale.financing.id,
         initialAmount: updatedSale.financing.initialAmount,
@@ -2914,98 +3003,181 @@ export class SalesService {
         lateFeeAmountPaid: number;
         status: string;
       }>;
+      amendmentHistory: Array<{
+        id: string;
+        fileUrl: string;
+        totalCouteAmount: number;
+        totalPaid: number;
+        totalPending: number;
+        totalLateFee: number;
+        additionalAmount: number;
+        previousInstallmentsCount: number;
+        newInstallmentsCount: number;
+        observation: string;
+        createdAt: Date;
+      }>;
     };
   }> {
-    // 1. Obtener la venta con todas las relaciones necesarias
-    const sale = await this.saleRepository.findOne({
-      where: { id: saleId },
-      relations: [
-        'client',
-        'client.lead',
-        'lot',
-        'lot.block',
-        'lot.block.stage',
-        'lot.block.stage.project',
-        'financing',
-        'financing.financingInstallments',
-      ],
-    });
+    // Ejecutar todas las consultas en paralelo para optimizar
+    const [saleData, installmentsWithTotals, amendmentHistory] =
+      await Promise.all([
+        // 1. Consulta optimizada para datos de venta con QueryBuilder
+        this.saleRepository
+          .createQueryBuilder('sale')
+          .select([
+            'sale.id',
+            'sale.status',
+            'sale.type',
+            'sale.totalAmount',
+            'sale.totalAmountPaid',
+            'sale.reservationAmount',
+            'sale.contractDate',
+          ])
+          .leftJoin('sale.client', 'client')
+          .addSelect(['client.id'])
+          .leftJoin('client.lead', 'lead')
+          .addSelect([
+            'lead.firstName',
+            'lead.lastName',
+            'lead.document',
+            'lead.documentType',
+          ])
+          .leftJoin('sale.lot', 'lot')
+          .addSelect(['lot.id', 'lot.name'])
+          .leftJoin('lot.block', 'block')
+          .addSelect(['block.name'])
+          .leftJoin('block.stage', 'stage')
+          .addSelect(['stage.name'])
+          .leftJoin('stage.project', 'project')
+          .addSelect(['project.name'])
+          .leftJoin('sale.financing', 'financing')
+          .addSelect([
+            'financing.id',
+            'financing.financingType',
+            'financing.initialAmount',
+            'financing.initialAmountPaid',
+            'financing.initialAmountPending',
+            'financing.interestRate',
+            'financing.quantityCoutes',
+          ])
+          .where('sale.id = :saleId', { saleId })
+          .getOne(),
 
-    if (!sale) {
+        // 2. Consulta para cuotas con totales calculados en la base de datos
+        this.saleRepository.manager
+          .createQueryBuilder()
+          .select([
+            'fi.id as id',
+            'fi."numberCuote" as "numberCuote"',
+            'fi."couteAmount" as "couteAmount"',
+            'fi."coutePending" as "coutePending"',
+            'fi."coutePaid" as "coutePaid"',
+            'fi."expectedPaymentDate" as "expectedPaymentDate"',
+            'fi."lateFeeAmount" as "lateFeeAmount"',
+            'fi."lateFeeAmountPending" as "lateFeeAmountPending"',
+            'fi."lateFeeAmountPaid" as "lateFeeAmountPaid"',
+            'fi.status as status',
+          ])
+          .from('financing_installments', 'fi')
+          .innerJoin('financing', 'f', 'fi."financingId" = f.id')
+          .where('f.id = :financingId', { financingId })
+          .orderBy('fi."numberCuote"', 'ASC')
+          .getRawMany()
+          .then(async (installments) => {
+            // Calcular totales con una consulta separada agregada
+            const totalsResult = await this.saleRepository.manager
+              .createQueryBuilder()
+              .select([
+                'COALESCE(SUM(fi."couteAmount"), 0) as "totalCouteAmount"',
+                'COALESCE(SUM(fi."coutePaid"), 0) as "totalPaid"',
+                'COALESCE(SUM(fi."coutePending"), 0) as "totalPending"',
+                'COALESCE(SUM(fi."lateFeeAmount"), 0) as "totalLateFee"',
+                'COALESCE(SUM(fi."lateFeeAmountPending"), 0) as "totalLateFeeePending"',
+                'COALESCE(SUM(fi."lateFeeAmountPaid"), 0) as "totalLateFeePaid"',
+              ])
+              .from('financing_installments', 'fi')
+              .innerJoin('financing', 'f', 'fi."financingId" = f.id')
+              .where('f.id = :financingId', { financingId })
+              .getRawOne();
+
+            return { installments, totals: totalsResult };
+          }),
+
+        // 3. Historial de adendas
+        this.amendmentHistoryRepository
+          .createQueryBuilder('ah')
+          .select([
+            'ah.id',
+            'ah.fileUrl',
+            'ah.totalCouteAmount',
+            'ah.totalPaid',
+            'ah.totalPending',
+            'ah.totalLateFee',
+            'ah.additionalAmount',
+            'ah.previousInstallmentsCount',
+            'ah.newInstallmentsCount',
+            'ah.observation',
+            'ah.createdAt',
+          ])
+          .where('ah.financingId = :financingId', { financingId })
+          .orderBy('ah.createdAt', 'DESC')
+          .getMany(),
+      ]);
+
+    // Validaciones
+    if (!saleData) {
       throw new NotFoundException(`La venta con ID ${saleId} no existe`);
     }
 
-    if (!sale.financing || sale.financing.id !== financingId) {
+    if (!saleData.financing || saleData.financing.id !== financingId) {
       throw new BadRequestException(
         `El financiamiento con ID ${financingId} no corresponde a la venta ${saleId}`,
       );
     }
 
-    // 2. Ordenar las cuotas por número
-    const sortedInstallments = (sale.financing.financingInstallments || [])
-      .sort((a, b) => a.numberCuote - b.numberCuote);
+    const { installments, totals } = installmentsWithTotals;
 
-    // 3. Calcular totales
-    const totals = sortedInstallments.reduce(
-      (acc, inst) => {
-        acc.totalCouteAmount += Number(inst.couteAmount) || 0;
-        acc.totalPaid += Number(inst.coutePaid) || 0;
-        acc.totalPending += Number(inst.coutePending) || 0;
-        acc.totalLateFee += Number(inst.lateFeeAmount) || 0;
-        acc.totalLateFeeePending += Number(inst.lateFeeAmountPending) || 0;
-        acc.totalLateFeePaid += Number(inst.lateFeeAmountPaid) || 0;
-        return acc;
-      },
-      {
-        totalCouteAmount: 0,
-        totalPaid: 0,
-        totalPending: 0,
-        totalLateFee: 0,
-        totalLateFeeePending: 0,
-        totalLateFeePaid: 0,
-      },
-    );
-
-    // 4. Construir la respuesta
+    // Construir la respuesta
     return {
       sale: {
-        id: sale.id,
-        status: sale.status,
-        type: sale.type,
-        totalAmount: Number(sale.totalAmount),
-        totalAmountPaid: Number(sale.totalAmountPaid) || 0,
-        reservationAmount: Number(sale.reservationAmount) || 0,
-        contractDate: sale.contractDate,
+        id: saleData.id,
+        status: saleData.status,
+        type: saleData.type,
+        totalAmount: Number(saleData.totalAmount),
+        totalAmountPaid: Number(saleData.totalAmountPaid) || 0,
+        reservationAmount: Number(saleData.reservationAmount) || 0,
+        contractDate: saleData.contractDate,
         client: {
-          id: sale.client.id,
-          fullName: `${sale.client.lead.firstName} ${sale.client.lead.lastName}`.trim(),
-          document: sale.client.lead.document,
-          documentType: sale.client.lead.documentType,
+          id: saleData.client.id,
+          fullName:
+            `${saleData.client.lead.firstName} ${saleData.client.lead.lastName}`.trim(),
+          document: saleData.client.lead.document,
+          documentType: saleData.client.lead.documentType,
         },
         lot: {
-          id: sale.lot.id,
-          name: sale.lot.name,
-          block: sale.lot.block.name,
-          stage: sale.lot.block.stage.name,
-          project: sale.lot.block.stage.project.name,
+          id: saleData.lot.id,
+          name: saleData.lot.name,
+          block: saleData.lot.block.name,
+          stage: saleData.lot.block.stage.name,
+          project: saleData.lot.block.stage.project.name,
         },
       },
       financing: {
-        id: sale.financing.id,
-        financingType: sale.financing.financingType,
-        initialAmount: Number(sale.financing.initialAmount),
-        initialAmountPaid: Number(sale.financing.initialAmountPaid) || 0,
-        initialAmountPending: Number(sale.financing.initialAmountPending) || 0,
-        interestRate: Number(sale.financing.interestRate) || 0,
-        quantityCoutes: Number(sale.financing.quantityCoutes),
-        // Totales calculados
-        totalCouteAmount: Number(totals.totalCouteAmount.toFixed(2)),
-        totalPaid: Number(totals.totalPaid.toFixed(2)),
-        totalPending: Number(totals.totalPending.toFixed(2)),
-        totalLateFee: Number(totals.totalLateFee.toFixed(2)),
-        totalLateFeeePending: Number(totals.totalLateFeeePending.toFixed(2)),
-        totalLateFeePaid: Number(totals.totalLateFeePaid.toFixed(2)),
-        installments: sortedInstallments.map((inst) => ({
+        id: saleData.financing.id,
+        financingType: saleData.financing.financingType,
+        initialAmount: Number(saleData.financing.initialAmount),
+        initialAmountPaid: Number(saleData.financing.initialAmountPaid) || 0,
+        initialAmountPending:
+          Number(saleData.financing.initialAmountPending) || 0,
+        interestRate: Number(saleData.financing.interestRate) || 0,
+        quantityCoutes: Number(saleData.financing.quantityCoutes),
+        totalCouteAmount: Number(totals.totalCouteAmount),
+        totalPaid: Number(totals.totalPaid),
+        totalPending: Number(totals.totalPending),
+        totalLateFee: Number(totals.totalLateFee),
+        totalLateFeeePending: Number(totals.totalLateFeeePending),
+        totalLateFeePaid: Number(totals.totalLateFeePaid),
+        installments: installments.map((inst) => ({
           id: inst.id,
           numberCuote: inst.numberCuote,
           couteAmount: Number(inst.couteAmount),
@@ -3016,6 +3188,19 @@ export class SalesService {
           lateFeeAmountPending: Number(inst.lateFeeAmountPending) || 0,
           lateFeeAmountPaid: Number(inst.lateFeeAmountPaid) || 0,
           status: inst.status,
+        })),
+        amendmentHistory: amendmentHistory.map((h) => ({
+          id: h.id,
+          fileUrl: h.fileUrl,
+          totalCouteAmount: Number(h.totalCouteAmount),
+          totalPaid: Number(h.totalPaid),
+          totalPending: Number(h.totalPending),
+          totalLateFee: Number(h.totalLateFee),
+          additionalAmount: Number(h.additionalAmount),
+          previousInstallmentsCount: h.previousInstallmentsCount,
+          newInstallmentsCount: h.newInstallmentsCount,
+          observation: h.observation,
+          createdAt: h.createdAt,
         })),
       },
     };
@@ -3070,49 +3255,56 @@ export class SalesService {
       );
     }
 
-    // 3. Calcular totales ANTES de cualquier cambio
+    // 3. Calcular totales ANTES de cualquier cambio (usando Decimal.js para precisión)
     const existingInstallments = sale.financing.financingInstallments || [];
-    const totals = existingInstallments.reduce(
-      (acc, inst) => {
-        acc.totalCouteAmount += Number(inst.couteAmount) || 0;
-        acc.totalPaid += Number(inst.coutePaid) || 0;
-        acc.totalPending += Number(inst.coutePending) || 0;
-        acc.totalLateFee += Number(inst.lateFeeAmount) || 0;
-        acc.totalLateFeePending += Number(inst.lateFeeAmountPending) || 0;
-        acc.totalLateFeePaid += Number(inst.lateFeeAmountPaid) || 0;
-        return acc;
-      },
-      {
-        totalCouteAmount: 0,
-        totalPaid: 0,
-        totalPending: 0,
-        totalLateFee: 0,
-        totalLateFeePending: 0,
-        totalLateFeePaid: 0,
-      },
-    );
 
-    // Redondear totales
-    Object.keys(totals).forEach((key) => {
-      totals[key] = Number(totals[key].toFixed(2));
-    });
+    // Usar Decimal.js para cálculos precisos
+    let decTotalCouteAmount = new Decimal(0);
+    let decTotalPaid = new Decimal(0);
+    let decTotalPending = new Decimal(0);
+    let decTotalLateFee = new Decimal(0);
+    let decTotalLateFeePending = new Decimal(0);
+    let decTotalLateFeePaid = new Decimal(0);
 
-    // 4. Calcular el monto que deben sumar las nuevas cuotas
+    for (const inst of existingInstallments) {
+      decTotalCouteAmount = decTotalCouteAmount.plus(inst.couteAmount || 0);
+      decTotalPaid = decTotalPaid.plus(inst.coutePaid || 0);
+      decTotalPending = decTotalPending.plus(inst.coutePending || 0);
+      decTotalLateFee = decTotalLateFee.plus(inst.lateFeeAmount || 0);
+      decTotalLateFeePending = decTotalLateFeePending.plus(
+        inst.lateFeeAmountPending || 0,
+      );
+      decTotalLateFeePaid = decTotalLateFeePaid.plus(
+        inst.lateFeeAmountPaid || 0,
+      );
+    }
+
+    // Convertir a objeto con valores numéricos redondeados
+    const totals = {
+      totalCouteAmount: decTotalCouteAmount.toDecimalPlaces(2).toNumber(),
+      totalPaid: decTotalPaid.toDecimalPlaces(2).toNumber(),
+      totalPending: decTotalPending.toDecimalPlaces(2).toNumber(),
+      totalLateFee: decTotalLateFee.toDecimalPlaces(2).toNumber(),
+      totalLateFeePending: decTotalLateFeePending.toDecimalPlaces(2).toNumber(),
+      totalLateFeePaid: decTotalLateFeePaid.toDecimalPlaces(2).toNumber(),
+    };
+
+    // 4. Calcular el monto que deben sumar las nuevas cuotas (usando Decimal.js)
     // total = (totalCouteAmount + totalLateFee) + additionalAmount - totalPaid - totalLateFeePaid
-    const expectedNewTotal = Number(
-      (
-        totals.totalCouteAmount +
-        totals.totalLateFee +
-        dto.additionalAmount -
-        totals.totalPaid -
-        totals.totalLateFeePaid
-      ).toFixed(2),
-    );
+    const decExpectedNewTotal = decTotalCouteAmount
+      .plus(decTotalLateFee)
+      .plus(dto.additionalAmount)
+      .minus(decTotalPaid)
+      .minus(decTotalLateFeePaid)
+      .toDecimalPlaces(2);
+
+    const expectedNewTotal = decExpectedNewTotal.toNumber();
 
     // 5. La primera cuota debe ser la suma de lo pagado
-    const paidInstallmentAmount = Number(
-      (totals.totalPaid + totals.totalLateFeePaid).toFixed(2),
-    );
+    const decPaidInstallmentAmount = decTotalPaid
+      .plus(decTotalLateFeePaid)
+      .toDecimalPlaces(2);
+    const paidInstallmentAmount = decPaidInstallmentAmount.toNumber();
 
     // 6. Validar que la primera cuota tenga el monto correcto (lo pagado)
     if (dto.installments.length === 0) {
@@ -3125,32 +3317,38 @@ export class SalesService {
     }
 
     if (paidInstallmentAmount > 0) {
-      if (Math.abs(firstInstallment.amount - paidInstallmentAmount) > 0.01) {
+      const decFirstAmount = new Decimal(firstInstallment.amount);
+      const amountDiff = decFirstAmount.minus(decPaidInstallmentAmount).abs();
+
+      if (amountDiff.greaterThan(0.01)) {
         throw new BadRequestException(
           `La primera cuota debe tener el monto total pagado: ${paidInstallmentAmount.toFixed(2)}. ` +
-          `Monto recibido: ${firstInstallment.amount.toFixed(2)}`,
+            `Monto recibido: ${firstInstallment.amount.toFixed(2)}`,
         );
       }
     }
 
     // 7. Calcular suma de las nuevas cuotas (excluyendo la primera si es la pagada)
-    let sumNewInstallments = 0;
+    let decSumNewInstallments = new Decimal(0);
     for (const inst of dto.installments) {
       if (paidInstallmentAmount > 0 && inst.numberCuote === 1) {
         // La primera cuota es la pagada, no se suma al pendiente
         continue;
       }
-      sumNewInstallments += Number(inst.amount);
+      decSumNewInstallments = decSumNewInstallments.plus(inst.amount);
     }
-    sumNewInstallments = Number(sumNewInstallments.toFixed(2));
+    decSumNewInstallments = decSumNewInstallments.toDecimalPlaces(2);
+    const sumNewInstallments = decSumNewInstallments.toNumber();
 
     // 8. Validar que la suma coincida
-    const difference = Math.abs(sumNewInstallments - expectedNewTotal);
-    if (difference > 1.0) {
+    const decDifference = decSumNewInstallments
+      .minus(decExpectedNewTotal)
+      .abs();
+    if (decDifference.greaterThan(1.0)) {
       throw new BadRequestException(
         `La suma de las nuevas cuotas pendientes (${sumNewInstallments.toFixed(2)}) no coincide con el monto esperado (${expectedNewTotal.toFixed(2)}). ` +
-        `Diferencia: ${difference.toFixed(2)}. ` +
-        `Fórmula: (${totals.totalCouteAmount} + ${totals.totalLateFee}) + (${dto.additionalAmount}) - ${totals.totalPaid} - ${totals.totalLateFeePaid} = ${expectedNewTotal}`,
+          `Diferencia: ${decDifference.toNumber().toFixed(2)}. ` +
+          `Fórmula: (${totals.totalCouteAmount} + ${totals.totalLateFee}) + (${dto.additionalAmount}) - ${totals.totalPaid} - ${totals.totalLateFeePaid} = ${expectedNewTotal}`,
       );
     }
 
@@ -3175,9 +3373,13 @@ export class SalesService {
     let historyId: string;
 
     await this.transactionService.runInTransaction(async (queryRunner) => {
-      const financingInstallmentsRepo = queryRunner.manager.getRepository(FinancingInstallments);
+      const financingInstallmentsRepo = queryRunner.manager.getRepository(
+        FinancingInstallments,
+      );
       const financingRepo = queryRunner.manager.getRepository(Financing);
-      const historyRepo = queryRunner.manager.getRepository(FinancingAmendmentHistory);
+      const historyRepo = queryRunner.manager.getRepository(
+        FinancingAmendmentHistory,
+      );
 
       // 10.1 Guardar historial de la adenda
       const history = historyRepo.create({
@@ -3216,7 +3418,8 @@ export class SalesService {
 
       // 10.3 Crear las nuevas cuotas
       for (const inst of dto.installments) {
-        const isPaidInstallment = paidInstallmentAmount > 0 && inst.numberCuote === 1;
+        const isPaidInstallment =
+          paidInstallmentAmount > 0 && inst.numberCuote === 1;
 
         const newInstallment = financingInstallmentsRepo.create({
           numberCuote: inst.numberCuote,
@@ -3241,7 +3444,8 @@ export class SalesService {
         date: new Date().toISOString(),
         additionalAmount: dto.additionalAmount,
         previousTotal: totals.totalCouteAmount + totals.totalLateFee,
-        newTotal: totals.totalCouteAmount + totals.totalLateFee + dto.additionalAmount,
+        newTotal:
+          totals.totalCouteAmount + totals.totalLateFee + dto.additionalAmount,
         previousInstallmentsCount: existingInstallments.length,
         newInstallmentsCount: dto.installments.length,
         historyId,
@@ -3283,5 +3487,29 @@ export class SalesService {
           })),
       },
     };
+  }
+
+  // ============================================================
+  // PAGO DE CUOTAS AUTO-APROBADO (ADM)
+  // ============================================================
+
+  async paidInstallmentsAutoApproved(
+    financingId: string,
+    amountPaid: number,
+    paymentDetails: CreateDetailPaymentDto[],
+    files: Express.Multer.File[],
+    userId: string,
+    dateOperation: string,
+    numberTicket?: string,
+  ) {
+    return await this.financingInstallmentsService.payInstallmentsAutoApproved(
+      financingId,
+      amountPaid,
+      paymentDetails,
+      files,
+      userId,
+      dateOperation,
+      numberTicket,
+    );
   }
 }

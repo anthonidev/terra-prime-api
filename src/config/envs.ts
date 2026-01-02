@@ -24,8 +24,6 @@ interface Envvars {
 
   PASSWORD_MASTER: string;
 
-  NATS_SERVERS: string;
-
   API_KEY_EXTERNAL: string;
   NEXUS_UNILEVEL_API_URL: string;
   NEXUS_UNILEVEL_API_KEY: string;
@@ -52,10 +50,6 @@ const envVarsSchema = joi
 
     FRONTEND_URL: joi.string().uri().required(),
     PASSWORD_MASTER: joi.string().default('12345678'),
-    NATS_SERVERS: joi
-      .string()
-      .default('nats://localhost:4222')
-      .description('NATS server URI'),
     API_KEY_EXTERNAL: joi.string().required(),
     NEXUS_UNILEVEL_API_URL: joi.string().required(),
     NEXUS_UNILEVEL_API_KEY: joi.string().required(),
@@ -90,7 +84,6 @@ export const envs = {
 
   frontendUrl: envVars.FRONTEND_URL,
   passwordMaster: envVars.PASSWORD_MASTER,
-  natsServers: envVars.NATS_SERVERS,
 
   apiKeyExternal: envVars.API_KEY_EXTERNAL,
   nexusUnilevelApiUrl: envVars.NEXUS_UNILEVEL_API_URL,
