@@ -20,6 +20,7 @@ export interface SaleWithCombinedInstallmentsResponse {
   maximumHoldPeriod?: number;
   fromReservation?: boolean;
   client: {
+    document: string | null;
     address: string;
     firstName: string;
     lastName: string;
