@@ -27,6 +27,9 @@ interface Envvars {
   API_KEY_EXTERNAL: string;
   NEXUS_UNILEVEL_API_URL: string;
   NEXUS_UNILEVEL_API_KEY: string;
+
+  NUBEFACT_BASE_URL: string;
+  NUBEFACT_TOKEN: string;
 }
 const envVarsSchema = joi
   .object({
@@ -53,6 +56,9 @@ const envVarsSchema = joi
     API_KEY_EXTERNAL: joi.string().required(),
     NEXUS_UNILEVEL_API_URL: joi.string().required(),
     NEXUS_UNILEVEL_API_KEY: joi.string().required(),
+
+    NUBEFACT_BASE_URL: joi.string().uri().optional(),
+    NUBEFACT_TOKEN: joi.string().optional(),
   })
   .unknown(true);
 const { error, value } = envVarsSchema.validate({
@@ -88,4 +94,7 @@ export const envs = {
   apiKeyExternal: envVars.API_KEY_EXTERNAL,
   nexusUnilevelApiUrl: envVars.NEXUS_UNILEVEL_API_URL,
   nexusUnilevelApiKey: envVars.NEXUS_UNILEVEL_API_KEY,
+
+  nubefactBaseUrl: envVars.NUBEFACT_BASE_URL,
+  nubefactToken: envVars.NUBEFACT_TOKEN,
 };

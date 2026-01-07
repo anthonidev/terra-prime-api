@@ -42,7 +42,6 @@ export interface SaleDetailCollectionResponse {
     reservationAmount: string | null;
     maximumHoldPeriod: number | null;
     fromReservation: boolean;
-    currency: string;
     guarantor: {
       id: number;
       firstName: string;
@@ -67,6 +66,7 @@ export interface SaleDetailCollectionResponse {
       block: string;
       stage: string;
       project: string;
+      currency: string;
     };
     radicationPdfUrl: string | null;
     paymentAcordPdfUrl: string | null;

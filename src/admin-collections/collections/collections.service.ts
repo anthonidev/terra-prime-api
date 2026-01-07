@@ -533,7 +533,6 @@ export class CollectionsService {
         reservationAmount: saleRaw.reservationAmount?.toString() || null,
         maximumHoldPeriod: saleRaw.maximumHoldPeriod || null,
         fromReservation: saleRaw.fromReservation || false,
-        currency: saleRaw.currency,
         guarantor: saleRaw.guarantor
           ? {
               id: saleRaw.guarantor.id,
@@ -561,6 +560,7 @@ export class CollectionsService {
           block: saleRaw.lot.block.name,
           stage: saleRaw.lot.block.stage.name,
           project: saleRaw.lot.block.stage.project.name,
+          currency: saleRaw.lot.block.stage.project.currency,
         },
         radicationPdfUrl: saleRaw.radicationPdfUrl,
         paymentAcordPdfUrl: saleRaw.paymentAcordPdfUrl,

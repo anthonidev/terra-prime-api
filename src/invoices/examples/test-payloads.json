@@ -1,0 +1,262 @@
+{
+  "ejemplo_1_factura_venta_lote_empresa": {
+    "descripcion": "Factura para empresa que compra lote con urbanización",
+    "payload": {
+      "documentType": 1,
+      "series": "F001",
+      "number": 1,
+      "clientDocumentType": 1,
+      "clientDocumentNumber": "20123456789",
+      "clientName": "CONSTRUCTORA LOS ANDES SAC",
+      "clientAddress": "Av. Industrial 456, Arequipa",
+      "clientEmail": "facturacion@constructoralosandes.com",
+      "currency": 1,
+      "exchangeRate": 1,
+      "items": [
+        {
+          "unitOfMeasure": "MTR",
+          "code": "LOTE-A-01",
+          "description": "Lote A-01 - Proyecto Los Jardines - Etapa 1 - Área: 120.00 m²",
+          "quantity": 120,
+          "unitValue": 250,
+          "igvType": 1
+        },
+        {
+          "unitOfMeasure": "ZZ",
+          "code": "URB-A-01",
+          "description": "Habilitación Urbana - Lote A-01",
+          "quantity": 1,
+          "unitValue": 8000,
+          "igvType": 1
+        }
+      ],
+      "sendAutomaticallyToSunat": false,
+      "sendAutomaticallyToClient": false,
+      "observations": "Venta de lote A-01 - Proyecto Los Jardines - Pago inicial del 30%",
+      "uniqueCode": "SALE-2024-001",
+      "pdfFormat": "A4"
+    }
+  },
+  "ejemplo_2_boleta_venta_lote_persona_natural": {
+    "descripcion": "Boleta para persona natural que compra lote",
+    "payload": {
+      "documentType": 2,
+      "series": "B001",
+      "number": 1,
+      "clientDocumentType": 0,
+      "clientDocumentNumber": "43256789",
+      "clientName": "JUAN CARLOS RODRIGUEZ MARTINEZ",
+      "clientAddress": "Calle Los Pinos 123, Arequipa",
+      "clientEmail": "jrodriguez@email.com",
+      "currency": 1,
+      "items": [
+        {
+          "unitOfMeasure": "MTR",
+          "code": "LOTE-B-15",
+          "description": "Lote B-15 - Proyecto Villa Sol - Etapa 2 - Área: 150.00 m²",
+          "quantity": 150,
+          "unitValue": 300,
+          "igvType": 1
+        },
+        {
+          "unitOfMeasure": "ZZ",
+          "code": "URB-B-15",
+          "description": "Habilitación Urbana - Lote B-15",
+          "quantity": 1,
+          "unitValue": 10000,
+          "igvType": 1
+        }
+      ],
+      "sendAutomaticallyToSunat": false,
+      "sendAutomaticallyToClient": false,
+      "observations": "Venta lote B-15 - Cuota inicial",
+      "uniqueCode": "SALE-2024-002"
+    }
+  },
+  "ejemplo_3_factura_cuota_mensual": {
+    "descripcion": "Factura por pago de cuota mensual de financiamiento",
+    "payload": {
+      "documentType": 1,
+      "series": "F001",
+      "number": 2,
+      "clientDocumentType": 1,
+      "clientDocumentNumber": "20987654321",
+      "clientName": "INVERSIONES INMOBILIARIAS DEL SUR EIRL",
+      "clientAddress": "Av. Ejercito 789, Arequipa",
+      "clientEmail": "contabilidad@inversionesdelsur.com",
+      "currency": 1,
+      "items": [
+        {
+          "unitOfMeasure": "ZZ",
+          "code": "CUOTA-01",
+          "description": "Cuota N° 1 de 24 - Financiamiento Lote C-10 - Proyecto Campiña Verde",
+          "quantity": 1,
+          "unitValue": 2500,
+          "igvType": 1
+        }
+      ],
+      "sendAutomaticallyToSunat": false,
+      "sendAutomaticallyToClient": true,
+      "observations": "Pago cuota 1/24 - Vencimiento: 15/02/2024",
+      "uniqueCode": "INSTALLMENT-2024-001"
+    }
+  },
+  "ejemplo_4_factura_venta_dolares": {
+    "descripcion": "Factura en dólares para venta de lote premium",
+    "payload": {
+      "documentType": 1,
+      "series": "F001",
+      "number": 3,
+      "clientDocumentType": 1,
+      "clientDocumentNumber": "20111222333",
+      "clientName": "DESARROLLOS URBANOS SAC",
+      "clientAddress": "Calle Comercio 321, Arequipa",
+      "clientEmail": "ventas@desarrollosurbanos.com",
+      "currency": 2,
+      "exchangeRate": 3.75,
+      "items": [
+        {
+          "unitOfMeasure": "MTR",
+          "code": "LOTE-PREMIUM-01",
+          "description": "Lote Premium D-01 - Proyecto Alturas de Cayma - Área: 200.00 m²",
+          "quantity": 200,
+          "unitValue": 120,
+          "igvType": 1
+        },
+        {
+          "unitOfMeasure": "ZZ",
+          "code": "URB-PREMIUM-01",
+          "description": "Habilitación Urbana Premium - Lote D-01",
+          "quantity": 1,
+          "unitValue": 15000,
+          "igvType": 1
+        }
+      ],
+      "sendAutomaticallyToSunat": false,
+      "sendAutomaticallyToClient": false,
+      "observations": "Venta lote premium - Zona exclusiva - Pago contado",
+      "uniqueCode": "SALE-PREMIUM-2024-001"
+    }
+  },
+  "ejemplo_5_nota_credito_descuento": {
+    "descripcion": "Nota de crédito por descuento o ajuste en precio",
+    "payload": {
+      "documentType": 3,
+      "series": "FC01",
+      "number": 1,
+      "clientDocumentType": 1,
+      "clientDocumentNumber": "20123456789",
+      "clientName": "CONSTRUCTORA LOS ANDES SAC",
+      "clientAddress": "Av. Industrial 456, Arequipa",
+      "clientEmail": "facturacion@constructoralosandes.com",
+      "currency": 1,
+      "relatedInvoiceId": 1,
+      "noteReasonCode": "01",
+      "noteReasonDescription": "Descuento por pronto pago",
+      "items": [
+        {
+          "unitOfMeasure": "ZZ",
+          "code": "DESC-001",
+          "description": "Descuento por pronto pago - Lote A-01",
+          "quantity": 1,
+          "unitValue": 2000,
+          "igvType": 1
+        }
+      ],
+      "sendAutomaticallyToSunat": false,
+      "sendAutomaticallyToClient": false,
+      "observations": "Descuento aplicado por pago adelantado de cuotas",
+      "uniqueCode": "NC-2024-001"
+    }
+  },
+  "ejemplo_6_boleta_inicial_con_descuento": {
+    "descripcion": "Boleta con descuento aplicado en el item",
+    "payload": {
+      "documentType": 2,
+      "series": "B001",
+      "number": 2,
+      "clientDocumentType": 0,
+      "clientDocumentNumber": "72345678",
+      "clientName": "MARIA ELENA GUTIERREZ FLORES",
+      "clientAddress": "Urb. San Antonio Mz. A Lt. 5, Arequipa",
+      "clientEmail": "mgutierrez@email.com",
+      "currency": 1,
+      "items": [
+        {
+          "unitOfMeasure": "MTR",
+          "code": "LOTE-E-08",
+          "description": "Lote E-08 - Proyecto Los Álamos - Etapa 1 - Área: 100.00 m²",
+          "quantity": 100,
+          "unitValue": 350,
+          "discount": 10,
+          "igvType": 1
+        },
+        {
+          "unitOfMeasure": "ZZ",
+          "code": "URB-E-08",
+          "description": "Habilitación Urbana - Lote E-08",
+          "quantity": 1,
+          "unitValue": 7000,
+          "discount": 0,
+          "igvType": 1
+        }
+      ],
+      "sendAutomaticallyToSunat": false,
+      "sendAutomaticallyToClient": true,
+      "observations": "Promoción especial - Descuento del 10% en precio de lote",
+      "uniqueCode": "SALE-PROMO-2024-001"
+    }
+  },
+  "ejemplo_7_factura_multiple_lotes": {
+    "descripcion": "Factura para empresa que compra múltiples lotes",
+    "payload": {
+      "documentType": 1,
+      "series": "F001",
+      "number": 4,
+      "clientDocumentType": 1,
+      "clientDocumentNumber": "20555666777",
+      "clientName": "INMOBILIARIA CENTRO COMERCIAL SAC",
+      "clientAddress": "Av. Parra 999, Arequipa",
+      "clientEmail": "compras@inmobiliariacentro.com",
+      "currency": 1,
+      "items": [
+        {
+          "unitOfMeasure": "MTR",
+          "code": "LOTE-F-01",
+          "description": "Lote F-01 - Proyecto Plaza Mayor - Área: 180.00 m²",
+          "quantity": 180,
+          "unitValue": 400,
+          "igvType": 1
+        },
+        {
+          "unitOfMeasure": "MTR",
+          "code": "LOTE-F-02",
+          "description": "Lote F-02 - Proyecto Plaza Mayor - Área: 180.00 m²",
+          "quantity": 180,
+          "unitValue": 400,
+          "igvType": 1
+        },
+        {
+          "unitOfMeasure": "MTR",
+          "code": "LOTE-F-03",
+          "description": "Lote F-03 - Proyecto Plaza Mayor - Área: 180.00 m²",
+          "quantity": 180,
+          "unitValue": 400,
+          "igvType": 1
+        },
+        {
+          "unitOfMeasure": "ZZ",
+          "code": "URB-F-PACK",
+          "description": "Habilitación Urbana - Paquete 3 Lotes",
+          "quantity": 1,
+          "unitValue": 30000,
+          "igvType": 1
+        }
+      ],
+      "sendAutomaticallyToSunat": false,
+      "sendAutomaticallyToClient": false,
+      "observations": "Venta de paquete de 3 lotes contiguos - Descuento corporativo aplicado",
+      "uniqueCode": "SALE-CORP-2024-001"
+    }
+  }
+}

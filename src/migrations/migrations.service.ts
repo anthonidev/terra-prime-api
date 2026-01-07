@@ -670,7 +670,7 @@ export class MigrationsService {
   /**
    * Actualizar estado de las cuotas según los pagos realizados
    * ✅ ENFOQUE INTERMEDIO: Pagos apuntan a financing, pero se aplican a cuota específica del Excel
-   * NO hay distribución automática - cada pago va solo a su cuota asignada
+   * ✅ DISTRIBUCIÓN EN CASCADA: Primero se cubre la cuota, luego la mora
    */
   private async updateInstallmentsStatus(
     financingId: string,
@@ -696,12 +696,14 @@ export class MigrationsService {
       .orderBy('payment.createdAt', 'ASC')
       .getMany();
 
-    // 3. Crear un mapa de acumulado de pagos por cuota (para calcular pendiente progresivo)
-    const installmentPaidAccumulator = new Map<number, number>();
+    // 3. Crear mapas de acumulado por cuota (separando cuota y mora)
+    const installmentCoutePaidAccumulator = new Map<number, number>();
+    const installmentLateFeeAmountPaidAccumulator = new Map<number, number>();
 
     // Inicializar acumuladores en 0
     for (const installment of installments) {
-      installmentPaidAccumulator.set(installment.numberCuote, 0);
+      installmentCoutePaidAccumulator.set(installment.numberCuote, 0);
+      installmentLateFeeAmountPaidAccumulator.set(installment.numberCuote, 0);
     }
 
     // 4. Procesar cada pago en orden cronológico
@@ -715,27 +717,56 @@ export class MigrationsService {
 
       if (!installment) continue;
 
-      // Acumular el pago para esta cuota
-      const currentPaid = installmentPaidAccumulator.get(cuotaNumber) || 0;
-      const newPaid = currentPaid + Number(payment.amount);
-      installmentPaidAccumulator.set(cuotaNumber, newPaid);
+      // Obtener acumulados actuales
+      const currentCoutePaid = installmentCoutePaidAccumulator.get(cuotaNumber) || 0;
+      const currentLateFeeAmountPaid = installmentLateFeeAmountPaidAccumulator.get(cuotaNumber) || 0;
 
-      // Calcular pendiente DESPUÉS de este pago específico
-      const pendingAfterThisPayment = Number(
-        (Number(installment.couteAmount) - newPaid).toFixed(2)
-      );
+      // Calcular pendientes antes de este pago (manejar null/undefined en mora)
+      const coutePendingBefore = Number(installment.couteAmount || 0) - currentCoutePaid;
+      const lateFeeAmountPendingBefore = Number(installment.lateFeeAmount || 0) - currentLateFeeAmountPaid;
 
-      // Determinar modo basado en el pendiente después de este pago
-      const mode = pendingAfterThisPayment <= 0 ? 'Total' : 'Parcial';
+      // 🔄 DISTRIBUCIÓN EN CASCADA
+      let remainingPayment = Number(payment.amount);
+      let aplicadoACuota = 0;
+      let aplicadoAMora = 0;
 
-      // Actualizar metadata del pago con pendiente progresivo
+      // Paso 1: Aplicar a la cuota
+      if (coutePendingBefore > 0 && remainingPayment > 0) {
+        aplicadoACuota = Math.min(remainingPayment, coutePendingBefore);
+        remainingPayment -= aplicadoACuota;
+      }
+
+      // Paso 2: Aplicar sobrante a la mora
+      if (lateFeeAmountPendingBefore > 0 && remainingPayment > 0) {
+        aplicadoAMora = Math.min(remainingPayment, lateFeeAmountPendingBefore);
+        remainingPayment -= aplicadoAMora;
+      }
+
+      // Actualizar acumuladores
+      const newCoutePaid = currentCoutePaid + aplicadoACuota;
+      const newLateFeeAmountPaid = currentLateFeeAmountPaid + aplicadoAMora;
+      installmentCoutePaidAccumulator.set(cuotaNumber, newCoutePaid);
+      installmentLateFeeAmountPaidAccumulator.set(cuotaNumber, newLateFeeAmountPaid);
+
+      // Calcular pendientes DESPUÉS de este pago (manejar null/undefined en mora)
+      const coutePendingAfter = Number((Number(installment.couteAmount || 0) - newCoutePaid).toFixed(2));
+      const lateFeeAmountPendingAfter = Number((Number(installment.lateFeeAmount || 0) - newLateFeeAmountPaid).toFixed(2));
+
+      // Determinar modo
+      const mode = (coutePendingAfter <= 0 && lateFeeAmountPendingAfter <= 0) ? 'Total' : 'Parcial';
+
+      // Actualizar metadata del pago con desglose detallado
       payment.metadata = {
         ...(payment.metadata || {}),
         'Cuotas afectadas': {
           [`Cuota ${installment.numberCuote}`]: {
             'Modo': mode,
-            'Monto aplicado': Number(payment.amount),
-            'Pendiente después de este pago': pendingAfterThisPayment > 0 ? pendingAfterThisPayment : 0,
+            'Monto total del pago': Number(payment.amount),
+            'Aplicado a cuota': Number(aplicadoACuota.toFixed(2)),
+            'Aplicado a mora': Number(aplicadoAMora.toFixed(2)),
+            'Excedente': Number(remainingPayment.toFixed(2)),
+            'Cuota pendiente después': coutePendingAfter > 0 ? coutePendingAfter : 0,
+            'Mora pendiente después': lateFeeAmountPendingAfter > 0 ? lateFeeAmountPendingAfter : 0,
           },
         },
       };
@@ -744,17 +775,27 @@ export class MigrationsService {
 
     // 5. Actualizar estados finales de las cuotas
     for (const installment of installments) {
-      const totalPaid = installmentPaidAccumulator.get(installment.numberCuote) || 0;
+      const totalCoutePaid = installmentCoutePaidAccumulator.get(installment.numberCuote) || 0;
+      const totalLateFeeAmountPaid = installmentLateFeeAmountPaidAccumulator.get(installment.numberCuote) || 0;
 
-      installment.coutePaid = Number(totalPaid.toFixed(2));
+      // Manejar null/undefined en los montos
+      const couteAmountSafe = Number(installment.couteAmount || 0);
+      const lateFeeAmountSafe = Number(installment.lateFeeAmount || 0);
+
+      installment.coutePaid = Number(totalCoutePaid.toFixed(2));
       installment.coutePending = Number(
-        (Number(installment.couteAmount) - totalPaid).toFixed(2)
+        (couteAmountSafe - totalCoutePaid).toFixed(2)
       );
 
-      // Actualizar estado
-      if (installment.coutePending <= 0) {
+      installment.lateFeeAmountPaid = Number(totalLateFeeAmountPaid.toFixed(2));
+      installment.lateFeeAmountPending = Number(
+        (lateFeeAmountSafe - totalLateFeeAmountPaid).toFixed(2)
+      );
+
+      // Actualizar estado: PAID solo si cuota y mora están completamente pagadas
+      if (installment.coutePending <= 0 && installment.lateFeeAmountPending <= 0) {
         installment.status = StatusFinancingInstallments.PAID;
-      } else if (totalPaid > 0) {
+      } else if (totalCoutePaid > 0 || totalLateFeeAmountPaid > 0) {
         installment.status = StatusFinancingInstallments.PENDING;
       } else {
         installment.status = StatusFinancingInstallments.PENDING;
@@ -763,7 +804,7 @@ export class MigrationsService {
       await manager.save(installment);
     }
 
-    this.logger.log(`  ✅ Estados de ${installments.length} cuotas actualizados (aplicación directa según Excel)`);
+    this.logger.log(`  ✅ Estados de ${installments.length} cuotas actualizados (distribución cascada: cuota → mora)`);
   }
 
   /**
@@ -839,6 +880,7 @@ export class MigrationsService {
 
   /**
    * Actualizar montos y estado de la venta
+   * ✅ Incluye cuotas + moras pagadas
    */
   private async updateSaleAmounts(
     saleId: string,
@@ -853,15 +895,19 @@ export class MigrationsService {
       return;
     }
 
-    // Calcular total pagado: inicial + cuotas
+    // Calcular total pagado: inicial + cuotas + moras
     const initialPaid = Number(sale.financing.initialAmountPaid || 0);
     const installments = sale.financing.financingInstallments;
     const installmentsPaid = installments.reduce(
       (sum, inst) => sum + Number(inst.coutePaid || 0),
       0,
     );
+    const lateFeesPaid = installments.reduce(
+      (sum, inst) => sum + Number(inst.lateFeeAmountPaid || 0),
+      0,
+    );
 
-    const totalPaid = Number((initialPaid + installmentsPaid).toFixed(2));
+    const totalPaid = Number((initialPaid + installmentsPaid + lateFeesPaid).toFixed(2));
     const totalPending = Number((Number(sale.totalAmount) - totalPaid).toFixed(2));
 
     sale.totalAmountPaid = totalPaid;
@@ -882,7 +928,7 @@ export class MigrationsService {
 
     await manager.save(sale);
     this.logger.log(
-      `  💰 Venta actualizada - Total pagado: $${sale.totalAmountPaid}, Pendiente: $${sale.totalAmountPending}, Estado: ${sale.status}`,
+      `  💰 Venta actualizada - Total pagado: $${sale.totalAmountPaid} (cuotas: $${installmentsPaid.toFixed(2)} + moras: $${lateFeesPaid.toFixed(2)}), Pendiente: $${sale.totalAmountPending}, Estado: ${sale.status}`,
     );
   }
 
@@ -1191,8 +1237,9 @@ export class MigrationsService {
   }
 
   private cleanAmount(value: any): number {
-    if (!value) return 0;
-    const str = String(value);
+    if (value === null || value === undefined) return 0;
+    const str = String(value).trim();
+    if (str === '' || str === '-') return 0; // Manejar vacío y guiones
     const cleaned = str.replace(/[$S\/\s,]/g, '');
     const num = parseFloat(cleaned);
     return isNaN(num) ? 0 : num;

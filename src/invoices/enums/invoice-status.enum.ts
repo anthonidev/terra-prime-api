@@ -1,0 +1,8 @@
+export enum InvoiceStatus {
+  DRAFT = 'BORRADOR',
+  PENDING = 'PENDIENTE',
+  SENT = 'ENVIADO',
+  ACCEPTED = 'ACEPTADO',
+  REJECTED = 'RECHAZADO',
+  CANCELLED = 'ANULADO',
+}
