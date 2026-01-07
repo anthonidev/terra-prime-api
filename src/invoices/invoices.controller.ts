@@ -22,14 +22,6 @@ export class InvoicesController {
     return await this.invoicesService.create(createInvoiceDto, user);
   }
 
-  @Post(':id/send-to-sunat')
-  @Roles('FAC', 'ADM')
-  async sendToSunat(
-    @Param('id', ParseIntPipe) id: number,
-  ): Promise<Invoice> {
-    return await this.invoicesService.sendToSunat(id);
-  }
-
   @Get()
   @Roles('FAC', 'ADM', 'JVE')
   async findAll(): Promise<Invoice[]> {

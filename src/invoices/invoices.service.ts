@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Invoice } from './entities/invoice.entity';
 import { InvoiceItem } from './entities/invoice-item.entity';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
@@ -10,6 +10,9 @@ import { NubefactInvoiceItemDto } from './dto/nubefact-invoice-item.dto';
 import { NubefactResponseDto } from './dto/nubefact-response.dto';
 import { InvoiceStatus } from './enums/invoice-status.enum';
 import { User } from 'src/user/entities/user.entity';
+import { Payment } from 'src/admin-payments/payments/entities/payment.entity';
+import { InvoiceSeriesConfig } from './entities/invoice-series-config.entity';
+import { UnitOfMeasure } from './enums/unit-of-measure.enum';
 
 @Injectable()
 export class InvoicesService {
@@ -18,19 +21,45 @@ export class InvoicesService {
     private readonly invoiceRepository: Repository<Invoice>,
     @InjectRepository(InvoiceItem)
     private readonly invoiceItemRepository: Repository<InvoiceItem>,
+    @InjectRepository(Payment)
+    private readonly paymentRepository: Repository<Payment>,
+    @InjectRepository(InvoiceSeriesConfig)
+    private readonly seriesConfigRepository: Repository<InvoiceSeriesConfig>,
+    private readonly dataSource: DataSource,
     private readonly nubefactAdapter: NubefactAdapter,
   ) {}
 
   async create(createInvoiceDto: CreateInvoiceDto, user: User): Promise<Invoice> {
+    // Buscar el pago relacionado
+    const payment = await this.paymentRepository.findOne({
+      where: { id: createInvoiceDto.paymentId },
+    });
+
+    if (!payment) {
+      throw new NotFoundException('Pago no encontrado');
+    }
+
+    // Obtener serie y número automáticamente usando transacción
+    const { series, number } = await this.getNextSeriesNumber(
+      createInvoiceDto.documentType,
+      createInvoiceDto.relatedInvoiceId
+    );
+
     const invoice = this.invoiceRepository.create({
       ...createInvoiceDto,
-      fullNumber: `${createInvoiceDto.series}-${createInvoiceDto.number}`,
+      series,
+      number,
+      fullNumber: `${series}-${number}`,
       createdBy: user,
+      payment: payment,
       status: InvoiceStatus.DRAFT,
     });
 
     const items = createInvoiceDto.items.map((itemDto) => {
-      const item = this.invoiceItemRepository.create(itemDto);
+      const item = this.invoiceItemRepository.create({
+        ...itemDto,
+        unitOfMeasure: itemDto.unitOfMeasure || UnitOfMeasure.NIU,
+      });
       this.calculateItemTotals(item);
       return item;
     });
@@ -38,46 +67,41 @@ export class InvoicesService {
     invoice.items = items;
     this.calculateInvoiceTotals(invoice);
 
-    return await this.invoiceRepository.save(invoice);
-  }
+    const savedInvoice = await this.invoiceRepository.save(invoice);
 
-  async sendToSunat(invoiceId: number): Promise<Invoice> {
-    const invoice = await this.invoiceRepository.findOne({
-      where: { id: invoiceId },
-      relations: ['items', 'relatedInvoice'],
-    });
-
-    if (!invoice)
-      throw new NotFoundException('Factura no encontrada');
-
-    const nubefactDto = this.mapToNubefactDto(invoice);
+    // Enviar automáticamente a SUNAT
+    const nubefactDto = this.mapToNubefactDto(savedInvoice);
     const response = await this.nubefactAdapter.post<NubefactResponseDto>(
       '',
       nubefactDto,
     );
 
-    invoice.status = InvoiceStatus.SENT;
-    invoice.sunatAccepted = response.aceptada_por_sunat;
-    invoice.sunatDescription = response.sunat_description;
-    invoice.sunatNote = response.sunat_note;
-    invoice.sunatResponseCode = response.sunat_responsecode;
-    invoice.sunatSoapError = response.sunat_soap_error;
-    invoice.pdfUrl = response.enlace_del_pdf;
-    invoice.xmlUrl = response.enlace_del_xml;
-    invoice.cdrUrl = response.enlace_del_cdr;
+    savedInvoice.status = InvoiceStatus.SENT;
+    savedInvoice.sunatAccepted = response.aceptada_por_sunat;
+    savedInvoice.sunatDescription = response.sunat_description;
+    savedInvoice.sunatNote = response.sunat_note;
+    savedInvoice.sunatResponseCode = response.sunat_responsecode;
+    savedInvoice.sunatSoapError = response.sunat_soap_error;
+    savedInvoice.pdfUrl = response.enlace_del_pdf;
+    savedInvoice.xmlUrl = response.enlace_del_xml;
+    savedInvoice.cdrUrl = response.enlace_del_cdr;
 
     if (response.aceptada_por_sunat === '1' || response.aceptada_por_sunat === 'true') {
-      invoice.status = InvoiceStatus.ACCEPTED;
+      savedInvoice.status = InvoiceStatus.ACCEPTED;
+
+      // Actualizar el numberTicket del payment con el fullNumber de la factura
+      payment.numberTicket = savedInvoice.fullNumber;
+      await this.paymentRepository.save(payment);
     } else {
-      invoice.status = InvoiceStatus.REJECTED;
+      savedInvoice.status = InvoiceStatus.REJECTED;
     }
 
-    return await this.invoiceRepository.save(invoice);
+    return await this.invoiceRepository.save(savedInvoice);
   }
 
   async findAll(): Promise<Invoice[]> {
     return await this.invoiceRepository.find({
-      relations: ['items', 'createdBy'],
+      relations: ['items', 'createdBy', 'payment'],
       order: { createdAt: 'DESC' },
     });
   }
@@ -85,7 +109,7 @@ export class InvoicesService {
   async findOne(id: number): Promise<Invoice> {
     const invoice = await this.invoiceRepository.findOne({
       where: { id },
-      relations: ['items', 'createdBy', 'relatedInvoice'],
+      relations: ['items', 'createdBy', 'relatedInvoice', 'payment'],
     });
 
     if (!invoice) {
@@ -93,6 +117,66 @@ export class InvoicesService {
     }
 
     return invoice;
+  }
+
+  private async getNextSeriesNumber(
+    documentType: number,
+    relatedInvoiceId?: number
+  ): Promise<{ series: string; number: number }> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      let targetDocumentType = documentType;
+
+      // Para Notas de Crédito (3) y Débito (4), determinar la serie según el documento relacionado
+      if ((documentType === 3 || documentType === 4) && relatedInvoiceId) {
+        const relatedInvoice = await this.invoiceRepository.findOne({
+          where: { id: relatedInvoiceId },
+        });
+
+        if (!relatedInvoice) {
+          throw new NotFoundException('Factura relacionada no encontrada');
+        }
+
+        // Usar el mismo tipo de documento base (FACTURA o BOLETA) para determinar la serie
+        targetDocumentType = relatedInvoice.documentType;
+      }
+
+      // Obtener la configuración de serie con bloqueo para evitar duplicados
+      const seriesConfig = await queryRunner.manager
+        .createQueryBuilder(InvoiceSeriesConfig, 'config')
+        .setLock('pessimistic_write')
+        .where('config.documentType = :documentType', { documentType: targetDocumentType })
+        .andWhere('config.isActive = :isActive', { isActive: true })
+        .getOne();
+
+      if (!seriesConfig) {
+        throw new BadRequestException(
+          `No se encontró configuración de serie activa para el tipo de documento ${targetDocumentType}`
+        );
+      }
+
+      // Incrementar el número
+      seriesConfig.lastNumber += 1;
+      await queryRunner.manager.save(seriesConfig);
+
+      // Confirmar transacción
+      await queryRunner.commitTransaction();
+
+      return {
+        series: seriesConfig.series,
+        number: seriesConfig.lastNumber,
+      };
+    } catch (error) {
+      // Revertir transacción en caso de error
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      // Liberar el query runner
+      await queryRunner.release();
+    }
   }
 
   private mapToNubefactDto(invoice: Invoice): NubefactInvoiceDto {

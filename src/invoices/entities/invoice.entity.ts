@@ -1,11 +1,12 @@
 import { User } from 'src/user/entities/user.entity';
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, OneToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Timestamped } from 'src/common/entities/timestamped.entity';
 import { DocumentType } from '../enums/document-type.enum';
 import { ClientDocumentType } from '../enums/client-document-type.enum';
 import { Currency } from '../enums/currency.enum';
 import { InvoiceStatus } from '../enums/invoice-status.enum';
 import { InvoiceItem } from './invoice-item.entity';
+import { Payment } from 'src/admin-payments/payments/entities/payment.entity';
 
 @Entity('invoices')
 export class Invoice extends Timestamped {
@@ -318,6 +319,10 @@ export class Invoice extends Timestamped {
     nullable: true,
   })
   noteReasonDescription: string;
+
+  @OneToOne(() => Payment, { nullable: true })
+  @JoinColumn({ name: 'payment_id' })
+  payment: Payment;
 
   @Column({ type: 'json', nullable: true })
   metadata: Record<string, any>;

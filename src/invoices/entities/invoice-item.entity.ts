@@ -1,6 +1,7 @@
 import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Invoice } from './invoice.entity';
 import { IgvType } from '../enums/igv-type.enum';
+import { UnitOfMeasure } from '../enums/unit-of-measure.enum';
 
 @Entity('invoice_items')
 export class InvoiceItem {
@@ -15,10 +16,11 @@ export class InvoiceItem {
   invoice: Invoice;
 
   @Column({
-    type: 'varchar',
-    length: 10,
+    type: 'enum',
+    enum: UnitOfMeasure,
+    default: UnitOfMeasure.NIU,
   })
-  unitOfMeasure: string;
+  unitOfMeasure: UnitOfMeasure;
 
   @Column({
     type: 'varchar',

@@ -1,10 +1,11 @@
 import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { IgvType } from '../enums/igv-type.enum';
+import { UnitOfMeasure } from '../enums/unit-of-measure.enum';
 
 export class CreateInvoiceItemDto {
-  @IsString({ message: 'La unidad de medida debe ser un texto' })
-  @IsNotEmpty({ message: 'La unidad de medida es requerida' })
-  unitOfMeasure: string;
+  @IsEnum(UnitOfMeasure, { message: 'La unidad de medida no es válida' })
+  @IsOptional()
+  unitOfMeasure?: UnitOfMeasure;
 
   @IsString({ message: 'El código debe ser un texto' })
   @IsOptional()
