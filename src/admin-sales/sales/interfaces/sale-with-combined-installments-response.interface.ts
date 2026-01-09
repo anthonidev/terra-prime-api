@@ -1,7 +1,35 @@
 import { CurrencyType } from 'src/project/entities/project.entity';
 import { StatusPayment } from 'src/admin-payments/payments/enums/status-payments.enum';
-import { AmortizationMetadata } from 'src/admin-sales/financing/interfaces/combined-amortization-response.interface';
-import { InstallmentWithPayments } from 'src/admin-sales/financing/interfaces/installment-with-payments.interface';
+
+export interface FinancingInstallmentDetail {
+  id: string;
+  numberCuote: number;
+  couteAmount: number;
+  coutePending: number;
+  coutePaid: number;
+  expectedPaymentDate: string;
+  lateFeeAmount: number;
+  lateFeeAmountPending: number;
+  lateFeeAmountPaid: number;
+  status: string;
+}
+
+export interface FinancingDetail {
+  id: string;
+  financingType: string;
+  initialAmount: number;
+  initialAmountPaid: number;
+  initialAmountPending: number;
+  interestRate: number;
+  quantityCoutes: number;
+  totalCouteAmount: number;
+  totalPaid: number;
+  totalPending: number;
+  totalLateFee: number;
+  totalLateFeeePending: number;
+  totalLateFeePaid: number;
+  installments: FinancingInstallmentDetail[];
+}
 
 export interface SaleWithCombinedInstallmentsResponse {
   id: string;
@@ -44,33 +72,10 @@ export interface SaleWithCombinedInstallmentsResponse {
   radicationPdfUrl: string | null;
   paymentAcordPdfUrl: string | null;
 
-  // Información de financiamiento combinado
+  // Información de financiamiento con estructura lot y hu
   financing?: {
-    id: string;
-    lot: {
-      id: string;
-      initialAmount: number;
-      initialAmountPaid?: number;
-      initialAmountPending?: number;
-      initialToPay?: number;
-      interestRate: number;
-      quantityCoutes: number;
-    };
-    urbanDevelopment?: {
-      id: number;
-      amount: number;
-      initialAmount: number;
-      status: string;
-      financing?: {
-        id: string;
-        initialAmount: number;
-        interestRate: number;
-        quantityCoutes: number;
-      };
-    };
-    lotInstallments: Omit<InstallmentWithPayments, 'payments'>[];
-    huInstallments: Omit<InstallmentWithPayments, 'payments'>[];
-    meta: AmortizationMetadata;
+    lot: FinancingDetail;
+    hu?: FinancingDetail;
   };
 
   guarantor: {

@@ -61,7 +61,11 @@ import { formatSaleResponse } from './helpers/format-sale-response.helper';
 import { formatSaleListResponse } from './helpers/format-sale-list-response.helper';
 import { formatSaleVendorResponse } from './helpers/format-sale-vendor-response.helper';
 import { SaleResponse } from './interfaces/sale-response.interface';
-import { SaleWithCombinedInstallmentsResponse } from './interfaces/sale-with-combined-installments-response.interface';
+import {
+  SaleWithCombinedInstallmentsResponse,
+  FinancingDetail,
+  FinancingInstallmentDetail,
+} from './interfaces/sale-with-combined-installments-response.interface';
 import { CombinedInstallmentWithPayments } from './interfaces/combined-installment-with-payments.interface';
 import { InstallmentWithPayments } from '../financing/interfaces/installment-with-payments.interface';
 import { PaginationDto } from 'src/common/dto/paginationDto';
@@ -801,7 +805,7 @@ export class SalesService {
         methodPayment: MethodPayment.VOUCHER,
         amount: totalPaymentAmount,
         relatedEntityType: 'financing',
-        relatedEntityId: sale.financing.id,
+        relatedEntityId: sale.financing.lot.id,
         metadata: {
           'Concepto de pago': 'Pago inicial de financiamiento',
           'Fecha de pago': new Date().toISOString(),
@@ -998,40 +1002,68 @@ export class SalesService {
     // Obtener resumen de pagos
     const paymentsSummary = await this.getPaymentsSummaryForSale(id);
 
-    // Obtener cuotas del lote con payments
-    let lotInstallmentsWithPayments: InstallmentWithPayments[] = [];
-    if (sale.financing)
-      lotInstallmentsWithPayments =
-        await this.financingInstallmentsService.getInstallmentsWithPayments(
-          sale.financing.id,
-        );
+    // Helper para construir FinancingDetail
+    const buildFinancingDetail = (
+      financing: typeof sale.financing,
+    ): FinancingDetail => {
+      const installments = financing.financingInstallments || [];
 
-    // Obtener cuotas de HU con payments
-    let huInstallmentsWithPayments: InstallmentWithPayments[] = [];
-    if (sale.urbanDevelopment?.financing)
-      huInstallmentsWithPayments =
-        await this.financingInstallmentsService.getInstallmentsWithPayments(
-          sale.urbanDevelopment.financing.id,
-        );
+      // Calcular totales de las cuotas
+      const totals = installments.reduce(
+        (acc, inst) => ({
+          totalCouteAmount: acc.totalCouteAmount + Number(inst.couteAmount),
+          totalPaid: acc.totalPaid + Number(inst.coutePaid),
+          totalPending: acc.totalPending + Number(inst.coutePending),
+          totalLateFee: acc.totalLateFee + Number(inst.lateFeeAmount || 0),
+          totalLateFeeePending:
+            acc.totalLateFeeePending + Number(inst.lateFeeAmountPending || 0),
+          totalLateFeePaid:
+            acc.totalLateFeePaid + Number(inst.lateFeeAmountPaid || 0),
+        }),
+        {
+          totalCouteAmount: 0,
+          totalPaid: 0,
+          totalPending: 0,
+          totalLateFee: 0,
+          totalLateFeeePending: 0,
+          totalLateFeePaid: 0,
+        },
+      );
 
-    // Calcular metadata
-    const lotTotalAmount = lotInstallmentsWithPayments.reduce(
-      (sum, inst) => sum + Number(inst.couteAmount),
-      0,
-    );
-    const huTotalAmount = huInstallmentsWithPayments.reduce(
-      (sum, inst) => sum + Number(inst.couteAmount),
-      0,
-    );
+      // Mapear cuotas al formato requerido
+      const mappedInstallments: FinancingInstallmentDetail[] = installments
+        .sort((a, b) => (a.numberCuote || 0) - (b.numberCuote || 0))
+        .map((inst) => ({
+          id: inst.id,
+          numberCuote: inst.numberCuote,
+          couteAmount: Number(inst.couteAmount),
+          coutePending: Number(inst.coutePending),
+          coutePaid: Number(inst.coutePaid),
+          expectedPaymentDate: inst.expectedPaymentDate
+            ? inst.expectedPaymentDate.toISOString()
+            : null,
+          lateFeeAmount: Number(inst.lateFeeAmount || 0),
+          lateFeeAmountPending: Number(inst.lateFeeAmountPending || 0),
+          lateFeeAmountPaid: Number(inst.lateFeeAmountPaid || 0),
+          status: inst.status,
+        }));
 
-    const meta = {
-      lotInstallmentsCount: lotInstallmentsWithPayments.length,
-      lotTotalAmount: parseFloat(lotTotalAmount.toFixed(2)),
-      huInstallmentsCount: huInstallmentsWithPayments.length,
-      huTotalAmount: parseFloat(huTotalAmount.toFixed(2)),
-      totalInstallmentsCount:
-        lotInstallmentsWithPayments.length + huInstallmentsWithPayments.length,
-      totalAmount: parseFloat((lotTotalAmount + huTotalAmount).toFixed(2)),
+      return {
+        id: financing.id,
+        financingType: financing.financingType,
+        initialAmount: Number(financing.initialAmount),
+        initialAmountPaid: Number(financing.initialAmountPaid || 0),
+        initialAmountPending: Number(financing.initialAmountPending || 0),
+        interestRate: Number(financing.interestRate || 0),
+        quantityCoutes: Number(financing.quantityCoutes),
+        totalCouteAmount: parseFloat(totals.totalCouteAmount.toFixed(2)),
+        totalPaid: parseFloat(totals.totalPaid.toFixed(2)),
+        totalPending: parseFloat(totals.totalPending.toFixed(2)),
+        totalLateFee: parseFloat(totals.totalLateFee.toFixed(2)),
+        totalLateFeeePending: parseFloat(totals.totalLateFeeePending.toFixed(2)),
+        totalLateFeePaid: parseFloat(totals.totalLateFeePaid.toFixed(2)),
+        installments: mappedInstallments,
+      };
     };
 
     const formattedSale = formatSaleResponse(sale);
@@ -1055,16 +1087,6 @@ export class SalesService {
     } else if (sale.type === 'FINANCED' && sale.financing) {
       // Para financiada, totalToPay es la suma de todas las cuotas más el inicial
       totalToPay = Number(sale.totalAmount) - reservationAmount;
-    }
-
-    // initialToPay: monto inicial menos la reserva (si viene de reserva)
-    let initialToPay = 0;
-    let initialAmountPaid = 0;
-    if (sale.financing) {
-      initialToPay = Number(sale.financing.initialAmount) - reservationAmount;
-      initialAmountPaid = sale.financing.initialAmountPaid
-        ? Number(sale.financing.initialAmountPaid)
-        : 0;
     }
 
     return {
@@ -1097,44 +1119,10 @@ export class SalesService {
       paymentAcordPdfUrl: formattedSale.paymentAcordPdfUrl,
       financing: sale.financing
         ? {
-            id: sale.financing.id,
-            lot: {
-              id: sale.financing.id,
-              initialAmount: sale.financing.initialAmount,
-              initialAmountPaid,
-              initialAmountPending: sale.financing.initialAmountPending
-                ? Number(sale.financing.initialAmountPending)
-                : null,
-              initialToPay,
-              interestRate: sale.financing.interestRate,
-              quantityCoutes: sale.financing.quantityCoutes,
-            },
-            urbanDevelopment: sale.urbanDevelopment
-              ? {
-                  id: sale.urbanDevelopment.id,
-                  amount: sale.urbanDevelopment.amount,
-                  initialAmount: sale.urbanDevelopment.initialAmount,
-                  status: sale.urbanDevelopment.status,
-                  financing: sale.urbanDevelopment.financing
-                    ? {
-                        id: sale.urbanDevelopment.financing.id,
-                        initialAmount:
-                          sale.urbanDevelopment.financing.initialAmount,
-                        interestRate:
-                          sale.urbanDevelopment.financing.interestRate,
-                        quantityCoutes:
-                          sale.urbanDevelopment.financing.quantityCoutes,
-                      }
-                    : undefined,
-                }
+            lot: buildFinancingDetail(sale.financing),
+            hu: sale.urbanDevelopment?.financing
+              ? buildFinancingDetail(sale.urbanDevelopment.financing)
               : undefined,
-            lotInstallments: lotInstallmentsWithPayments.map(
-              ({ payments, ...rest }) => rest,
-            ),
-            huInstallments: huInstallmentsWithPayments.map(
-              ({ payments, ...rest }) => rest,
-            ),
-            meta,
           }
         : undefined,
       guarantor: formattedSale.guarantor,
