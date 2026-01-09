@@ -18,6 +18,8 @@ import { TransactionService } from 'src/common/services/transaction.service';
 import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
 import { InstallmentWithPayments } from '../interfaces/installment-with-payments.interface';
 import { PaymentContribution } from '../interfaces/payment-contribution.interface';
+import { CreateDetailPaymentWithUrlDto } from 'src/admin-payments/payments/dto/create-detail-payment-with-url.dto';
+import { CreatePaymentWithUrlDto } from 'src/admin-payments/payments/dto/create-payment-with-url.dto';
 
 export class FinancingInstallmentsService {
   constructor(
@@ -271,6 +273,101 @@ export class FinancingInstallmentsService {
           userId,
           dateOperation,
           numberTicket,
+          queryRunner,
+        );
+      },
+    );
+  }
+
+  /**
+   * MÉTODO PARA MIGRACIÓN DE DATOS
+   * Pagar cuotas con auto-aprobación usando URLs existentes (sin subir archivos)
+   * El pago se crea directamente con estado APPROVED
+   * SIGUE EXACTAMENTE LA MISMA LÓGICA DE payInstallmentsAutoApproved
+   */
+  async payInstallmentsAutoApprovedWithUrls(
+    financingId: string,
+    amountPaid: number,
+    paymentDetailsWithUrls: CreateDetailPaymentWithUrlDto[],
+    userId: string,
+    dateOperation: string,
+    numberTicket?: string,
+  ): Promise<PaymentResponse> {
+    if (amountPaid <= 0)
+      throw new BadRequestException('El monto a pagar debe ser mayor a cero.');
+
+    await this.paymentsService.isValidPaymentConfig(
+      'financingInstallments',
+      financingId,
+    );
+
+    const installmentsToPay = await this.financingInstallmentsRepository.find({
+      where: {
+        financing: { id: financingId },
+        status: StatusFinancingInstallments.PENDING,
+      },
+      order: { expectedPaymentDate: 'ASC' },
+    });
+
+    if (installmentsToPay.length === 0)
+      throw new BadRequestException('No hay cuotas pendientes para pagar.');
+
+    return await this.transactionService.runInTransaction(
+      async (queryRunner) => {
+        const totalPendingAmount = parseFloat(
+          installmentsToPay
+            .reduce((sum, installment) => {
+              const currentPending = parseFloat(
+                Number(installment.coutePending ?? 0).toFixed(2),
+              );
+              const currentLateFeePending = parseFloat(
+                Number(installment.lateFeeAmountPending ?? 0).toFixed(2),
+              );
+              return sum + currentPending + currentLateFeePending;
+            }, 0)
+            .toFixed(2),
+        );
+
+        if (amountPaid > totalPendingAmount)
+          throw new BadRequestException(
+            `El monto a pagar (${amountPaid.toFixed(2)}) excede el total pendiente de las cuotas y moras (${totalPendingAmount.toFixed(2)}).`,
+          );
+
+        // Calcular pagos y obtener detalles de cuotas afectadas
+        const affectedInstallmentsDetails = await this.calculateAmountInCoutesWithDetails(
+          installmentsToPay,
+          amountPaid,
+          queryRunner,
+        );
+
+        // Construir metadata con el nuevo formato
+        const cuotasAfectadas: Record<string, any> = {};
+        for (const detail of affectedInstallmentsDetails) {
+          cuotasAfectadas[`Cuota ${detail.numberCuote}`] = {
+            Modo: detail.mode,
+            'Monto aplicado': detail.amountApplied,
+            'Pendiente después de este pago': detail.pendingAfterPayment,
+          };
+        }
+
+        // Registrar el pago en el sistema de pagos general con URLs existentes
+        const createPaymentWithUrlDto: CreatePaymentWithUrlDto = {
+          methodPayment: MethodPayment.VOUCHER,
+          amount: amountPaid,
+          relatedEntityType: 'financingInstallments',
+          relatedEntityId: financingId,
+          metadata: {
+            'Concepto de pago': 'Pago de cuotas de financiación (Auto-aprobado)',
+            'Cuotas afectadas': cuotasAfectadas,
+          },
+          paymentDetails: paymentDetailsWithUrls,
+          userId: userId,
+          dateOperation: dateOperation,
+          numberTicket: numberTicket,
+        };
+
+        return await this.paymentsService.createAutoApprovedWithUrls(
+          createPaymentWithUrlDto,
           queryRunner,
         );
       },

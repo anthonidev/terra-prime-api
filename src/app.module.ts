@@ -27,7 +27,7 @@ import { InvoicesModule } from './invoices/invoices.module';
         type: 'postgres',
         host: envs.dbHost,
         port: envs.dbPort,
-        database: envs.dbName,
+        dbName: envs.dbName.trim(),
         username: envs.dbUsername,
         password: envs.dbPassword,
         autoLoadEntities: true,

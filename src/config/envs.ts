@@ -61,9 +61,10 @@ const envVarsSchema = joi
     NUBEFACT_TOKEN: joi.string().optional(),
   })
   .unknown(true);
-const { error, value } = envVarsSchema.validate({
-  ...process.env,
-});
+const { error, value } = envVarsSchema.validate(
+  { ...process.env },
+  { convert: true } // 👈 ESTO ES CLAVE
+);
 if (error) {
   console.log(error);
   throw new Error(`Config validation error: ${error.message}`);

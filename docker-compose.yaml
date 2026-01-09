@@ -28,7 +28,7 @@ services:
       - '5432:5432'
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 123
+      POSTGRES_PASSWORD: 123456
       POSTGRES_DB: HuertasDB
       TZ: 'America/Lima'
       POSTGRES_INITDB_ARGS: '--encoding=UTF8'
@@ -37,22 +37,6 @@ services:
     command: postgres -c 'client_encoding=UTF8'
     volumes:
       - postgres:/var/lib/postgresql/data
-
-  mongodb:
-    image: mongo:7.0
-    container_name: chabot-mongodb
-    restart: always
-    ports:
-      - '27017:27017'
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password123
-      MONGO_INITDB_DATABASE: chatbot_db
-    volumes:
-      - mongodb_data:/data/db
-      - mongodb_config:/data/configdb
-
-    command: mongod --auth
 
 volumes:
   nats_data:

@@ -24,6 +24,7 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { FindPaymentsDto } from './dto/find-payments.dto';
 import { CompletePaymentDto } from './dto/complete-payment.dto';
+import { BulkCreatePaymentsDto } from './dto/bulk-create-payments.dto';
 
 @Controller('payments')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -108,5 +109,16 @@ export class PaymentsController {
       id,
       updateCodeOperationDto.codeOperation,
     );
+  }
+
+  /**
+   * ENDPOINT TEMPORAL PARA MIGRACIÓN DE DATOS
+   * Crea múltiples payments en bulk usando URLs existentes
+   * TODO: ELIMINAR ESTE ENDPOINT DESPUÉS DE LA MIGRACIÓN
+   */
+  @Post('bulk-migrate')
+  @Roles('ADM', 'JVE')
+  async bulkCreatePayments(@Body() bulkDto: BulkCreatePaymentsDto) {
+    return this.paymentsService.bulkCreatePaymentsWithUrls(bulkDto);
   }
 }

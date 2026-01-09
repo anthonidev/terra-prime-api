@@ -31,6 +31,8 @@ import { PaymentAllResponse } from '../interfaces/payment-all-response.interface
 import { Paginated } from 'src/common/interfaces/paginated.interface';
 import { CompletePaymentDto } from '../dto/complete-payment.dto';
 import { NexusApiService } from 'src/external-api/nexus-api.service';
+import { CreatePaymentWithUrlDto } from '../dto/create-payment-with-url.dto';
+import { BulkCreatePaymentsDto } from '../dto/bulk-create-payments.dto';
 
 @Injectable()
 export class PaymentsService {
@@ -252,6 +254,94 @@ export class PaymentsService {
           );
         }
       }
+      throw error;
+    }
+  }
+
+  /**
+   * MÉTODO PARA MIGRACIÓN DE DATOS
+   * Crea un pago auto-aprobado usando URLs existentes (sin subir archivos)
+   * El pago se crea directamente con estado APPROVED
+   */
+  async createAutoApprovedWithUrls(
+    createPaymentDto: CreatePaymentWithUrlDto,
+    queryRunner: QueryRunner,
+  ): Promise<PaymentResponse> {
+    try {
+      const {
+        amount,
+        methodPayment,
+        relatedEntityType,
+        relatedEntityId,
+        paymentDetails,
+        metadata,
+        userId,
+        dateOperation,
+        numberTicket,
+      } = createPaymentDto;
+
+      const paymentConfig = await this.isValidPaymentConfig(
+        relatedEntityType,
+        relatedEntityId,
+      );
+
+      // Crear pago directamente como APPROVED
+      const payment = this.paymentRepository.create({
+        user: { id: userId },
+        paymentConfig: { id: paymentConfig.id },
+        amount: amount,
+        status: StatusPayment.APPROVED,
+        methodPayment: methodPayment,
+        relatedEntityType: relatedEntityType,
+        relatedEntityId: relatedEntityId,
+        metadata: metadata || {},
+        // Campos de aprobación
+        reviewedBy: { id: userId } as any,
+        reviewedAt: new Date(),
+        dateOperation: new Date(dateOperation),
+        numberTicket: numberTicket,
+      });
+
+      const savedPayment = await queryRunner.manager.save(payment);
+
+      // Actualizar estado de la venta
+      await this.updateStatusSale(
+        relatedEntityType,
+        relatedEntityId,
+        queryRunner,
+      );
+
+      // Crear detalles de pago usando URLs existentes
+      const createdVouchers = await Promise.all(
+        paymentDetails.map(async (detailDto) => {
+          const savedDetail =
+            await this.paymentsDetailService.createWithExistingUrl(
+              savedPayment.id,
+              detailDto,
+              queryRunner,
+            );
+          return {
+            id: savedDetail.id,
+            url: savedDetail.url,
+            amount: savedDetail.amount,
+            bankName: savedDetail.bankName,
+            transactionReference: savedDetail.transactionReference,
+            codeOperation: savedDetail.codeOperation,
+            transactionDate: savedDetail.transactionDate,
+            isActive: savedDetail.isActive,
+          };
+        }),
+      );
+
+      // Actualizar estado al aprobar el pago
+      savedPayment.details = createdVouchers as any;
+      await this.updateStatusApprovedPayment(savedPayment, queryRunner);
+
+      return {
+        ...formatPaymentsResponse(savedPayment),
+        vouchers: createdVouchers,
+      };
+    } catch (error) {
       throw error;
     }
   }
@@ -757,6 +847,122 @@ export class PaymentsService {
         return formatPaymentsResponse(payment);
       },
     );
+  }
+
+  /**
+   * MÉTODO HELPER PARA MIGRACIÓN
+   * Resuelve el financingId actual usando el saleCode de la migración
+   */
+  private async resolveFinancingIdFromSaleCode(
+    saleCode: string,
+  ): Promise<string> {
+    const sale = await this.paymentRepository.manager
+      .createQueryBuilder('sales', 'sale')
+      .leftJoinAndSelect('sale.financing', 'financing')
+      .where("sale.metadata->>'Codigo' = :saleCode", { saleCode })
+      .getOne();
+
+    if (!sale) {
+      throw new NotFoundException(
+        `No se encontró una venta con código ${saleCode}`,
+      );
+    }
+
+    if (!sale['financing']) {
+      throw new NotFoundException(
+        `La venta con código ${saleCode} no tiene un financiamiento asociado`,
+      );
+    }
+
+    return sale['financing'].id;
+  }
+
+  /**
+   * MÉTODO TEMPORAL PARA MIGRACIÓN DE DATOS
+   * Crea múltiples payments en bulk usando URLs existentes (sin subir archivos)
+   * Todos los payments se crean directamente como APPROVED
+   * Para financingInstallments, sigue la lógica completa de actualización de cuotas
+   * Resuelve el financingId usando el saleCode de la migración
+   */
+  async bulkCreatePaymentsWithUrls(
+    bulkDto: BulkCreatePaymentsDto,
+  ): Promise<{ success: number; failed: number; errors: any[] }> {
+    const results = {
+      success: 0,
+      failed: 0,
+      errors: [],
+    };
+
+    for (const paymentDto of bulkDto.payments) {
+      try {
+        // Resolver el financingId desde el saleCode
+        let financingId: string;
+
+        if (paymentDto.saleCode) {
+          this.logger.log(
+            `Resolviendo financingId para saleCode: ${paymentDto.saleCode}`,
+          );
+          financingId = await this.resolveFinancingIdFromSaleCode(
+            paymentDto.saleCode,
+          );
+          this.logger.log(
+            `FinancingId resuelto: ${financingId} para saleCode: ${paymentDto.saleCode}`,
+          );
+        } else if (paymentDto.relatedEntityId) {
+          // Fallback por si viene con relatedEntityId
+          financingId = paymentDto.relatedEntityId;
+        } else {
+          throw new BadRequestException(
+            'Se requiere saleCode o relatedEntityId para crear el payment',
+          );
+        }
+
+        // Si es un pago de cuotas de financiamiento, usar la lógica específica
+        if (paymentDto.relatedEntityType === 'financingInstallments') {
+          await this.financingInstallmentsService.payInstallmentsAutoApprovedWithUrls(
+            financingId,
+            paymentDto.amount,
+            paymentDto.paymentDetails,
+            paymentDto.userId,
+            paymentDto.dateOperation,
+            paymentDto.numberTicket,
+          );
+
+          results.success++;
+          this.logger.log(
+            `✓ Financing installment payment created successfully for saleCode ${paymentDto.saleCode} (financing ${financingId})`,
+          );
+        } else {
+          // Para otros tipos de pagos, usar el método directo
+          await this.transactionService.runInTransaction(
+            async (queryRunner) => {
+              // Asignar el financingId resuelto
+              paymentDto.relatedEntityId = financingId;
+
+              await this.createAutoApprovedWithUrls(paymentDto, queryRunner);
+
+              results.success++;
+              this.logger.log(
+                `✓ Payment created successfully for ${paymentDto.relatedEntityType} ${financingId}`,
+              );
+            },
+          );
+        }
+      } catch (error) {
+        results.failed++;
+        results.errors.push({
+          saleCode: paymentDto.saleCode,
+          relatedEntityType: paymentDto.relatedEntityType,
+          amount: paymentDto.amount,
+          error: error.message,
+        });
+        this.logger.error(
+          `✗ Failed to create payment for saleCode ${paymentDto.saleCode}: ${error.message}`,
+        );
+      }
+    }
+
+    return results;
   }
 
   // Internal helpers methods

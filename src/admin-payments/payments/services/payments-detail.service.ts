@@ -5,6 +5,7 @@ import { CreateDetailPaymentDto } from "../dto/create-detail-payment.dto";
 import { UpdateDetailPaymentDto } from "../dto/update-detail-payment.dto";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { AwsS3Service } from '../../../files/aws-s3.service';
+import { CreateDetailPaymentWithUrlDto } from "../dto/create-detail-payment-with-url.dto";
 
 export class PaymentsDetailService {
   constructor(
@@ -47,6 +48,34 @@ export class PaymentsDetailService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Crea un detalle de pago usando URLs existentes (sin subir archivo a S3)
+   * Usado para migración de datos
+   */
+  async createWithExistingUrl(
+    paymentId: number,
+    detailDto: CreateDetailPaymentWithUrlDto,
+    queryRunner?: QueryRunner,
+  ): Promise<PaymentDetails> {
+    const repository = queryRunner
+      ? queryRunner.manager.getRepository(PaymentDetails)
+      : this.paymentDetailsRepository;
+
+    const paymentDetail = repository.create({
+      payment: { id: paymentId },
+      url: detailDto.url,
+      urlKey: detailDto.urlKey,
+      amount: detailDto.amount,
+      bankName: detailDto.bankName,
+      transactionReference: detailDto.transactionReference,
+      codeOperation: detailDto.codeOperation,
+      transactionDate: new Date(detailDto.transactionDate),
+      isActive: true,
+    });
+
+    return await repository.save(paymentDetail);
   }
 
   async delete(

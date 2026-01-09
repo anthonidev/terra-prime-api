@@ -4,6 +4,7 @@
 /build
 /postgres
 /CLAUDE.md
+/MIGRACION-PAYMENTS.md
 # Logs
 logs
 *.log
