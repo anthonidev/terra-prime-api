@@ -1,46 +1,14 @@
-import { Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsEmail, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { IsBoolean, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { DocumentType } from '../enums/document-type.enum';
-import { ClientDocumentType } from '../enums/client-document-type.enum';
-import { Currency } from '../enums/currency.enum';
-import { CreateInvoiceItemDto } from './create-invoice-item.dto';
 
 export class CreateInvoiceDto {
   @IsEnum(DocumentType, { message: 'El tipo de documento no es válido' })
   documentType: DocumentType;
 
-  @IsEnum(ClientDocumentType, { message: 'El tipo de documento del cliente no es válido' })
-  clientDocumentType: ClientDocumentType;
-
-  @IsString({ message: 'El número de documento del cliente debe ser un texto' })
-  @IsNotEmpty({ message: 'El número de documento del cliente es requerido' })
-  clientDocumentNumber: string;
-
-  @IsString({ message: 'El nombre del cliente debe ser un texto' })
-  @IsNotEmpty({ message: 'El nombre del cliente es requerido' })
-  clientName: string;
-
-  @IsString({ message: 'La dirección del cliente debe ser un texto' })
-  @IsOptional()
-  clientAddress?: string;
-
-  @IsEmail({}, { message: 'El email del cliente no es válido' })
-  @IsOptional()
-  clientEmail?: string;
-
-  @IsEnum(Currency, { message: 'La moneda no es válida' })
-  @IsOptional()
-  currency?: Currency;
-
   @IsNumber({}, { message: 'El tipo de cambio debe ser un número' })
   @Min(0, { message: 'El tipo de cambio no puede ser negativo' })
   @IsOptional()
   exchangeRate?: number;
-
-  @IsArray({ message: 'Los items deben ser un arreglo' })
-  @ValidateNested({ each: true })
-  @Type(() => CreateInvoiceItemDto)
-  items: CreateInvoiceItemDto[];
 
   @IsBoolean({ message: 'El campo enviar automáticamente a SUNAT debe ser un booleano' })
   @IsOptional()

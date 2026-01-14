@@ -7,10 +7,12 @@ import { InvoicesController } from './invoices.controller';
 import { InvoicesService } from './invoices.service';
 import { CommonModule } from 'src/common/common.module';
 import { Payment } from 'src/admin-payments/payments/entities/payment.entity';
+import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
+import { Financing } from 'src/admin-sales/financing/entities/financing.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Invoice, InvoiceItem, InvoiceSeriesConfig, Payment]),
+    TypeOrmModule.forFeature([Invoice, InvoiceItem, InvoiceSeriesConfig, Payment, Sale, Financing]),
     CommonModule,
   ],
   controllers: [InvoicesController],
