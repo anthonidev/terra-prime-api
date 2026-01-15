@@ -393,7 +393,8 @@ export class InvoicesService {
       if (cuotasAfectadas && typeof cuotasAfectadas === 'object') {
         for (const [cuotaKey, cuotaData] of Object.entries(cuotasAfectadas)) {
           const modo = (cuotaData as any)?.Modo || 'Total';
-          const montoAplicado = (cuotaData as any)?.['Aplicado a cuota'] || 0;
+          // Intentar ambos nombres de campo para compatibilidad
+          const montoAplicado = (cuotaData as any)?.['Monto aplicado'] || (cuotaData as any)?.['Aplicado a cuota'] || 0;
 
           // Extraer número de cuota del key "Cuota X"
           const cuotaNumber = cuotaKey.replace('Cuota ', '');
