@@ -1,9 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, QueryRunner, Repository } from 'typeorm';
 import { Invoice } from './entities/invoice.entity';
 import { InvoiceItem } from './entities/invoice-item.entity';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
+import { FindInvoicesDto } from './dto/find-invoices.dto';
 import { NubefactAdapter } from 'src/common/adapters/nubefact.adapter';
 import { NubefactInvoiceDto } from './dto/nubefact-invoice.dto';
 import { NubefactInvoiceItemDto } from './dto/nubefact-invoice-item.dto';
@@ -19,6 +20,7 @@ import { ClientDocumentType } from './enums/client-document-type.enum';
 import { CurrencyType } from 'src/project/entities/project.entity';
 import { Currency } from './enums/currency.enum';
 import { IgvType } from './enums/igv-type.enum';
+import { PaginationHelper, PaginatedResult } from 'src/common/helpers/pagination.helper';
 
 @Injectable()
 export class InvoicesService {
@@ -49,85 +51,139 @@ export class InvoicesService {
       throw new NotFoundException('Pago no encontrado');
     }
 
-    // Obtener datos del cliente automáticamente desde payment -> sale -> client -> lead
-    const clientData = await this.getClientDataFromPayment(payment);
+    // Obtener currency automáticamente desde payment -> sale -> lot -> project
+    const currencyData = await this.getCurrencyFromPayment(payment);
 
-    // Obtener serie y número automáticamente usando transacción
-    const { series, number } = await this.getNextSeriesNumber(
-      createInvoiceDto.documentType,
-      createInvoiceDto.relatedInvoiceId
-    );
+    // Crear una transacción para garantizar que si falla Nubefact, no se guarde la factura
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const invoice = this.invoiceRepository.create({
-      ...createInvoiceDto,
-      series,
-      number,
-      fullNumber: `${series}-${number}`,
-      createdBy: user,
-      payment: payment,
-      status: InvoiceStatus.DRAFT,
-      // Sobrescribir con datos del cliente y currency obtenidos automáticamente
-      clientDocumentType: clientData.documentType,
-      clientDocumentNumber: clientData.documentNumber,
-      clientName: clientData.name,
-      clientAddress: clientData.address,
-      clientEmail: clientData.email,
-      currency: clientData.currency,
-    });
+    try {
+      // Obtener serie y número automáticamente usando el queryRunner de la transacción
+      const { series, number } = await this.getNextSeriesNumber(
+        createInvoiceDto.documentType,
+        createInvoiceDto.relatedInvoiceId,
+        queryRunner
+      );
 
-    // Generar items automáticamente desde el payment
-    const items = await this.generateInvoiceItemsFromPayment(payment);
+      const invoice = this.invoiceRepository.create({
+        ...createInvoiceDto,
+        series,
+        number,
+        fullNumber: `${series}-${number}`,
+        createdBy: user,
+        payment: payment,
+        status: InvoiceStatus.DRAFT,
+        currency: currencyData, // Currency automático
+      });
 
-    invoice.items = items;
-    this.calculateInvoiceTotals(invoice);
+      // Generar items automáticamente desde payment metadata
+      const items = await this.generateInvoiceItemsFromPayment(payment);
 
-    const savedInvoice = await this.invoiceRepository.save(invoice);
+      invoice.items = items;
+      this.calculateInvoiceTotals(invoice);
 
-    // Enviar automáticamente a SUNAT
-    const nubefactDto = this.mapToNubefactDto(savedInvoice);
-    const response = await this.nubefactAdapter.post<NubefactResponseDto>(
-      '',
-      nubefactDto,
-    );
+      // Guardar la factura dentro de la transacción
+      const savedInvoice = await queryRunner.manager.save(invoice);
 
-    savedInvoice.status = InvoiceStatus.SENT;
-    savedInvoice.sunatAccepted = response.aceptada_por_sunat;
-    savedInvoice.sunatDescription = response.sunat_description;
-    savedInvoice.sunatNote = response.sunat_note;
-    savedInvoice.sunatResponseCode = response.sunat_responsecode;
-    savedInvoice.sunatSoapError = response.sunat_soap_error;
-    savedInvoice.pdfUrl = response.enlace_del_pdf;
-    savedInvoice.xmlUrl = response.enlace_del_xml;
-    savedInvoice.cdrUrl = response.enlace_del_cdr;
+      // Enviar automáticamente a SUNAT
+      const nubefactDto = this.mapToNubefactDto(savedInvoice);
+      const response = await this.nubefactAdapter.post<NubefactResponseDto>(
+        '',
+        nubefactDto,
+      );
 
-    if (response.aceptada_por_sunat === '1' || response.aceptada_por_sunat === 'true') {
-      savedInvoice.status = InvoiceStatus.ACCEPTED;
+      // Si Nubefact responde (aunque sea con error), actualizar la factura
+      savedInvoice.status = InvoiceStatus.SENT;
+      savedInvoice.sunatAccepted = response.aceptada_por_sunat;
+      savedInvoice.sunatDescription = response.sunat_description;
+      savedInvoice.sunatNote = response.sunat_note;
+      savedInvoice.sunatResponseCode = response.sunat_responsecode;
+      savedInvoice.sunatSoapError = response.sunat_soap_error;
+      savedInvoice.pdfUrl = response.enlace_del_pdf;
+      savedInvoice.xmlUrl = response.enlace_del_xml;
+      savedInvoice.cdrUrl = response.enlace_del_cdr;
 
-      // Actualizar el numberTicket del payment con el fullNumber de la factura
-      payment.numberTicket = savedInvoice.fullNumber;
-      await this.paymentRepository.save(payment);
-    } else {
-      savedInvoice.status = InvoiceStatus.REJECTED;
+      if (response.aceptada_por_sunat === '1' || response.aceptada_por_sunat === 'true') {
+        savedInvoice.status = InvoiceStatus.ACCEPTED;
+
+        // Actualizar el numberTicket del payment con el fullNumber de la factura
+        payment.numberTicket = savedInvoice.fullNumber;
+        await queryRunner.manager.save(payment);
+      } else {
+        savedInvoice.status = InvoiceStatus.REJECTED;
+      }
+
+      // Guardar los cambios finales de la factura
+      const finalInvoice = await queryRunner.manager.save(savedInvoice);
+
+      // Si todo salió bien, confirmar la transacción
+      await queryRunner.commitTransaction();
+
+      return finalInvoice;
+    } catch (error) {
+      // Si algo falla (Nubefact o cualquier otro error), revertir todo
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      // Liberar el query runner
+      await queryRunner.release();
+    }
+  }
+
+  async findAll(filters: FindInvoicesDto): Promise<PaginatedResult<Invoice>> {
+    const {
+      page = 1,
+      limit = 10,
+      order = 'DESC',
+      startDate,
+      endDate,
+    } = filters;
+
+    const queryBuilder = this.invoiceRepository
+      .createQueryBuilder('invoice')
+      .leftJoinAndSelect('invoice.items', 'items')
+      .leftJoinAndSelect('invoice.createdBy', 'createdBy')
+      .leftJoinAndSelect('invoice.payment', 'payment')
+      .leftJoinAndSelect('invoice.relatedInvoice', 'relatedInvoice');
+
+    // Aplicar filtros de fecha solo si se proporcionan
+    if (startDate) {
+      const startDateTime = new Date(startDate);
+      startDateTime.setHours(0, 0, 0, 0);
+      queryBuilder.andWhere('invoice.createdAt >= :startDate', {
+        startDate: startDateTime,
+      });
     }
 
-    return await this.invoiceRepository.save(savedInvoice);
+    if (endDate) {
+      const endDateTime = new Date(endDate);
+      endDateTime.setHours(23, 59, 59, 999);
+      queryBuilder.andWhere('invoice.createdAt <= :endDate', {
+        endDate: endDateTime,
+      });
+    }
+
+    // Aplicar ordenamiento y paginación
+    queryBuilder
+      .orderBy('invoice.createdAt', order)
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [items, totalItems] = await queryBuilder.getManyAndCount();
+
+    return PaginationHelper.createPaginatedResponse(items, totalItems, filters);
   }
 
-  async findAll(): Promise<Invoice[]> {
-    return await this.invoiceRepository.find({
-      relations: ['items', 'createdBy', 'payment'],
-      order: { createdAt: 'DESC' },
-    });
-  }
-
-  async findOne(id: number): Promise<Invoice> {
+  async findOne(paymentId: number): Promise<Invoice> {
     const invoice = await this.invoiceRepository.findOne({
-      where: { id },
+      where: { payment: { id: paymentId } },
       relations: ['items', 'createdBy', 'relatedInvoice', 'payment'],
     });
 
     if (!invoice) {
-      throw new NotFoundException('Factura no encontrada');
+      throw new NotFoundException('Factura no encontrada para el pago especificado');
     }
 
     return invoice;
@@ -135,11 +191,18 @@ export class InvoicesService {
 
   private async getNextSeriesNumber(
     documentType: number,
-    relatedInvoiceId?: number
+    relatedInvoiceId?: number,
+    providedQueryRunner?: QueryRunner
   ): Promise<{ series: string; number: number }> {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    // Si se proporciona un queryRunner, usarlo (forma parte de una transacción mayor)
+    // Si no, crear uno nuevo (para mantener compatibilidad)
+    const queryRunner = providedQueryRunner || this.dataSource.createQueryRunner();
+    const shouldManageTransaction = !providedQueryRunner;
+
+    if (shouldManageTransaction) {
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+    }
 
     try {
       let targetDocumentType = documentType;
@@ -176,20 +239,26 @@ export class InvoicesService {
       seriesConfig.lastNumber += 1;
       await queryRunner.manager.save(seriesConfig);
 
-      // Confirmar transacción
-      await queryRunner.commitTransaction();
+      // Solo confirmar si manejamos nuestra propia transacción
+      if (shouldManageTransaction) {
+        await queryRunner.commitTransaction();
+      }
 
       return {
         series: seriesConfig.series,
         number: seriesConfig.lastNumber,
       };
     } catch (error) {
-      // Revertir transacción en caso de error
-      await queryRunner.rollbackTransaction();
+      // Solo revertir si manejamos nuestra propia transacción
+      if (shouldManageTransaction) {
+        await queryRunner.rollbackTransaction();
+      }
       throw error;
     } finally {
-      // Liberar el query runner
-      await queryRunner.release();
+      // Solo liberar si manejamos nuestra propia transacción
+      if (shouldManageTransaction) {
+        await queryRunner.release();
+      }
     }
   }
 
@@ -310,17 +379,26 @@ export class InvoicesService {
   private async generateInvoiceItemsFromPayment(payment: Payment): Promise<InvoiceItem[]> {
     const items: InvoiceItem[] = [];
 
+    // Log de debugging
+    console.log('🔍 Payment metadata completo:', JSON.stringify(payment.metadata, null, 2));
+    console.log('🔍 Payment relatedEntityType:', payment.relatedEntityType);
+    console.log('🔍 Payment amount:', payment.amount);
+
     // Caso 1: Pago de cuotas de financiamiento (financingInstallments)
     if (payment.relatedEntityType === 'financingInstallments') {
       const cuotasAfectadas = payment.metadata?.['Cuotas afectadas'];
 
+      console.log('🔍 Cuotas afectadas encontradas:', JSON.stringify(cuotasAfectadas, null, 2));
+
       if (cuotasAfectadas && typeof cuotasAfectadas === 'object') {
         for (const [cuotaKey, cuotaData] of Object.entries(cuotasAfectadas)) {
           const modo = (cuotaData as any)?.Modo || 'Total';
-          const montoAplicado = (cuotaData as any)?.['Monto aplicado'] || 0;
+          const montoAplicado = (cuotaData as any)?.['Aplicado a cuota'] || 0;
 
           // Extraer número de cuota del key "Cuota X"
           const cuotaNumber = cuotaKey.replace('Cuota ', '');
+
+          console.log(`🔍 Procesando ${cuotaKey}: modo=${modo}, montoAplicado=${montoAplicado}`);
 
           const item = this.invoiceItemRepository.create({
             unitOfMeasure: UnitOfMeasure.NIU,
@@ -331,7 +409,7 @@ export class InvoicesService {
             unitPrice: 0, // Se calculará
             discount: 0,
             subtotal: 0, // Se calculará
-            igvType: IgvType.UNAFFECTED_ONEROUS_OPERATION,
+            igvType: IgvType.TAXED_ONEROUS_OPERATION, // Gravado 18% IGV para venta de terrenos
             igv: 0,
             total: 0, // Se calculará
           });
@@ -352,7 +430,7 @@ export class InvoicesService {
         unitPrice: 0, // Se calculará
         discount: 0,
         subtotal: 0, // Se calculará
-        igvType: IgvType.UNAFFECTED_ONEROUS_OPERATION,
+        igvType: IgvType.TAXED_ONEROUS_OPERATION, // Gravado 18% IGV para venta de terrenos
         igv: 0,
         total: 0, // Se calculará
       });
@@ -371,7 +449,7 @@ export class InvoicesService {
         unitPrice: 0, // Se calculará
         discount: 0,
         subtotal: 0, // Se calculará
-        igvType: IgvType.UNAFFECTED_ONEROUS_OPERATION,
+        igvType: IgvType.TAXED_ONEROUS_OPERATION, // Gravado 18% IGV para venta de terrenos
         igv: 0,
         total: 0, // Se calculará
       });
@@ -390,7 +468,7 @@ export class InvoicesService {
         unitPrice: 0, // Se calculará
         discount: 0,
         subtotal: 0, // Se calculará
-        igvType: IgvType.UNAFFECTED_ONEROUS_OPERATION,
+        igvType: IgvType.TAXED_ONEROUS_OPERATION, // Gravado 18% IGV para venta de terrenos
         igv: 0,
         total: 0, // Se calculará
       });
@@ -412,18 +490,10 @@ export class InvoicesService {
   }
 
   /**
-   * Obtiene los datos del cliente y currency desde el payment siguiendo las cadenas:
-   * - Datos cliente: payment -> financing/sale -> client -> lead
-   * - Currency: payment -> financing/sale -> lot -> block -> stage -> project
+   * Obtiene el currency desde el payment siguiendo la cadena:
+   * payment -> financing/sale/reservation -> lot -> block -> stage -> project
    */
-  private async getClientDataFromPayment(payment: Payment): Promise<{
-    documentType: ClientDocumentType;
-    documentNumber: string;
-    name: string;
-    address: string;
-    email: string;
-    currency: Currency;
-  }> {
+  private async getCurrencyFromPayment(payment: Payment): Promise<Currency> {
     let sale: Sale | null = null;
 
     // Si el payment no tiene relatedEntityType o relatedEntityId, lanzar error
@@ -435,13 +505,10 @@ export class InvoicesService {
 
     // Determinar el tipo de entidad relacionada y obtener la sale
     if (payment.relatedEntityType === 'financing') {
-      // Buscar financing con su relación a sale y toda la cadena hasta project
       const financing = await this.financingRepository.findOne({
         where: { id: payment.relatedEntityId },
         relations: [
           'sale',
-          'sale.client',
-          'sale.client.lead',
           'sale.lot',
           'sale.lot.block',
           'sale.lot.block.stage',
@@ -464,13 +531,10 @@ export class InvoicesService {
       sale = financing.sale;
     }
     else if (payment.relatedEntityType === 'financingInstallments') {
-      // Para financingInstallments, necesitamos buscar el financing primero
       const financing = await this.financingRepository.findOne({
         where: { id: payment.relatedEntityId },
         relations: [
           'sale',
-          'sale.client',
-          'sale.client.lead',
           'sale.lot',
           'sale.lot.block',
           'sale.lot.block.stage',
@@ -493,12 +557,9 @@ export class InvoicesService {
       sale = financing.sale;
     }
     else if (payment.relatedEntityType === 'sale') {
-      // Buscar sale directamente con sus relaciones hasta project
       sale = await this.saleRepository.findOne({
         where: { id: payment.relatedEntityId },
         relations: [
-          'client',
-          'client.lead',
           'lot',
           'lot.block',
           'lot.block.stage',
@@ -513,12 +574,9 @@ export class InvoicesService {
       }
     }
     else if (payment.relatedEntityType === 'reservation') {
-      // Para reservation, el relatedEntityId es el saleId, no el reservationId
       sale = await this.saleRepository.findOne({
         where: { id: payment.relatedEntityId },
         relations: [
-          'client',
-          'client.lead',
           'lot',
           'lot.block',
           'lot.block.stage',
@@ -538,16 +596,6 @@ export class InvoicesService {
       );
     }
 
-    // Verificar que la venta tenga un cliente
-    if (!sale.client) {
-      throw new BadRequestException('La venta no tiene un cliente asociado');
-    }
-
-    // Verificar que el cliente tenga un lead (el lead tiene eager: true, pero lo verificamos)
-    if (!sale.client.lead) {
-      throw new BadRequestException('El cliente no tiene un lead asociado');
-    }
-
     // Verificar que la venta tenga un lot y su cadena completa hasta project
     if (!sale.lot) {
       throw new BadRequestException('La venta no tiene un lote asociado');
@@ -562,22 +610,7 @@ export class InvoicesService {
       throw new BadRequestException('La etapa no tiene un proyecto asociado');
     }
 
-    const lead = sale.client.lead;
-    const client = sale.client;
     const project = sale.lot.block.stage.project;
-
-    // Mapear el tipo de documento del lead al tipo de documento del cliente en la factura
-    let clientDocumentType: ClientDocumentType;
-    if (lead.documentType === 'DNI') {
-      clientDocumentType = ClientDocumentType.DNI;
-    } else if (lead.documentType === 'CE') {
-      clientDocumentType = ClientDocumentType.FOREIGN_CARD;
-    } else if (lead.documentType === 'RUC') {
-      clientDocumentType = ClientDocumentType.RUC;
-    } else {
-      // Por defecto, usar DNI si el tipo no coincide
-      clientDocumentType = ClientDocumentType.DNI;
-    }
 
     // Mapear el currency del project al currency de la factura
     let invoiceCurrency: Currency;
@@ -590,13 +623,6 @@ export class InvoicesService {
       invoiceCurrency = Currency.PEN;
     }
 
-    return {
-      documentType: clientDocumentType,
-      documentNumber: lead.document,
-      name: lead.fullName, // Usa el getter fullName del lead
-      address: client.address,
-      email: lead.email,
-      currency: invoiceCurrency,
-    };
+    return invoiceCurrency;
   }
 }
