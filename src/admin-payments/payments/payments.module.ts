@@ -14,6 +14,7 @@ import { FinancingModule } from 'src/admin-sales/financing/financing.module';
 import { ProjectModule } from 'src/project/project.module';
 import { ReservationsModule } from 'src/admin-sales/reservations/reservations.module';
 import { ExternalApiModule } from 'src/external-api/external-api.module';
+import { InvoicesModule } from 'src/invoices/invoices.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { ExternalApiModule } from 'src/external-api/external-api.module';
     ProjectModule,
     ReservationsModule,
     forwardRef(() => ExternalApiModule),
+    forwardRef(() => InvoicesModule),
   ],
   controllers: [PaymentsController],
   providers: [PaymentsService, PaymentsDetailService],

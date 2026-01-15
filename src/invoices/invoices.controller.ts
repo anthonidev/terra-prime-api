@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, UseGuards } fr
 import { InvoicesService } from './invoices.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { FindInvoicesDto } from './dto/find-invoices.dto';
+import { AnnulInvoiceDto } from './dto/annul-invoice.dto';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/user/entities/user.entity';
 import { Invoice } from './entities/invoice.entity';
@@ -22,6 +23,15 @@ export class InvoicesController {
     @GetUser() user: User,
   ): Promise<Invoice> {
     return await this.invoicesService.create(createInvoiceDto, user);
+  }
+
+  @Post('annul/:id')
+  @Roles('FAC', 'ADM')
+  async annulInvoice(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() annulDto: AnnulInvoiceDto,
+  ): Promise<Invoice> {
+    return await this.invoicesService.annulInvoice(id, annulDto);
   }
 
   @Get()

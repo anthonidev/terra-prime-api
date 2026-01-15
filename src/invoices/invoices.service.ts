@@ -5,10 +5,13 @@ import { Invoice } from './entities/invoice.entity';
 import { InvoiceItem } from './entities/invoice-item.entity';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { FindInvoicesDto } from './dto/find-invoices.dto';
+import { AnnulInvoiceDto } from './dto/annul-invoice.dto';
 import { NubefactAdapter } from 'src/common/adapters/nubefact.adapter';
 import { NubefactInvoiceDto } from './dto/nubefact-invoice.dto';
 import { NubefactInvoiceItemDto } from './dto/nubefact-invoice-item.dto';
 import { NubefactResponseDto } from './dto/nubefact-response.dto';
+import { NubefactAnnulInvoiceDto } from './dto/nubefact-annul-invoice.dto';
+import { NubefactAnnulResponseDto } from './dto/nubefact-annul-response.dto';
 import { InvoiceStatus } from './enums/invoice-status.enum';
 import { User } from 'src/user/entities/user.entity';
 import { Payment } from 'src/admin-payments/payments/entities/payment.entity';
@@ -187,6 +190,139 @@ export class InvoicesService {
     }
 
     return invoice;
+  }
+
+  /**
+   * Anula una factura en Nubefact/SUNAT
+   * Solo se pueden anular facturas que fueron aceptadas por SUNAT
+   */
+  async annulInvoice(invoiceId: number, annulDto: AnnulInvoiceDto): Promise<Invoice> {
+    // Buscar la factura con sus relaciones
+    const invoice = await this.invoiceRepository.findOne({
+      where: { id: invoiceId },
+      relations: ['items', 'createdBy', 'payment', 'relatedInvoice'],
+    });
+
+    if (!invoice) {
+      throw new NotFoundException(`Factura con ID ${invoiceId} no encontrada`);
+    }
+
+    // Validar que la factura esté aceptada por SUNAT
+    if (invoice.status !== InvoiceStatus.ACCEPTED) {
+      throw new BadRequestException(
+        `Solo se pueden anular facturas aceptadas por SUNAT. Estado actual: ${invoice.status}`
+      );
+    }
+
+    // Construir el DTO para Nubefact
+    const nubefactAnnulDto: NubefactAnnulInvoiceDto = {
+      operacion: 'generar_anulacion',
+      tipo_de_comprobante: invoice.documentType,
+      serie: invoice.series,
+      numero: invoice.number,
+      motivo: annulDto.motivo,
+      codigo_unico: annulDto.codigo_unico || invoice.uniqueCode || '',
+    };
+
+    // Enviar la anulación a Nubefact
+    const response = await this.nubefactAdapter.post<NubefactAnnulResponseDto>(
+      '',
+      nubefactAnnulDto,
+    );
+
+    // Actualizar el estado de la factura
+    invoice.status = InvoiceStatus.CANCELLED;
+    invoice.sunatAccepted = String(response.aceptada_por_sunat);
+    invoice.sunatDescription = response.sunat_description;
+    invoice.sunatNote = response.sunat_note;
+    invoice.sunatResponseCode = response.sunat_responsecode;
+    invoice.sunatSoapError = response.sunat_soap_error;
+
+    // Guardar los enlaces de la anulación en el metadata
+    invoice.metadata = {
+      ...invoice.metadata,
+      annulment: {
+        motivo: annulDto.motivo,
+        annulledAt: new Date().toISOString(),
+        enlace: response.enlace,
+        sunat_ticket_numero: response.sunat_ticket_numero,
+        enlace_del_pdf: response.enlace_del_pdf,
+        enlace_del_xml: response.enlace_del_xml,
+        enlace_del_cdr: response.enlace_del_cdr,
+      },
+    };
+
+    return await this.invoiceRepository.save(invoice);
+  }
+
+  /**
+   * Anula una factura asociada a un payment (si existe)
+   * Usado cuando se anula un pago de cuotas
+   */
+  async annulInvoiceByPaymentId(paymentId: number, motivo: string): Promise<Invoice | null> {
+    // Buscar si existe una factura para este payment
+    const invoice = await this.invoiceRepository.findOne({
+      where: { payment: { id: paymentId } },
+      relations: ['items', 'createdBy', 'payment', 'relatedInvoice'],
+    });
+
+    // Si no hay factura, no hay nada que anular
+    if (!invoice) {
+      return null;
+    }
+
+    // Solo anular si la factura fue aceptada por SUNAT
+    if (invoice.status !== InvoiceStatus.ACCEPTED) {
+      console.log(`⚠️ Factura ${invoice.id} no está ACEPTADA (estado: ${invoice.status}), se omite anulación`);
+      return null;
+    }
+
+    // Construir el DTO para Nubefact
+    const nubefactAnnulDto: NubefactAnnulInvoiceDto = {
+      operacion: 'generar_anulacion',
+      tipo_de_comprobante: invoice.documentType,
+      serie: invoice.series,
+      numero: invoice.number,
+      motivo: motivo,
+      codigo_unico: invoice.uniqueCode || '',
+    };
+
+    try {
+      // Enviar la anulación a Nubefact
+      const response = await this.nubefactAdapter.post<NubefactAnnulResponseDto>(
+        '',
+        nubefactAnnulDto,
+      );
+
+      // Actualizar el estado de la factura
+      invoice.status = InvoiceStatus.CANCELLED;
+      invoice.sunatAccepted = String(response.aceptada_por_sunat);
+      invoice.sunatDescription = response.sunat_description;
+      invoice.sunatNote = response.sunat_note;
+      invoice.sunatResponseCode = response.sunat_responsecode;
+      invoice.sunatSoapError = response.sunat_soap_error;
+
+      // Guardar los enlaces de la anulación en el metadata
+      invoice.metadata = {
+        ...invoice.metadata,
+        annulment: {
+          motivo: motivo,
+          annulledAt: new Date().toISOString(),
+          enlace: response.enlace,
+          sunat_ticket_numero: response.sunat_ticket_numero,
+          enlace_del_pdf: response.enlace_del_pdf,
+          enlace_del_xml: response.enlace_del_xml,
+          enlace_del_cdr: response.enlace_del_cdr,
+        },
+      };
+
+      return await this.invoiceRepository.save(invoice);
+    } catch (error) {
+      console.error(`❌ Error al anular factura ${invoice.id} en Nubefact:`, error.message);
+      // No lanzar el error, solo loguearlo para que no bloquee la anulación del payment
+      // La factura quedará en estado ACCEPTED pero el payment estará CANCELLED
+      return null;
+    }
   }
 
   private async getNextSeriesNumber(

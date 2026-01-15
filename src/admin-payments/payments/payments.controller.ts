@@ -25,6 +25,7 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { FindPaymentsDto } from './dto/find-payments.dto';
 import { CompletePaymentDto } from './dto/complete-payment.dto';
 import { BulkCreatePaymentsDto } from './dto/bulk-create-payments.dto';
+import { CancelInstallmentDto } from './dto/cancel-installment.dto';
 
 @Controller('payments')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -54,6 +55,20 @@ export class PaymentsController {
     return this.paymentsService.rejectPayment(
       id,
       rejectionDto.rejectionReason,
+      user.id,
+    );
+  }
+
+  @Post('cancel-installment/:id')
+  @Roles('FAC', 'ADM')
+  async cancelInstallmentPayment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() cancelDto: CancelInstallmentDto,
+    @GetUser() user: User,
+  ) {
+    return this.paymentsService.cancelInstallmentPayment(
+      id,
+      cancelDto.cancellationReason,
       user.id,
     );
   }

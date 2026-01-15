@@ -33,6 +33,7 @@ import { CompletePaymentDto } from '../dto/complete-payment.dto';
 import { NexusApiService } from 'src/external-api/nexus-api.service';
 import { CreatePaymentWithUrlDto } from '../dto/create-payment-with-url.dto';
 import { BulkCreatePaymentsDto } from '../dto/bulk-create-payments.dto';
+import { InvoicesService } from 'src/invoices/invoices.service';
 
 @Injectable()
 export class PaymentsService {
@@ -51,6 +52,8 @@ export class PaymentsService {
     private readonly reservationService: ReservationsService,
     private readonly lotService: LotService,
     private readonly nexusApiService: NexusApiService,
+    @Inject(forwardRef(() => InvoicesService))
+    private readonly invoicesService: InvoicesService,
   ) {}
   // Methods for endpoints
   async create(
@@ -644,6 +647,99 @@ export class PaymentsService {
         'Error al revertir las cuotas: ' + error.message,
       );
     }
+  }
+
+  /**
+   * Anula un pago de cuotas de financiamiento que ya fue aprobado
+   * Revierte todos los montos de las cuotas afectadas
+   */
+  async cancelInstallmentPayment(
+    paymentId: number,
+    cancellationReason: string,
+    canceledById: string,
+  ): Promise<PaymentResponse> {
+    // Buscar el pago con sus relaciones
+    const payment = await this.paymentRepository.findOne({
+      where: { id: paymentId },
+      relations: ['user', 'user.role', 'paymentConfig', 'details'],
+    });
+
+    if (!payment) {
+      throw new NotFoundException(`Pago con ID ${paymentId} no encontrado`);
+    }
+
+    // Validar que sea un pago de cuotas
+    if (payment.relatedEntityType !== 'financingInstallments') {
+      throw new BadRequestException(
+        'Solo se pueden anular pagos de cuotas de financiamiento',
+      );
+    }
+
+    // Validar que el pago esté aprobado o completado
+    if (
+      payment.status !== StatusPayment.APPROVED &&
+      payment.status !== StatusPayment.COMPLETED
+    ) {
+      throw new BadRequestException(
+        `Solo se pueden anular pagos en estado APPROVED o COMPLETED. Estado actual: ${payment.status}`,
+      );
+    }
+
+    // Validar que tenga el backup de cuotas
+    if (!payment.metadata?.installmentsBackup) {
+      throw new BadRequestException(
+        'El pago no tiene información de respaldo de cuotas. No se puede anular.',
+      );
+    }
+
+    // Ejecutar la anulación en una transacción
+    return await this.transactionService.runInTransaction(
+      async (queryRunner) => {
+        // Cambiar estado a CANCELLED
+        payment.status = StatusPayment.CANCELLED;
+        payment.rejectionReason = cancellationReason; // Reutilizar el campo rejectionReason
+        payment.reviewedBy = { id: canceledById } as any;
+        payment.reviewedAt = new Date();
+
+        // Agregar metadata de cancelación
+        payment.metadata = {
+          ...payment.metadata,
+          canceledAt: new Date().toISOString(),
+          canceledBy: canceledById,
+          cancellationReason: cancellationReason,
+        };
+
+        const canceledPayment = await queryRunner.manager.save(payment);
+
+        // Revertir las cuotas a su estado anterior
+        await this.revertInstallmentsPayment(paymentId, queryRunner);
+
+        // Anular factura asociada si existe (fuera de la transacción porque usa HTTP)
+        // Se hace después de confirmar la transacción para no bloquear la anulación del payment
+        const annulledInvoice = await this.invoicesService.annulInvoiceByPaymentId(
+          paymentId,
+          `Anulación automática por cancelación de pago: ${cancellationReason}`,
+        );
+
+        if (annulledInvoice) {
+          console.log(`✅ Factura ${annulledInvoice.id} anulada exitosamente en Nubefact`);
+        }
+
+        return {
+          ...formatPaymentsResponse(canceledPayment),
+          vouchers: payment.details.map((detail) => ({
+            id: detail.id,
+            url: detail.url,
+            amount: detail.amount,
+            bankName: detail.bankName,
+            transactionReference: detail.transactionReference,
+            codeOperation: detail.codeOperation,
+            transactionDate: detail.transactionDate,
+            isActive: detail.isActive,
+          })),
+        };
+      },
+    );
   }
 
   async findAllPayments(
