@@ -122,7 +122,7 @@ export class PaymentsController {
   ) {
     return this.paymentsDetailService.updateCodeOperation(
       id,
-      updateCodeOperationDto.codeOperation,
+      updateCodeOperationDto,
     );
   }
 

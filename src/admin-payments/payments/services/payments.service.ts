@@ -931,10 +931,10 @@ export class PaymentsService {
         if (!payment)
           throw new NotFoundException(`Pago con ID ${paymentId} no encontrado`);
 
-        if (payment.status !== StatusPayment.APPROVED)
-          throw new BadRequestException(
-            `El pago tiene que estar aprobado previamente`,
-          );
+        // if (payment.status !== StatusPayment.APPROVED)
+        //   throw new BadRequestException(
+        //     `El pago tiene que estar aprobado previamente`,
+        //   );
 
         payment.numberTicket = numberTicket;
         payment.status = StatusPayment.COMPLETED;
@@ -1118,6 +1118,8 @@ export class PaymentsService {
           client: sale.client
             ? {
                 address: sale.client.address,
+                documentType: sale.client.lead?.documentType,
+                email: sale.client.lead?.email,
                 lead: {
                   firstName: sale.client.lead?.firstName,
                   lastName: sale.client.lead?.lastName,
