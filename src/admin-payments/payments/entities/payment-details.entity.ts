@@ -1,31 +1,37 @@
-import { BeforeInsert, BeforeUpdate, Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
-import { Payment } from "./payment.entity";
+import {
+  BeforeInsert,
+  BeforeUpdate,
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { Payment } from './payment.entity';
 
 @Entity('payment_details')
 export class PaymentDetails {
-
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(
-    () => Payment,
-    (payment) => payment.details,
-    { nullable: false, onDelete: 'CASCADE' }
-  )
+  @ManyToOne(() => Payment, (payment) => payment.details, {
+    nullable: false,
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'payment_id' })
   payment: Payment;
 
   @Column({
     type: 'varchar',
     length: 500,
-    nullable: true
+    nullable: true,
   })
   url?: string;
 
   @Column({
     type: 'varchar',
     length: 200,
-    nullable: true
+    nullable: true,
   })
   urlKey?: string;
 
@@ -41,34 +47,32 @@ export class PaymentDetails {
   amount: number;
 
   @Column({
-    type: 'varchar',
-    length: 100,
-    nullable: true
+    type: 'text',
+    nullable: true,
   })
   bankName: string;
 
   @Column({
-    type: 'varchar',
-    length: 100,
-    nullable: true
+    type: 'text',
+    nullable: true,
   })
   transactionReference: string;
 
   @Column({
     type: 'varchar',
     length: 50,
-    nullable: true
+    nullable: true,
   })
   codeOperation: string;
 
   @Column({
-    type: 'timestamp'
+    type: 'timestamp',
   })
   transactionDate: Date;
 
   @Column({
     type: 'boolean',
-    default: true
+    default: true,
   })
   isActive: boolean;
 
@@ -82,7 +86,6 @@ export class PaymentDetails {
     if (this.transactionReference)
       this.transactionReference = this.transactionReference.trim();
 
-    if (this.bankName)
-      this.bankName = this.bankName.trim();
+    if (this.bankName) this.bankName = this.bankName.trim();
   }
 }
