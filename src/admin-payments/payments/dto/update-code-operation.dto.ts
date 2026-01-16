@@ -1,9 +1,23 @@
 import { Transform } from "class-transformer";
-import { IsNotEmpty, IsString } from "class-validator";
+import { IsDateString, IsOptional, IsString } from "class-validator";
 
 export class UpdateCodeOperationDto {
+    @IsOptional()
     @IsString()
-    @IsNotEmpty({ message: 'El código de operación es requerido' })
     @Transform(({ value }) => value?.trim())
-    codeOperation: string;
+    codeOperation?: string;
+
+    @IsOptional()
+    @IsString()
+    @Transform(({ value }) => value?.trim())
+    bankName?: string;
+
+    @IsOptional()
+    @IsString()
+    @Transform(({ value }) => value?.trim())
+    transactionReference?: string;
+
+    @IsOptional()
+    @IsDateString({}, { message: 'La fecha de transacción debe ser una fecha válida' })
+    transactionDate?: string;
 }

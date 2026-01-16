@@ -1022,6 +1022,8 @@ export class PaymentsService {
           client: sale.client
             ? {
                 address: sale.client.address,
+                documentType: sale.client.lead?.documentType,
+                email: sale.client.lead?.email,
                 lead: {
                   firstName: sale.client.lead?.firstName,
                   lastName: sale.client.lead?.lastName,
