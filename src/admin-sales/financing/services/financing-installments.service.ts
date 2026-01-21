@@ -28,7 +28,7 @@ export class FinancingInstallmentsService {
     @Inject(forwardRef(() => PaymentsService))
     private readonly paymentsService: PaymentsService,
     private readonly transactionService: TransactionService,
-  ) {}
+  ) { }
   create(createFinancingInstallmentsDto: CreateFinancingInstallmentsDto) {
     const { couteAmount, expectedPaymentDate } = createFinancingInstallmentsDto;
     const financingInstallments = this.financingInstallmentsRepository.create({
@@ -237,6 +237,16 @@ export class FinancingInstallmentsService {
             `El monto a pagar (${amountPaid.toFixed(2)}) excede el total pendiente de las cuotas y moras (${totalPendingAmount.toFixed(2)}).`,
           );
 
+        // NUEVO: Guardar el estado anterior de las cuotas para poder revertir
+        const installmentsBackup = installmentsToPay.map((installment) => ({
+          id: installment.id,
+          previousLateFeeAmountPending: installment.lateFeeAmountPending,
+          previousLateFeeAmountPaid: installment.lateFeeAmountPaid,
+          previousCoutePending: installment.coutePending,
+          previousCoutePaid: installment.coutePaid,
+          previousStatus: installment.status,
+        }));
+
         // Calcular pagos y obtener detalles de cuotas afectadas
         const affectedInstallmentsDetails = await this.calculateAmountInCoutesWithDetails(
           installmentsToPay,
@@ -263,6 +273,7 @@ export class FinancingInstallmentsService {
           metadata: {
             'Concepto de pago': 'Pago de cuotas de financiación (Auto-aprobado)',
             'Cuotas afectadas': cuotasAfectadas,
+            installmentsBackup: JSON.stringify(installmentsBackup),
           },
           paymentDetails,
         };
@@ -333,6 +344,16 @@ export class FinancingInstallmentsService {
             `El monto a pagar (${amountPaid.toFixed(2)}) excede el total pendiente de las cuotas y moras (${totalPendingAmount.toFixed(2)}).`,
           );
 
+        // NUEVO: Guardar el estado anterior de las cuotas para poder revertir
+        const installmentsBackup = installmentsToPay.map((installment) => ({
+          id: installment.id,
+          previousLateFeeAmountPending: installment.lateFeeAmountPending,
+          previousLateFeeAmountPaid: installment.lateFeeAmountPaid,
+          previousCoutePending: installment.coutePending,
+          previousCoutePaid: installment.coutePaid,
+          previousStatus: installment.status,
+        }));
+
         // Calcular pagos y obtener detalles de cuotas afectadas
         const affectedInstallmentsDetails = await this.calculateAmountInCoutesWithDetails(
           installmentsToPay,
@@ -359,6 +380,7 @@ export class FinancingInstallmentsService {
           metadata: {
             'Concepto de pago': 'Pago de cuotas de financiación (Auto-aprobado)',
             'Cuotas afectadas': cuotasAfectadas,
+            installmentsBackup: JSON.stringify(installmentsBackup),
           },
           paymentDetails: paymentDetailsWithUrls,
           userId: userId,
