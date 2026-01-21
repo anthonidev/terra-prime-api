@@ -28,6 +28,7 @@ import { BulkCreatePaymentsDto } from './dto/bulk-create-payments.dto';
 import { CancelInstallmentDto } from './dto/cancel-installment.dto';
 
 @Controller('payments')
+// @UseGuards(JwtAuthGuard)
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class PaymentsController {
   constructor(
