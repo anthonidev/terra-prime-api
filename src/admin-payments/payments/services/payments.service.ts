@@ -868,9 +868,12 @@ export class PaymentsService {
       }
 
       if (search)
-        queryBuilder.andWhere('(user.email ILIKE :search)', {
-          search: `%${search}%`,
-        });
+        queryBuilder.andWhere(
+          '(user.email ILIKE :search OR payment.numberTicket ILIKE :search)',
+          {
+            search: `%${search}%`,
+          },
+        );
 
       if (userId)
         queryBuilder.andWhere('payment.user.id = :userId', { userId });
