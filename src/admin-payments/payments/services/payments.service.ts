@@ -838,6 +838,7 @@ export class PaymentsService {
         status,
         collectorId,
         order = 'DESC',
+        orderBy = 'createdAt',
         search,
       } = filters;
 
@@ -845,7 +846,24 @@ export class PaymentsService {
         .createQueryBuilder('payment')
         .leftJoinAndSelect('payment.paymentConfig', 'paymentConfig')
         .leftJoinAndSelect('payment.reviewedBy', 'reviewer')
-        .leftJoinAndSelect('payment.user', 'user');
+        .leftJoinAndSelect('payment.user', 'user')
+        // Join para pagos de tipo 'sale' y 'reservation'
+        .leftJoin(
+          'sales',
+          'sale',
+          `sale.id = "payment"."relatedEntityId"::uuid AND "payment"."relatedEntityType" IN ('sale', 'reservation')`,
+        )
+        .leftJoin('sale.client', 'client')
+        .leftJoin('client.lead', 'lead')
+        // Join para pagos de tipo 'financing' y 'financingInstallments'
+        .leftJoin(
+          'financing',
+          'financing',
+          `financing.id = "payment"."relatedEntityId"::uuid AND "payment"."relatedEntityType" IN ('financing', 'financingInstallments')`,
+        )
+        .leftJoin('financing.sale', 'financingSale')
+        .leftJoin('financingSale.client', 'financingClient')
+        .leftJoin('financingClient.lead', 'financingLead');
 
       if (paymentConfigId)
         queryBuilder.andWhere('payment.paymentConfig.id = :paymentConfigId', {
@@ -869,7 +887,7 @@ export class PaymentsService {
 
       if (search)
         queryBuilder.andWhere(
-          '(user.email ILIKE :search OR payment.numberTicket ILIKE :search)',
+          '(user.email ILIKE :search OR payment.numberTicket ILIKE :search OR lead.document ILIKE :search OR financingLead.document ILIKE :search)',
           {
             search: `%${search}%`,
           },
@@ -884,7 +902,7 @@ export class PaymentsService {
         });
 
       queryBuilder
-        .orderBy('payment.createdAt', order)
+        .orderBy(`payment.${orderBy}`, order)
         .skip((page - 1) * limit)
         .take(limit);
 
