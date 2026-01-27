@@ -1,6 +1,8 @@
 import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { InvoicesService } from './invoices.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
+import { CreateCreditNoteDto } from './dto/create-credit-note.dto';
+import { CreateDebitNoteDto } from './dto/create-debit-note.dto';
 import { FindInvoicesDto } from './dto/find-invoices.dto';
 import { AnnulInvoiceDto } from './dto/annul-invoice.dto';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
@@ -44,5 +46,23 @@ export class InvoicesController {
   @Roles('FAC', 'ADM', 'JVE')
   async findOne(@Param('paymentId', ParseIntPipe) paymentId: number): Promise<Invoice> {
     return await this.invoicesService.findOne(paymentId);
+  }
+
+  @Post('credit-note')
+  @Roles('FAC', 'ADM')
+  async createCreditNote(
+    @Body() createCreditNoteDto: CreateCreditNoteDto,
+    @GetUser() user: User,
+  ): Promise<Invoice> {
+    return await this.invoicesService.createCreditNote(createCreditNoteDto, user);
+  }
+
+  @Post('debit-note')
+  @Roles('FAC', 'ADM')
+  async createDebitNote(
+    @Body() createDebitNoteDto: CreateDebitNoteDto,
+    @GetUser() user: User,
+  ): Promise<Invoice> {
+    return await this.invoicesService.createDebitNote(createDebitNoteDto, user);
   }
 }

@@ -600,6 +600,34 @@ export class CollectionsService {
     );
   }
 
+  async paidLateFees(
+    financingId: string,
+    amountPaid: number,
+    paymentDetails: CreateDetailPaymentDto[],
+    files: Express.Multer.File[],
+    userId: string,
+  ): Promise<PaymentResponse> {
+    return await this.financingInstallmentsService.payLateFees(
+      financingId,
+      amountPaid,
+      paymentDetails,
+      files,
+      userId,
+    );
+  }
+
+  async getInstallmentsWithPendingLateFees(financingId: string) {
+    return await this.financingInstallmentsService.getInstallmentsWithPendingLateFees(
+      financingId,
+    );
+  }
+
+  async getTotalPendingLateFees(financingId: string): Promise<number> {
+    return await this.financingInstallmentsService.getTotalPendingLateFees(
+      financingId,
+    );
+  }
+
   async findAllPaymentsByCollector(
     filters: FindPaymentsDto,
     userId?: string,

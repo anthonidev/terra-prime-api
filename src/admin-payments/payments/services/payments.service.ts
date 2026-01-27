@@ -1295,6 +1295,24 @@ export class PaymentsService {
         'RESERVATION_PAYMENT',
       );
     }
+
+    if (relatedEntityType === 'lateFee') {
+      paymentConfig = await this.paymentConfigService.findOneByCode(
+        'LATE_FEE_PAYMENT',
+      );
+      const pendingPayment = await this.paymentRepository.findOne({
+        where: {
+          relatedEntityType,
+          relatedEntityId,
+          status: StatusPayment.PENDING,
+        },
+      });
+      if (pendingPayment)
+        throw new BadRequestException(
+          `El pago de moras no se puede realizar porque tiene un pago pendiente en curso.`,
+        );
+    }
+
     return paymentConfig;
   }
 

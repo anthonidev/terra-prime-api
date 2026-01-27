@@ -130,6 +130,54 @@ export class CollectionsController {
     );
   }
 
+  @Post('financing/late-fees/paid/:financingId')
+  @Roles('COB', 'SCO')
+  @UseInterceptors(FilesInterceptor('files'))
+  @UsePipes(new ValidationPipe({ transform: true }))
+  paidLateFees(
+    @Param('financingId') financingId: string,
+    @Body() paidInstallmentsDto: PaidInstallmentsDto,
+    @GetUser() user: User,
+    @UploadedFiles(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({
+          fileType: /(jpg|jpeg|png|webp)$/,
+        })
+        .addMaxSizeValidator({
+          maxSize: 1024 * 1024 * 2,
+        })
+        .build({
+          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+          fileIsRequired: false,
+        }),
+    )
+    files: Array<Express.Multer.File>,
+  ) {
+    return this.collectionsService.paidLateFees(
+      financingId,
+      paidInstallmentsDto.amountPaid,
+      paidInstallmentsDto.payments,
+      files,
+      user.id,
+    );
+  }
+
+  @Get('financing/late-fees/:financingId')
+  @Roles('COB', 'SCO', 'ADM')
+  getInstallmentsWithPendingLateFees(
+    @Param('financingId') financingId: string,
+  ) {
+    return this.collectionsService.getInstallmentsWithPendingLateFees(
+      financingId,
+    );
+  }
+
+  @Get('financing/late-fees/total/:financingId')
+  @Roles('COB', 'SCO', 'ADM')
+  getTotalPendingLateFees(@Param('financingId') financingId: string) {
+    return this.collectionsService.getTotalPendingLateFees(financingId);
+  }
+
   @Get('collectors/statistics')
   @Roles('SCO')
   getCollectorStatistics(@Query() filters: CollectorStatisticsFiltersDto) {

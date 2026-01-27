@@ -23,6 +23,11 @@ import { ClientDocumentType } from './enums/client-document-type.enum';
 import { CurrencyType } from 'src/project/entities/project.entity';
 import { Currency } from './enums/currency.enum';
 import { IgvType } from './enums/igv-type.enum';
+import { DocumentType } from './enums/document-type.enum';
+import { CreditNoteType, CreditNoteTypeDescriptions } from './enums/credit-note-type.enum';
+import { DebitNoteType, DebitNoteTypeDescriptions } from './enums/debit-note-type.enum';
+import { CreateCreditNoteDto } from './dto/create-credit-note.dto';
+import { CreateDebitNoteDto } from './dto/create-debit-note.dto';
 import { PaginationHelper, PaginatedResult } from 'src/common/helpers/pagination.helper';
 
 @Injectable()
@@ -451,11 +456,23 @@ export class InvoicesService {
       items: nubefactItems,
     };
 
+    // Para notas de crédito o débito
     if (invoice.relatedInvoice) {
+      // Determinar el tipo de documento que se modifica (1 = FACTURA, 2 = BOLETA)
+      nubefactDto.documento_que_se_modifica_tipo = invoice.relatedInvoice.documentType;
+      nubefactDto.documento_que_se_modifica_serie = invoice.relatedInvoice.series;
+      nubefactDto.documento_que_se_modifica_numero = invoice.relatedInvoice.number;
+
+      // Asignar el tipo de nota según sea crédito o débito
+      if (invoice.documentType === DocumentType.CREDIT_NOTE) {
+        nubefactDto.tipo_de_nota_de_credito = parseInt(invoice.noteReasonCode, 10);
+      } else if (invoice.documentType === DocumentType.DEBIT_NOTE) {
+        nubefactDto.tipo_de_nota_de_debito = parseInt(invoice.noteReasonCode, 10);
+      }
+
+      // Mantener campos legacy por compatibilidad
       nubefactDto.codigo_tipo_nota = invoice.noteReasonCode;
       nubefactDto.motivo_nota = invoice.noteReasonDescription;
-      nubefactDto.comprobante_afectado_serie = invoice.relatedInvoice.series;
-      nubefactDto.comprobante_afectado_numero = invoice.relatedInvoice.number;
     }
 
     return nubefactDto;
@@ -520,7 +537,7 @@ export class InvoicesService {
     console.log('🔍 Payment relatedEntityType:', payment.relatedEntityType);
     console.log('🔍 Payment amount:', payment.amount);
 
-    // Caso 1: Pago de cuotas de financiamiento (financingInstallments)
+    // Caso 1: Pago de cuotas de financiamiento (financingInstallments) - SIN IGV
     if (payment.relatedEntityType === 'financingInstallments') {
       const cuotasAfectadas = payment.metadata?.['Cuotas afectadas'];
 
@@ -546,7 +563,7 @@ export class InvoicesService {
             unitPrice: 0, // Se calculará
             discount: 0,
             subtotal: 0, // Se calculará
-            igvType: IgvType.TAXED_ONEROUS_OPERATION, // Gravado 18% IGV para venta de terrenos
+            igvType: IgvType.UNAFFECTED_ONEROUS_OPERATION, // Inafecto - SIN IGV para pago de cuotas
             igv: 0,
             total: 0, // Se calculará
           });
@@ -554,6 +571,59 @@ export class InvoicesService {
           this.calculateItemTotals(item);
           items.push(item);
         }
+      }
+    }
+    // Caso 1.1: Pago de moras (lateFee) - CON IGV 18%
+    else if (payment.relatedEntityType === 'lateFee') {
+      const morasAfectadas = payment.metadata?.['Moras afectadas'];
+
+      console.log('🔍 Moras afectadas encontradas:', JSON.stringify(morasAfectadas, null, 2));
+
+      if (morasAfectadas && typeof morasAfectadas === 'object') {
+        for (const [cuotaKey, moraData] of Object.entries(morasAfectadas)) {
+          const modo = (moraData as any)?.Modo || 'Total';
+          const montoAplicado = (moraData as any)?.['Mora aplicada'] || 0;
+
+          // Extraer número de cuota del key "Cuota X"
+          const cuotaNumber = cuotaKey.replace('Cuota ', '');
+
+          console.log(`🔍 Procesando mora ${cuotaKey}: modo=${modo}, montoAplicado=${montoAplicado}`);
+
+          const item = this.invoiceItemRepository.create({
+            unitOfMeasure: UnitOfMeasure.NIU,
+            code: '',
+            description: `Pago ${modo} de mora - cuota ${cuotaNumber}`,
+            quantity: 1,
+            unitValue: montoAplicado,
+            unitPrice: 0, // Se calculará
+            discount: 0,
+            subtotal: 0, // Se calculará
+            igvType: IgvType.TAXED_ONEROUS_OPERATION, // Gravado 18% IGV para moras
+            igv: 0,
+            total: 0, // Se calculará
+          });
+
+          this.calculateItemTotals(item);
+          items.push(item);
+        }
+      } else {
+        // Fallback: si no hay metadata detallada, crear un item genérico
+        const item = this.invoiceItemRepository.create({
+          unitOfMeasure: UnitOfMeasure.NIU,
+          code: '',
+          description: 'Pago de moras de financiamiento',
+          quantity: 1,
+          unitValue: payment.amount,
+          unitPrice: 0,
+          discount: 0,
+          subtotal: 0,
+          igvType: IgvType.TAXED_ONEROUS_OPERATION, // Gravado 18% IGV para moras
+          igv: 0,
+          total: 0,
+        });
+
+        this.calculateItemTotals(item);
+        items.push(item);
       }
     }
     // Caso 2: Pago de inicial de financing
@@ -667,7 +737,8 @@ export class InvoicesService {
 
       sale = financing.sale;
     }
-    else if (payment.relatedEntityType === 'financingInstallments') {
+    else if (payment.relatedEntityType === 'financingInstallments' || payment.relatedEntityType === 'lateFee') {
+      // Tanto cuotas como moras usan el financing ID
       const financing = await this.financingRepository.findOne({
         where: { id: payment.relatedEntityId },
         relations: [
@@ -761,5 +832,277 @@ export class InvoicesService {
     }
 
     return invoiceCurrency;
+  }
+
+  /**
+   * Crear una Nota de Crédito asociada a una factura o boleta existente
+   */
+  async createCreditNote(createCreditNoteDto: CreateCreditNoteDto, user: User): Promise<Invoice> {
+    // Buscar la factura/boleta original
+    const relatedInvoice = await this.invoiceRepository.findOne({
+      where: { id: createCreditNoteDto.relatedInvoiceId },
+      relations: ['items', 'payment'],
+    });
+
+    if (!relatedInvoice) {
+      throw new NotFoundException('Factura o boleta original no encontrada');
+    }
+
+    // Validar que el documento original sea una factura o boleta (no otra nota)
+    if (relatedInvoice.documentType !== DocumentType.INVOICE && relatedInvoice.documentType !== DocumentType.RECEIPT) {
+      throw new BadRequestException('Solo se pueden crear notas de crédito para facturas o boletas');
+    }
+
+    // Validar que la factura original esté aceptada por SUNAT
+    if (relatedInvoice.status !== InvoiceStatus.ACCEPTED) {
+      throw new BadRequestException('Solo se pueden crear notas de crédito para documentos aceptados por SUNAT');
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Determinar la serie según el documento original (F para facturas, B para boletas)
+      const { series, number } = await this.getNextSeriesNumber(
+        DocumentType.CREDIT_NOTE,
+        createCreditNoteDto.relatedInvoiceId,
+        queryRunner
+      );
+
+      // Obtener descripción del tipo de nota
+      const reasonDescription = createCreditNoteDto.reasonDescription ||
+        CreditNoteTypeDescriptions[createCreditNoteDto.creditNoteType];
+
+      // Crear la nota de crédito
+      const creditNote = this.invoiceRepository.create({
+        documentType: DocumentType.CREDIT_NOTE,
+        series,
+        number,
+        fullNumber: `${series}-${number}`,
+        sunatTransaction: relatedInvoice.sunatTransaction,
+        clientDocumentType: relatedInvoice.clientDocumentType as ClientDocumentType,
+        clientDocumentNumber: relatedInvoice.clientDocumentNumber,
+        clientName: relatedInvoice.clientName,
+        clientAddress: relatedInvoice.clientAddress,
+        clientEmail: relatedInvoice.clientEmail,
+        currency: relatedInvoice.currency,
+        exchangeRate: relatedInvoice.exchangeRate,
+        igvPercentage: relatedInvoice.igvPercentage,
+        sendAutomaticallyToSunat: true,
+        sendAutomaticallyToClient: false,
+        observations: createCreditNoteDto.observations,
+        relatedInvoice: relatedInvoice,
+        noteReasonCode: String(createCreditNoteDto.creditNoteType),
+        noteReasonDescription: reasonDescription,
+        createdBy: user,
+        status: InvoiceStatus.DRAFT,
+      });
+
+      // Generar items - usar monto específico o copiar de la factura original
+      const items: InvoiceItem[] = [];
+
+      if (createCreditNoteDto.amount) {
+        // Monto específico proporcionado
+        const item = this.invoiceItemRepository.create({
+          unitOfMeasure: UnitOfMeasure.NIU,
+          code: '',
+          description: reasonDescription,
+          quantity: 1,
+          unitValue: createCreditNoteDto.amount,
+          unitPrice: 0,
+          discount: 0,
+          subtotal: 0,
+          igvType: relatedInvoice.items[0]?.igvType || IgvType.TAXED_ONEROUS_OPERATION,
+          igv: 0,
+          total: 0,
+        });
+        this.calculateItemTotals(item);
+        items.push(item);
+      } else {
+        // Copiar items de la factura original
+        for (const originalItem of relatedInvoice.items) {
+          const item = this.invoiceItemRepository.create({
+            unitOfMeasure: originalItem.unitOfMeasure,
+            code: originalItem.code,
+            description: originalItem.description,
+            quantity: originalItem.quantity,
+            unitValue: originalItem.unitValue,
+            unitPrice: originalItem.unitPrice,
+            discount: originalItem.discount,
+            subtotal: originalItem.subtotal,
+            igvType: originalItem.igvType,
+            igv: originalItem.igv,
+            total: originalItem.total,
+          });
+          items.push(item);
+        }
+      }
+
+      creditNote.items = items;
+      this.calculateInvoiceTotals(creditNote);
+
+      // Guardar la nota de crédito
+      const savedCreditNote = await queryRunner.manager.save(creditNote);
+
+      // Enviar a SUNAT
+      const nubefactDto = this.mapToNubefactDto(savedCreditNote);
+      const response = await this.nubefactAdapter.post<NubefactResponseDto>('', nubefactDto);
+
+      // Actualizar con respuesta de SUNAT
+      savedCreditNote.status = InvoiceStatus.SENT;
+      savedCreditNote.sunatAccepted = response.aceptada_por_sunat;
+      savedCreditNote.sunatDescription = response.sunat_description;
+      savedCreditNote.sunatNote = response.sunat_note;
+      savedCreditNote.sunatResponseCode = response.sunat_responsecode;
+      savedCreditNote.sunatSoapError = response.sunat_soap_error;
+      savedCreditNote.pdfUrl = response.enlace_del_pdf;
+      savedCreditNote.xmlUrl = response.enlace_del_xml;
+      savedCreditNote.cdrUrl = response.enlace_del_cdr;
+
+      if (response.aceptada_por_sunat === '1' || response.aceptada_por_sunat === 'true') {
+        savedCreditNote.status = InvoiceStatus.ACCEPTED;
+      } else {
+        savedCreditNote.status = InvoiceStatus.REJECTED;
+      }
+
+      const finalCreditNote = await queryRunner.manager.save(savedCreditNote);
+      await queryRunner.commitTransaction();
+
+      return finalCreditNote;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Crear una Nota de Débito asociada a una factura o boleta existente
+   */
+  async createDebitNote(createDebitNoteDto: CreateDebitNoteDto, user: User): Promise<Invoice> {
+    // Buscar la factura/boleta original
+    const relatedInvoice = await this.invoiceRepository.findOne({
+      where: { id: createDebitNoteDto.relatedInvoiceId },
+      relations: ['items', 'payment'],
+    });
+
+    if (!relatedInvoice) {
+      throw new NotFoundException('Factura o boleta original no encontrada');
+    }
+
+    // Validar que el documento original sea una factura o boleta
+    if (relatedInvoice.documentType !== DocumentType.INVOICE && relatedInvoice.documentType !== DocumentType.RECEIPT) {
+      throw new BadRequestException('Solo se pueden crear notas de débito para facturas o boletas');
+    }
+
+    // Validar que la factura original esté aceptada por SUNAT
+    if (relatedInvoice.status !== InvoiceStatus.ACCEPTED) {
+      throw new BadRequestException('Solo se pueden crear notas de débito para documentos aceptados por SUNAT');
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const { series, number } = await this.getNextSeriesNumber(
+        DocumentType.DEBIT_NOTE,
+        createDebitNoteDto.relatedInvoiceId,
+        queryRunner
+      );
+
+      // Obtener descripción del tipo de nota
+      const reasonDescription = createDebitNoteDto.reasonDescription ||
+        DebitNoteTypeDescriptions[createDebitNoteDto.debitNoteType];
+
+      // Descripción del cargo
+      const chargeDescription = createDebitNoteDto.chargeDescription || reasonDescription;
+
+      // Determinar el tipo de IGV según el tipo de nota de débito
+      // Para moras (LATE_FEE_INTEREST), usar IGV gravado (18%)
+      const igvType = createDebitNoteDto.debitNoteType === DebitNoteType.LATE_FEE_INTEREST
+        ? IgvType.TAXED_ONEROUS_OPERATION
+        : (relatedInvoice.items[0]?.igvType || IgvType.TAXED_ONEROUS_OPERATION);
+
+      // Crear la nota de débito
+      const debitNote = this.invoiceRepository.create({
+        documentType: DocumentType.DEBIT_NOTE,
+        series,
+        number,
+        fullNumber: `${series}-${number}`,
+        sunatTransaction: relatedInvoice.sunatTransaction,
+        clientDocumentType: relatedInvoice.clientDocumentType as ClientDocumentType,
+        clientDocumentNumber: relatedInvoice.clientDocumentNumber,
+        clientName: relatedInvoice.clientName,
+        clientAddress: relatedInvoice.clientAddress,
+        clientEmail: relatedInvoice.clientEmail,
+        currency: relatedInvoice.currency,
+        exchangeRate: relatedInvoice.exchangeRate,
+        igvPercentage: relatedInvoice.igvPercentage,
+        sendAutomaticallyToSunat: true,
+        sendAutomaticallyToClient: false,
+        observations: createDebitNoteDto.observations,
+        relatedInvoice: relatedInvoice,
+        noteReasonCode: String(createDebitNoteDto.debitNoteType),
+        noteReasonDescription: reasonDescription,
+        createdBy: user,
+        status: InvoiceStatus.DRAFT,
+      });
+
+      // Generar item con el monto adicional
+      const item = this.invoiceItemRepository.create({
+        unitOfMeasure: UnitOfMeasure.NIU,
+        code: '',
+        description: chargeDescription,
+        quantity: 1,
+        unitValue: createDebitNoteDto.amount,
+        unitPrice: 0,
+        discount: 0,
+        subtotal: 0,
+        igvType: igvType,
+        igv: 0,
+        total: 0,
+      });
+
+      this.calculateItemTotals(item);
+      debitNote.items = [item];
+      this.calculateInvoiceTotals(debitNote);
+
+      // Guardar la nota de débito
+      const savedDebitNote = await queryRunner.manager.save(debitNote);
+
+      // Enviar a SUNAT
+      const nubefactDto = this.mapToNubefactDto(savedDebitNote);
+      const response = await this.nubefactAdapter.post<NubefactResponseDto>('', nubefactDto);
+
+      // Actualizar con respuesta de SUNAT
+      savedDebitNote.status = InvoiceStatus.SENT;
+      savedDebitNote.sunatAccepted = response.aceptada_por_sunat;
+      savedDebitNote.sunatDescription = response.sunat_description;
+      savedDebitNote.sunatNote = response.sunat_note;
+      savedDebitNote.sunatResponseCode = response.sunat_responsecode;
+      savedDebitNote.sunatSoapError = response.sunat_soap_error;
+      savedDebitNote.pdfUrl = response.enlace_del_pdf;
+      savedDebitNote.xmlUrl = response.enlace_del_xml;
+      savedDebitNote.cdrUrl = response.enlace_del_cdr;
+
+      if (response.aceptada_por_sunat === '1' || response.aceptada_por_sunat === 'true') {
+        savedDebitNote.status = InvoiceStatus.ACCEPTED;
+      } else {
+        savedDebitNote.status = InvoiceStatus.REJECTED;
+      }
+
+      const finalDebitNote = await queryRunner.manager.save(savedDebitNote);
+      await queryRunner.commitTransaction();
+
+      return finalDebitNote;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }

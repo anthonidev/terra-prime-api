@@ -118,29 +118,27 @@ export class FinancingInstallmentsService {
 
     return await this.transactionService.runInTransaction(
       async (queryRunner) => {
+        // Solo considerar el principal pendiente (sin moras - las moras se pagan por separado)
         const totalPendingAmount = parseFloat(
           installmentsToPay
             .reduce((sum, installment) => {
               const currentPending = parseFloat(
                 Number(installment.coutePending ?? 0).toFixed(2),
               );
-              const currentLateFeePending = parseFloat(
-                Number(installment.lateFeeAmountPending ?? 0).toFixed(2),
-              );
-              return sum + currentPending + currentLateFeePending;
+              return sum + currentPending;
             }, 0)
             .toFixed(2),
         );
 
         if (amountPaid > totalPendingAmount)
           throw new BadRequestException(
-            `El monto a pagar (${amountPaid.toFixed(2)}) excede el total pendiente de las cuotas y moras (${totalPendingAmount.toFixed(2)}).`,
+            `El monto a pagar (${amountPaid.toFixed(2)}) excede el total pendiente de las cuotas (${totalPendingAmount.toFixed(2)}).`,
           );
 
         let remainingAmount = amountPaid;
         const paidInstallmentIds: string[] = [];
 
-        // NUEVO: Guardar el estado anterior de las cuotas para poder revertir
+        // Guardar el estado anterior de las cuotas para poder revertir
         const installmentsBackup = installmentsToPay.map((installment) => ({
           id: installment.id,
           previousLateFeeAmountPending: installment.lateFeeAmountPending,
@@ -168,7 +166,7 @@ export class FinancingInstallmentsService {
             'Fecha de pago': new Date().toISOString(),
             'Monto de pago': amountPaid,
             'Cuotas afectadas': paidInstallmentIds.join(', '),
-            // NUEVO: Guardar información para revertir
+            // Guardar información para revertir
             installmentsBackup: JSON.stringify(installmentsBackup),
           },
           paymentDetails,
@@ -218,23 +216,21 @@ export class FinancingInstallmentsService {
 
     return await this.transactionService.runInTransaction(
       async (queryRunner) => {
+        // Solo considerar el principal pendiente (sin moras - las moras se pagan por separado)
         const totalPendingAmount = parseFloat(
           installmentsToPay
             .reduce((sum, installment) => {
               const currentPending = parseFloat(
                 Number(installment.coutePending ?? 0).toFixed(2),
               );
-              const currentLateFeePending = parseFloat(
-                Number(installment.lateFeeAmountPending ?? 0).toFixed(2),
-              );
-              return sum + currentPending + currentLateFeePending;
+              return sum + currentPending;
             }, 0)
             .toFixed(2),
         );
 
         if (amountPaid > totalPendingAmount)
           throw new BadRequestException(
-            `El monto a pagar (${amountPaid.toFixed(2)}) excede el total pendiente de las cuotas y moras (${totalPendingAmount.toFixed(2)}).`,
+            `El monto a pagar (${amountPaid.toFixed(2)}) excede el total pendiente de las cuotas (${totalPendingAmount.toFixed(2)}).`,
           );
 
         // Calcular pagos y obtener detalles de cuotas afectadas
@@ -314,23 +310,21 @@ export class FinancingInstallmentsService {
 
     return await this.transactionService.runInTransaction(
       async (queryRunner) => {
+        // Solo considerar el principal pendiente (sin moras - las moras se pagan por separado)
         const totalPendingAmount = parseFloat(
           installmentsToPay
             .reduce((sum, installment) => {
               const currentPending = parseFloat(
                 Number(installment.coutePending ?? 0).toFixed(2),
               );
-              const currentLateFeePending = parseFloat(
-                Number(installment.lateFeeAmountPending ?? 0).toFixed(2),
-              );
-              return sum + currentPending + currentLateFeePending;
+              return sum + currentPending;
             }, 0)
             .toFixed(2),
         );
 
         if (amountPaid > totalPendingAmount)
           throw new BadRequestException(
-            `El monto a pagar (${amountPaid.toFixed(2)}) excede el total pendiente de las cuotas y moras (${totalPendingAmount.toFixed(2)}).`,
+            `El monto a pagar (${amountPaid.toFixed(2)}) excede el total pendiente de las cuotas (${totalPendingAmount.toFixed(2)}).`,
           );
 
         // Calcular pagos y obtener detalles de cuotas afectadas
@@ -398,6 +392,7 @@ export class FinancingInstallmentsService {
     for (const installment of installmentsToPay) {
       if (amountLeft <= 0) break;
 
+      // Solo el principal, sin moras
       const pendingAmount = Number(
         (installment.couteAmount - (installment.coutePaid || 0)).toFixed(2),
       );
@@ -413,19 +408,26 @@ export class FinancingInstallmentsService {
         );
         amountLeft = Number((amountLeft - paymentAmount).toFixed(2));
 
-        // Determinar modo (Total o Parcial)
-        const isPaidCompletely = installment.coutePending <= 0;
+        // Determinar modo (Total o Parcial) basado solo en el principal
+        const isPrincipalPaidCompletely = installment.coutePending <= 0;
+        const hasLateFee = Number(installment.lateFeeAmountPending ?? 0) > 0;
 
-        if (isPaidCompletely) {
+        // Determinar estado según principal y moras
+        if (isPrincipalPaidCompletely && !hasLateFee) {
+          // Principal pagado y sin moras pendientes -> PAID
           installment.status = StatusFinancingInstallments.PAID;
+        } else if (hasLateFee) {
+          // Tiene moras pendientes -> EXPIRED
+          installment.status = StatusFinancingInstallments.EXPIRED;
         } else {
+          // Principal pendiente, sin moras -> PENDING
           installment.status = StatusFinancingInstallments.PENDING;
         }
 
         // Agregar a la lista de cuotas afectadas
         affectedInstallments.push({
           numberCuote: installment.numberCuote,
-          mode: isPaidCompletely ? 'Total' : 'Parcial',
+          mode: isPrincipalPaidCompletely ? 'Total' : 'Parcial',
           amountApplied: paymentAmount,
           pendingAfterPayment: Number(installment.coutePending.toFixed(2)),
         });
@@ -487,7 +489,7 @@ export class FinancingInstallmentsService {
     for (const installment of installmentsToPay) {
       if (amountLeft <= 0) break;
 
-      // Calcular el monto pendiente real de esta cuota
+      // Calcular el monto pendiente real de esta cuota (solo principal, sin moras)
       const pendingAmount = Number(
         (installment.couteAmount - (installment.coutePaid || 0)).toFixed(2),
       );
@@ -496,7 +498,7 @@ export class FinancingInstallmentsService {
       if (pendingAmount > 0) {
         const paymentAmount = Math.min(amountLeft, pendingAmount);
 
-        // Actualizar valores
+        // Actualizar valores del principal
         installment.coutePaid = Number(
           (Number(installment.coutePaid || 0) + paymentAmount).toFixed(2),
         );
@@ -505,11 +507,18 @@ export class FinancingInstallmentsService {
         );
         amountLeft = Number((amountLeft - paymentAmount).toFixed(2));
 
-        // Marcar como PAID solo si está completamente pagada
-        if (installment.coutePending <= 0) {
+        // Determinar estado según principal y moras
+        const hasLateFee = Number(installment.lateFeeAmountPending ?? 0) > 0;
+
+        if (installment.coutePending <= 0 && !hasLateFee) {
+          // Principal pagado y sin moras pendientes -> PAID
           installment.status = StatusFinancingInstallments.PAID;
           paidInstallmentIds.push(installment.id);
+        } else if (hasLateFee) {
+          // Tiene moras pendientes -> EXPIRED
+          installment.status = StatusFinancingInstallments.EXPIRED;
         } else {
+          // Principal pendiente, sin moras -> PENDING
           installment.status = StatusFinancingInstallments.PENDING;
         }
       }
@@ -753,5 +762,333 @@ export class FinancingInstallmentsService {
       failed,
       totalPoints: overdueInstallments.length,
     };
+  }
+
+  /**
+   * Obtener cuotas con moras pendientes de un financiamiento
+   */
+  async getInstallmentsWithPendingLateFees(financingId: string) {
+    const installments = await this.financingInstallmentsRepository.find({
+      where: {
+        financing: { id: financingId },
+        status: StatusFinancingInstallments.EXPIRED,
+      },
+      order: { expectedPaymentDate: 'ASC' },
+    });
+
+    // Filtrar solo las que tienen mora pendiente
+    return installments.filter(
+      (installment) => Number(installment.lateFeeAmountPending ?? 0) > 0,
+    );
+  }
+
+  /**
+   * Obtener total de moras pendientes de un financiamiento
+   */
+  async getTotalPendingLateFees(financingId: string): Promise<number> {
+    const installmentsWithLateFees =
+      await this.getInstallmentsWithPendingLateFees(financingId);
+
+    return parseFloat(
+      installmentsWithLateFees
+        .reduce((sum, installment) => {
+          return sum + Number(installment.lateFeeAmountPending ?? 0);
+        }, 0)
+        .toFixed(2),
+    );
+  }
+
+  /**
+   * Pagar moras de cuotas (pago separado con IGV)
+   */
+  async payLateFees(
+    financingId: string,
+    amountPaid: number,
+    paymentDetails: CreateDetailPaymentDto[],
+    files: Express.Multer.File[],
+    userId: string,
+  ): Promise<PaymentResponse> {
+    if (amountPaid <= 0)
+      throw new BadRequestException('El monto a pagar debe ser mayor a cero.');
+
+    await this.paymentsService.isValidPaymentConfig('lateFee', financingId);
+
+    // Buscar cuotas con moras pendientes
+    const installmentsWithLateFees =
+      await this.getInstallmentsWithPendingLateFees(financingId);
+
+    if (installmentsWithLateFees.length === 0)
+      throw new BadRequestException('No hay moras pendientes para pagar.');
+
+    return await this.transactionService.runInTransaction(
+      async (queryRunner) => {
+        const totalLateFeesPending = parseFloat(
+          installmentsWithLateFees
+            .reduce((sum, installment) => {
+              return sum + Number(installment.lateFeeAmountPending ?? 0);
+            }, 0)
+            .toFixed(2),
+        );
+
+        if (amountPaid > totalLateFeesPending)
+          throw new BadRequestException(
+            `El monto a pagar (${amountPaid.toFixed(2)}) excede el total de moras pendientes (${totalLateFeesPending.toFixed(2)}).`,
+          );
+
+        const paidInstallmentIds: string[] = [];
+
+        // Guardar el estado anterior para poder revertir
+        const installmentsBackup = installmentsWithLateFees.map(
+          (installment) => ({
+            id: installment.id,
+            previousLateFeeAmountPending: installment.lateFeeAmountPending,
+            previousLateFeeAmountPaid: installment.lateFeeAmountPaid,
+            previousStatus: installment.status,
+          }),
+        );
+
+        // Aplicar el pago a las moras
+        await this.calculateLateFeePayment(
+          installmentsWithLateFees,
+          amountPaid,
+          queryRunner,
+          paidInstallmentIds,
+        );
+
+        // Registrar el pago en el sistema de pagos general
+        const createPaymentDto: CreatePaymentDto = {
+          methodPayment: MethodPayment.VOUCHER,
+          amount: amountPaid,
+          relatedEntityType: 'lateFee',
+          relatedEntityId: financingId,
+          metadata: {
+            'Concepto de pago': 'Pago de moras de financiación',
+            'Fecha de pago': new Date().toISOString(),
+            'Monto de pago': amountPaid,
+            'Cuotas con moras afectadas': paidInstallmentIds.join(', '),
+            installmentsBackup: JSON.stringify(installmentsBackup),
+          },
+          paymentDetails,
+        };
+
+        return await this.paymentsService.create(
+          createPaymentDto,
+          files,
+          userId,
+          queryRunner,
+        );
+      },
+    );
+  }
+
+  /**
+   * Pagar moras con auto-aprobación (para uso de ADM)
+   */
+  async payLateFeesAutoApproved(
+    financingId: string,
+    amountPaid: number,
+    paymentDetails: CreateDetailPaymentDto[],
+    files: Express.Multer.File[],
+    userId: string,
+    dateOperation: string,
+    numberTicket?: string,
+  ): Promise<PaymentResponse> {
+    if (amountPaid <= 0)
+      throw new BadRequestException('El monto a pagar debe ser mayor a cero.');
+
+    await this.paymentsService.isValidPaymentConfig('lateFee', financingId);
+
+    const installmentsWithLateFees =
+      await this.getInstallmentsWithPendingLateFees(financingId);
+
+    if (installmentsWithLateFees.length === 0)
+      throw new BadRequestException('No hay moras pendientes para pagar.');
+
+    return await this.transactionService.runInTransaction(
+      async (queryRunner) => {
+        const totalLateFeesPending = parseFloat(
+          installmentsWithLateFees
+            .reduce((sum, installment) => {
+              return sum + Number(installment.lateFeeAmountPending ?? 0);
+            }, 0)
+            .toFixed(2),
+        );
+
+        if (amountPaid > totalLateFeesPending)
+          throw new BadRequestException(
+            `El monto a pagar (${amountPaid.toFixed(2)}) excede el total de moras pendientes (${totalLateFeesPending.toFixed(2)}).`,
+          );
+
+        // Calcular pagos y obtener detalles
+        const affectedInstallmentsDetails =
+          await this.calculateLateFeePaymentWithDetails(
+            installmentsWithLateFees,
+            amountPaid,
+            queryRunner,
+          );
+
+        // Construir metadata
+        const morasAfectadas: Record<string, any> = {};
+        for (const detail of affectedInstallmentsDetails) {
+          morasAfectadas[`Cuota ${detail.numberCuote}`] = {
+            Modo: detail.mode,
+            'Mora aplicada': detail.amountApplied,
+            'Mora pendiente después de este pago': detail.pendingAfterPayment,
+          };
+        }
+
+        const createPaymentDto: CreatePaymentDto = {
+          methodPayment: MethodPayment.VOUCHER,
+          amount: amountPaid,
+          relatedEntityType: 'lateFee',
+          relatedEntityId: financingId,
+          metadata: {
+            'Concepto de pago': 'Pago de moras de financiación (Auto-aprobado)',
+            'Moras afectadas': morasAfectadas,
+          },
+          paymentDetails,
+        };
+
+        return await this.paymentsService.createAutoApproved(
+          createPaymentDto,
+          files,
+          userId,
+          dateOperation,
+          numberTicket,
+          queryRunner,
+        );
+      },
+    );
+  }
+
+  /**
+   * Calcula el pago de moras y actualiza las cuotas
+   */
+  private async calculateLateFeePayment(
+    installmentsWithLateFees: FinancingInstallments[],
+    remainingAmount: number,
+    queryRunner: QueryRunner,
+    paidInstallmentIds: string[],
+  ) {
+    let amountLeft = Number(remainingAmount.toFixed(2));
+
+    for (const installment of installmentsWithLateFees) {
+      if (amountLeft <= 0) break;
+
+      const lateFeeAmountPending = Number(
+        (installment.lateFeeAmountPending ?? 0).toFixed(2),
+      );
+
+      if (lateFeeAmountPending > 0) {
+        const paymentAmount = Math.min(amountLeft, lateFeeAmountPending);
+
+        // Actualizar valores de mora
+        installment.lateFeeAmountPaid = Number(
+          (Number(installment.lateFeeAmountPaid || 0) + paymentAmount).toFixed(
+            2,
+          ),
+        );
+        installment.lateFeeAmountPending = Number(
+          (
+            Number(installment.lateFeeAmount) - installment.lateFeeAmountPaid
+          ).toFixed(2),
+        );
+        amountLeft = Number((amountLeft - paymentAmount).toFixed(2));
+
+        paidInstallmentIds.push(installment.id);
+
+        // Determinar estado
+        const isPrincipalPaid = Number(installment.coutePending ?? 0) <= 0;
+        const hasLateFee = installment.lateFeeAmountPending > 0;
+
+        if (isPrincipalPaid && !hasLateFee) {
+          // Principal pagado y moras pagadas -> PAID
+          installment.status = StatusFinancingInstallments.PAID;
+        } else if (hasLateFee) {
+          // Aún tiene moras pendientes -> EXPIRED
+          installment.status = StatusFinancingInstallments.EXPIRED;
+        } else {
+          // Principal pendiente, sin moras -> PENDING
+          installment.status = StatusFinancingInstallments.PENDING;
+        }
+      }
+
+      await queryRunner.manager.save(installment);
+    }
+  }
+
+  /**
+   * Calcula el pago de moras y retorna los detalles
+   */
+  private async calculateLateFeePaymentWithDetails(
+    installmentsWithLateFees: FinancingInstallments[],
+    remainingAmount: number,
+    queryRunner: QueryRunner,
+  ): Promise<
+    Array<{
+      numberCuote: number;
+      mode: 'Total' | 'Parcial';
+      amountApplied: number;
+      pendingAfterPayment: number;
+    }>
+  > {
+    let amountLeft = Number(remainingAmount.toFixed(2));
+    const affectedInstallments: Array<{
+      numberCuote: number;
+      mode: 'Total' | 'Parcial';
+      amountApplied: number;
+      pendingAfterPayment: number;
+    }> = [];
+
+    for (const installment of installmentsWithLateFees) {
+      if (amountLeft <= 0) break;
+
+      const lateFeeAmountPending = Number(
+        (installment.lateFeeAmountPending ?? 0).toFixed(2),
+      );
+
+      if (lateFeeAmountPending > 0) {
+        const paymentAmount = Math.min(amountLeft, lateFeeAmountPending);
+
+        // Actualizar valores de mora
+        installment.lateFeeAmountPaid = Number(
+          (Number(installment.lateFeeAmountPaid || 0) + paymentAmount).toFixed(
+            2,
+          ),
+        );
+        installment.lateFeeAmountPending = Number(
+          (
+            Number(installment.lateFeeAmount) - installment.lateFeeAmountPaid
+          ).toFixed(2),
+        );
+        amountLeft = Number((amountLeft - paymentAmount).toFixed(2));
+
+        const isLateFeePaidCompletely = installment.lateFeeAmountPending <= 0;
+
+        // Determinar estado
+        const isPrincipalPaid = Number(installment.coutePending ?? 0) <= 0;
+
+        if (isPrincipalPaid && isLateFeePaidCompletely) {
+          installment.status = StatusFinancingInstallments.PAID;
+        } else if (!isLateFeePaidCompletely) {
+          installment.status = StatusFinancingInstallments.EXPIRED;
+        } else {
+          installment.status = StatusFinancingInstallments.PENDING;
+        }
+
+        affectedInstallments.push({
+          numberCuote: installment.numberCuote,
+          mode: isLateFeePaidCompletely ? 'Total' : 'Parcial',
+          amountApplied: paymentAmount,
+          pendingAfterPayment: Number(
+            installment.lateFeeAmountPending.toFixed(2),
+          ),
+        });
+      }
+
+      await queryRunner.manager.save(installment);
+    }
+
+    return affectedInstallments;
   }
 }

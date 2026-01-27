@@ -29,7 +29,14 @@ export class NubefactInvoiceDto {
   observaciones?: string;
   items: NubefactInvoiceItemDto[];
 
-  // Para notas de crédito/débito
+  // Para notas de crédito/débito - Campos según documentación Nubefact
+  documento_que_se_modifica_tipo?: number; // 1 = FACTURA, 2 = BOLETA
+  documento_que_se_modifica_serie?: string;
+  documento_que_se_modifica_numero?: number;
+  tipo_de_nota_de_credito?: number; // 1-13 según CreditNoteType
+  tipo_de_nota_de_debito?: number; // 1-5 según DebitNoteType
+
+  // Campos legacy (mantener por compatibilidad)
   codigo_tipo_nota?: string;
   motivo_nota?: string;
   comprobante_afectado_serie?: string;
