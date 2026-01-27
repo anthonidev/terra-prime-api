@@ -501,12 +501,21 @@ export class InvoicesService {
       totalIgv += item.igv;
       totalDiscounts += (item.quantity * item.unitValue * (item.discount || 0)) / 100;
 
-      if (item.igvType === 1) {
+      // Gravado (1-7): suma a totalTaxed
+      if (item.igvType >= 1 && item.igvType <= 7) {
         totalTaxed += item.subtotal;
-      } else if ([13, 14, 15, 16, 17, 18].includes(item.igvType)) {
-        totalUnaffected += item.subtotal;
-      } else if ([11, 12].includes(item.igvType)) {
+      }
+      // Exonerado (8, 17): suma a totalExonerated
+      else if (item.igvType === 8 || item.igvType === 17) {
         totalExonerated += item.subtotal;
+      }
+      // Inafecto (9-15, 20): suma a totalUnaffected
+      else if ((item.igvType >= 9 && item.igvType <= 15) || item.igvType === 20) {
+        totalUnaffected += item.subtotal;
+      }
+      // Exportación (16): suma a totalUnaffected
+      else if (item.igvType === 16) {
+        totalUnaffected += item.subtotal;
       }
     });
 
@@ -520,9 +529,11 @@ export class InvoicesService {
   }
 
   private getIgvPercentageByType(igvType: number): number {
-    if (igvType === 1) {
+    // Gravado (1-7): aplica IGV 18%
+    if (igvType >= 1 && igvType <= 7) {
       return 18;
     }
+    // Exonerado, Inafecto, Exportación: sin IGV
     return 0;
   }
 
@@ -573,9 +584,10 @@ export class InvoicesService {
         }
       }
     }
-    // Caso 1.1: Pago de moras (lateFee) - CON IGV 18%
+    // Caso 1.1: Pago de moras (lateFee) - CON IGV 18% INCLUIDO
     else if (payment.relatedEntityType === 'lateFee') {
       const morasAfectadas = payment.metadata?.['Moras afectadas'];
+      const IGV_RATE = 1.18; // Factor para extraer IGV incluido
 
       console.log('🔍 Moras afectadas encontradas:', JSON.stringify(morasAfectadas, null, 2));
 
@@ -587,14 +599,17 @@ export class InvoicesService {
           // Extraer número de cuota del key "Cuota X"
           const cuotaNumber = cuotaKey.replace('Cuota ', '');
 
-          console.log(`🔍 Procesando mora ${cuotaKey}: modo=${modo}, montoAplicado=${montoAplicado}`);
+          // Calcular base gravable (IGV incluido en el monto)
+          const baseGravable = Number((montoAplicado / IGV_RATE).toFixed(2));
+
+          console.log(`🔍 Procesando mora ${cuotaKey}: modo=${modo}, montoAplicado=${montoAplicado}, baseGravable=${baseGravable}`);
 
           const item = this.invoiceItemRepository.create({
             unitOfMeasure: UnitOfMeasure.NIU,
             code: '',
             description: `Pago ${modo} de mora - cuota ${cuotaNumber}`,
             quantity: 1,
-            unitValue: montoAplicado,
+            unitValue: baseGravable, // Base sin IGV
             unitPrice: 0, // Se calculará
             discount: 0,
             subtotal: 0, // Se calculará
@@ -608,12 +623,14 @@ export class InvoicesService {
         }
       } else {
         // Fallback: si no hay metadata detallada, crear un item genérico
+        const baseGravable = Number((payment.amount / IGV_RATE).toFixed(2));
+
         const item = this.invoiceItemRepository.create({
           unitOfMeasure: UnitOfMeasure.NIU,
           code: '',
           description: 'Pago de moras de financiamiento',
           quantity: 1,
-          unitValue: payment.amount,
+          unitValue: baseGravable, // Base sin IGV
           unitPrice: 0,
           discount: 0,
           subtotal: 0,
@@ -626,7 +643,7 @@ export class InvoicesService {
         items.push(item);
       }
     }
-    // Caso 2: Pago de inicial de financing
+    // Caso 2: Pago de inicial de financing - SIN IGV
     else if (payment.relatedEntityType === 'financing') {
       const item = this.invoiceItemRepository.create({
         unitOfMeasure: UnitOfMeasure.NIU,
@@ -637,7 +654,7 @@ export class InvoicesService {
         unitPrice: 0, // Se calculará
         discount: 0,
         subtotal: 0, // Se calculará
-        igvType: IgvType.TAXED_ONEROUS_OPERATION, // Gravado 18% IGV para venta de terrenos
+        igvType: IgvType.UNAFFECTED_ONEROUS_OPERATION, // Inafecto - SIN IGV
         igv: 0,
         total: 0, // Se calculará
       });
@@ -645,7 +662,7 @@ export class InvoicesService {
       this.calculateItemTotals(item);
       items.push(item);
     }
-    // Caso 3: Pago completo de venta (sale)
+    // Caso 3: Pago completo de venta (sale) - SIN IGV
     else if (payment.relatedEntityType === 'sale') {
       const item = this.invoiceItemRepository.create({
         unitOfMeasure: UnitOfMeasure.NIU,
@@ -656,7 +673,7 @@ export class InvoicesService {
         unitPrice: 0, // Se calculará
         discount: 0,
         subtotal: 0, // Se calculará
-        igvType: IgvType.TAXED_ONEROUS_OPERATION, // Gravado 18% IGV para venta de terrenos
+        igvType: IgvType.UNAFFECTED_ONEROUS_OPERATION, // Inafecto - SIN IGV
         igv: 0,
         total: 0, // Se calculará
       });
@@ -664,7 +681,7 @@ export class InvoicesService {
       this.calculateItemTotals(item);
       items.push(item);
     }
-    // Caso 4: Pago de reserva (reservation)
+    // Caso 4: Pago de reserva (reservation) - SIN IGV
     else if (payment.relatedEntityType === 'reservation') {
       const item = this.invoiceItemRepository.create({
         unitOfMeasure: UnitOfMeasure.NIU,
@@ -675,7 +692,7 @@ export class InvoicesService {
         unitPrice: 0, // Se calculará
         discount: 0,
         subtotal: 0, // Se calculará
-        igvType: IgvType.TAXED_ONEROUS_OPERATION, // Gravado 18% IGV para venta de terrenos
+        igvType: IgvType.UNAFFECTED_ONEROUS_OPERATION, // Inafecto - SIN IGV
         igv: 0,
         total: 0, // Se calculará
       });
