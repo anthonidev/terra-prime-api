@@ -1060,7 +1060,9 @@ export class SalesService {
         totalPaid: parseFloat(totals.totalPaid.toFixed(2)),
         totalPending: parseFloat(totals.totalPending.toFixed(2)),
         totalLateFee: parseFloat(totals.totalLateFee.toFixed(2)),
-        totalLateFeeePending: parseFloat(totals.totalLateFeeePending.toFixed(2)),
+        totalLateFeeePending: parseFloat(
+          totals.totalLateFeeePending.toFixed(2),
+        ),
         totalLateFeePaid: parseFloat(totals.totalLateFeePaid.toFixed(2)),
         installments: mappedInstallments,
       };
@@ -3494,6 +3496,30 @@ export class SalesService {
     numberTicket?: string,
   ) {
     return await this.financingInstallmentsService.payInstallmentsAutoApproved(
+      financingId,
+      amountPaid,
+      paymentDetails,
+      files,
+      userId,
+      dateOperation,
+      numberTicket,
+    );
+  }
+
+  // ============================================================
+  // PAGO DE MORAS AUTO-APROBADO (ADM)
+  // ============================================================
+
+  async paidLateFeesAutoApproved(
+    financingId: string,
+    amountPaid: number,
+    paymentDetails: CreateDetailPaymentDto[],
+    files: Express.Multer.File[],
+    userId: string,
+    dateOperation: string,
+    numberTicket?: string,
+  ) {
+    return await this.financingInstallmentsService.payLateFeesAutoApproved(
       financingId,
       amountPaid,
       paymentDetails,

@@ -131,7 +131,7 @@ export class CollectionsController {
   }
 
   @Post('financing/late-fees/paid/:financingId')
-  @Roles('COB', 'SCO')
+  @Roles('COB', 'SCO', 'ADM')
   @UseInterceptors(FilesInterceptor('files'))
   @UsePipes(new ValidationPipe({ transform: true }))
   paidLateFees(

@@ -350,4 +350,38 @@ export class SalesController {
       paidInstallmentsDto.numberTicket,
     );
   }
+
+  @Post('financing/late-fees/paid-approved/:financingId')
+  @Roles('ADM')
+  @UseInterceptors(FilesInterceptor('files'))
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async paidLateFeesAutoApproved(
+    @Param('financingId', ParseUUIDPipe) financingId: string,
+    @Body() paidLateFeesDto: PaidInstallmentsAutoApprovedDto,
+    @GetUser() user: User,
+    @UploadedFiles(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({
+          fileType: /(jpg|jpeg|png|webp)$/,
+        })
+        .addMaxSizeValidator({
+          maxSize: 1024 * 1024 * 2,
+        })
+        .build({
+          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+          fileIsRequired: false,
+        }),
+    )
+    files: Array<Express.Multer.File>,
+  ) {
+    return this.salesService.paidLateFeesAutoApproved(
+      financingId,
+      paidLateFeesDto.amountPaid,
+      paidLateFeesDto.payments,
+      files,
+      user.id,
+      paidLateFeesDto.dateOperation,
+      paidLateFeesDto.numberTicket,
+    );
+  }
 }
