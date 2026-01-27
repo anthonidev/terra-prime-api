@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   IsDateString,
   IsEnum,
+  IsIn,
   IsNumber,
   IsOptional,
   IsString,
@@ -10,6 +11,9 @@ import { PaginationDto } from 'src/common/dto/paginationDto';
 import { StatusPayment } from '../enums/status-payments.enum';
 
 export class FindPaymentsDto extends PaginationDto {
+  @IsOptional()
+  @IsIn(['createdAt', 'numberTicket'])
+  orderBy?: 'createdAt' | 'numberTicket' = 'createdAt';
   @IsOptional()
   @IsNumber()
   @Type(() => Number)

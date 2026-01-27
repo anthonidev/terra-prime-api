@@ -54,7 +54,7 @@ export class PaymentsService {
     private readonly nexusApiService: NexusApiService,
     @Inject(forwardRef(() => InvoicesService))
     private readonly invoicesService: InvoicesService,
-  ) {}
+  ) { }
   // Methods for endpoints
   async create(
     createPaymentDto: CreatePaymentDto,
@@ -619,28 +619,110 @@ export class PaymentsService {
       relations: ['details'],
     });
 
-    if (!payment || !payment.metadata?.installmentsBackup) {
+    if (!payment || (!payment.metadata?.installmentsBackup && !payment.metadata?.['Cuotas afectadas'])) {
       throw new BadRequestException(
         'No se encontró información de respaldo para revertir las cuotas',
       );
     }
 
     try {
-      const installmentsBackup = JSON.parse(
-        payment.metadata.installmentsBackup,
-      );
-
-      // Restaurar cada cuota a su estado anterior
-      for (const backup of installmentsBackup) {
-        await this.financingInstallmentsService.updateAmountsPayment(
-          backup.id,
-          backup.previousLateFeeAmountPending,
-          backup.previousLateFeeAmountPaid,
-          backup.previousCoutePending,
-          backup.previousCoutePaid,
-          backup.previousStatus,
-          queryRunner,
+      if (payment.metadata?.installmentsBackup) {
+        // Lógica existente: Restaurar desde backup completo
+        const installmentsBackup = JSON.parse(
+          payment.metadata.installmentsBackup,
         );
+
+        for (const backup of installmentsBackup) {
+          await this.financingInstallmentsService.updateAmountsPayment(
+            backup.id,
+            backup.previousLateFeeAmountPending,
+            backup.previousLateFeeAmountPaid,
+            backup.previousCoutePending,
+            backup.previousCoutePaid,
+            backup.previousStatus,
+            queryRunner,
+          );
+        }
+      } else if (payment.metadata?.['Cuotas afectadas']) {
+        // Lógica de respaldo: Restaurar usando "Cuotas afectadas"
+        // Este es un fallback para pagos antiguos que no tienen installmentsBackup
+        const affectedInstallments = payment.metadata['Cuotas afectadas'];
+
+        // Iterar sobre las claves (e.g., "Cuota 1", "Cuota 2")
+        for (const [key, data] of Object.entries(affectedInstallments)) {
+          const numberCuote = parseInt(key.replace('Cuota ', ''));
+          const amountApplied = Number(data['Monto aplicado']);
+
+          // Buscar la cuota específica
+          // Nota: Necesitamos encontrar la cuota por número y financingId
+          // Como no tenemos método directo por número en service, usamos repository directo aquí o añadimos método
+          // Para mantenerlo limpio, usaremos el financingId del pago
+
+          const financingId = payment.relatedEntityId;
+          const installment = await queryRunner.manager.findOne('financing_installments', {
+            where: {
+              financing: { id: financingId },
+              numberCuote: numberCuote
+            }
+          } as any);
+
+          if (installment) {
+            // Revertir los montos
+            // La lógica inversa de application: 
+            // 1. Restaurar principal (coutePaid -> coutePending)
+            // 2. Restaurar mora (lateFeeAmountPaid -> lateFeeAmountPending)
+
+            let remainingToRevert = amountApplied;
+
+            // Cuánto se pagó de principal en esta transacción?
+            // Es difícil saberlo exacto sin el backup, pero podemos deducirlo
+            // Asumimos que lo último que se pagó fue lo que se aplicó
+
+            // Estrategia: Revertir del Principal primero, luego Mora (inverso al pago)
+            // Al pagar hacemos: Mora primero, luego Principal
+            // Al revertir: Principal primero, luego Mora
+
+            if (remainingToRevert > 0) {
+              // Revertir Principal
+              const principalToRevert = Math.min(remainingToRevert, Number(installment.coutePaid || 0));
+
+              if (principalToRevert > 0) {
+                installment.coutePaid = Number((Number(installment.coutePaid) - principalToRevert).toFixed(2));
+                installment.coutePending = Number((Number(installment.coutePending) + principalToRevert).toFixed(2));
+                remainingToRevert = Number((remainingToRevert - principalToRevert).toFixed(2));
+              }
+            }
+
+            if (remainingToRevert > 0) {
+              // Revertir Mora
+              const lateFeeToRevert = Math.min(remainingToRevert, Number(installment.lateFeeAmountPaid || 0));
+
+              if (lateFeeToRevert > 0) {
+                installment.lateFeeAmountPaid = Number((Number(installment.lateFeeAmountPaid) - lateFeeToRevert).toFixed(2));
+                installment.lateFeeAmountPending = Number((Number(installment.lateFeeAmountPending) + lateFeeToRevert).toFixed(2));
+                remainingToRevert = Number((remainingToRevert - lateFeeToRevert).toFixed(2));
+              }
+            }
+
+            // Restaurar estado
+            // Si estaba PAID, ahora debe ser PENDING (o EXPIRED si la fecha pasó)
+            // Verificamos si la fecha de vencimiento ya pasó para decidir entre PENDING/EXPIRED
+            const now = new Date();
+            const expectedDate = new Date(installment.expectedPaymentDate);
+
+            if (installment.coutePending > 0 || installment.lateFeeAmountPending > 0) {
+              if (expectedDate < now) {
+                installment.status = 'EXPIRED'; // Usar string o importar enum si es necesario, pero string suele funcionar con TypeORM
+              } else {
+                installment.status = 'PENDING';
+              }
+            }
+
+            await queryRunner.manager.save(installment);
+          }
+        }
+      } else {
+        throw new Error('No se encontró información de respaldo ni metadata de cuotas afectadas.');
       }
     } catch (error) {
       throw new BadRequestException(
@@ -685,8 +767,8 @@ export class PaymentsService {
       );
     }
 
-    // Validar que tenga el backup de cuotas
-    if (!payment.metadata?.installmentsBackup) {
+    // Validar que tenga el backup de cuotas O la metadata de cuotas afectadas
+    if (!payment.metadata?.installmentsBackup && !payment.metadata?.['Cuotas afectadas']) {
       throw new BadRequestException(
         'El pago no tiene información de respaldo de cuotas. No se puede anular.',
       );
@@ -756,6 +838,7 @@ export class PaymentsService {
         status,
         collectorId,
         order = 'DESC',
+        orderBy = 'createdAt',
         search,
       } = filters;
 
@@ -763,7 +846,24 @@ export class PaymentsService {
         .createQueryBuilder('payment')
         .leftJoinAndSelect('payment.paymentConfig', 'paymentConfig')
         .leftJoinAndSelect('payment.reviewedBy', 'reviewer')
-        .leftJoinAndSelect('payment.user', 'user');
+        .leftJoinAndSelect('payment.user', 'user')
+        // Join para pagos de tipo 'sale' y 'reservation'
+        .leftJoin(
+          'sales',
+          'sale',
+          `sale.id = "payment"."relatedEntityId"::uuid AND "payment"."relatedEntityType" IN ('sale', 'reservation')`,
+        )
+        .leftJoin('sale.client', 'client')
+        .leftJoin('client.lead', 'lead')
+        // Join para pagos de tipo 'financing' y 'financingInstallments'
+        .leftJoin(
+          'financing',
+          'financing',
+          `financing.id = "payment"."relatedEntityId"::uuid AND "payment"."relatedEntityType" IN ('financing', 'financingInstallments')`,
+        )
+        .leftJoin('financing.sale', 'financingSale')
+        .leftJoin('financingSale.client', 'financingClient')
+        .leftJoin('financingClient.lead', 'financingLead');
 
       if (paymentConfigId)
         queryBuilder.andWhere('payment.paymentConfig.id = :paymentConfigId', {
@@ -786,9 +886,12 @@ export class PaymentsService {
       }
 
       if (search)
-        queryBuilder.andWhere('(user.email ILIKE :search)', {
-          search: `%${search}%`,
-        });
+        queryBuilder.andWhere(
+          '(user.email ILIKE :search OR payment.numberTicket ILIKE :search OR lead.document ILIKE :search OR financingLead.document ILIKE :search)',
+          {
+            search: `%${search}%`,
+          },
+        );
 
       if (userId)
         queryBuilder.andWhere('payment.user.id = :userId', { userId });
@@ -799,7 +902,7 @@ export class PaymentsService {
         });
 
       queryBuilder
-        .orderBy('payment.createdAt', order)
+        .orderBy(`payment.${orderBy}`, order)
         .skip((page - 1) * limit)
         .take(limit);
 
@@ -1117,25 +1220,25 @@ export class PaymentsService {
           currency: sale.lot.block?.stage?.project?.currency,
           client: sale.client
             ? {
-                address: sale.client.address,
-                documentType: sale.client.lead?.documentType,
-                email: sale.client.lead?.email,
-                lead: {
-                  firstName: sale.client.lead?.firstName,
-                  lastName: sale.client.lead?.lastName,
-                  document: sale.client.lead?.document,
-                },
-              }
+              address: sale.client.address,
+              documentType: sale.client.lead?.documentType,
+              email: sale.client.lead?.email,
+              lead: {
+                firstName: sale.client.lead?.firstName,
+                lastName: sale.client.lead?.lastName,
+                document: sale.client.lead?.document,
+              },
+            }
             : null,
 
           lot: sale.lot
             ? {
-                name: sale.lot.name,
-                lotPrice: sale.lot.lotPrice,
-                block: sale.lot.block?.name,
-                stage: sale.lot.block?.stage?.name,
-                project: sale.lot.block?.stage?.project?.name,
-              }
+              name: sale.lot.name,
+              lotPrice: sale.lot.lotPrice,
+              block: sale.lot.block?.name,
+              stage: sale.lot.block?.stage?.name,
+              project: sale.lot.block?.stage?.project?.name,
+            }
             : null,
         };
       }),

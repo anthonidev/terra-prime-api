@@ -47,7 +47,7 @@ export class InvoicesService {
     private readonly financingRepository: Repository<Financing>,
     private readonly dataSource: DataSource,
     private readonly nubefactAdapter: NubefactAdapter,
-  ) {}
+  ) { }
 
   async create(createInvoiceDto: CreateInvoiceDto, user: User): Promise<Invoice> {
     // Buscar el pago relacionado
@@ -213,11 +213,11 @@ export class InvoicesService {
     }
 
     // Validar que la factura esté aceptada por SUNAT
-    if (invoice.status !== InvoiceStatus.ACCEPTED) {
-      throw new BadRequestException(
-        `Solo se pueden anular facturas aceptadas por SUNAT. Estado actual: ${invoice.status}`
-      );
-    }
+    // if (invoice.status !== InvoiceStatus.ACCEPTED) {
+    //   throw new BadRequestException(
+    //     `Solo se pueden anular facturas aceptadas por SUNAT. Estado actual: ${invoice.status}`
+    //   );
+    // }
 
     // Construir el DTO para Nubefact
     const nubefactAnnulDto: NubefactAnnulInvoiceDto = {
@@ -225,7 +225,7 @@ export class InvoicesService {
       tipo_de_comprobante: invoice.documentType,
       serie: invoice.series,
       numero: invoice.number,
-      motivo: annulDto.motivo,
+      motivo: annulDto.reason,
       codigo_unico: annulDto.codigo_unico || invoice.uniqueCode || '',
     };
 
@@ -247,7 +247,7 @@ export class InvoicesService {
     invoice.metadata = {
       ...invoice.metadata,
       annulment: {
-        motivo: annulDto.motivo,
+        motivo: annulDto.reason,
         annulledAt: new Date().toISOString(),
         enlace: response.enlace,
         sunat_ticket_numero: response.sunat_ticket_numero,
