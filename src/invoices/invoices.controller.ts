@@ -65,4 +65,12 @@ export class InvoicesController {
   ): Promise<Invoice> {
     return await this.invoicesService.createDebitNote(createDebitNoteDto, user);
   }
+
+  @Get(':id/notes')
+  @Roles('FAC', 'ADM', 'JVE')
+  async findRelatedNotes(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<Invoice[]> {
+    return await this.invoicesService.findRelatedNotes(id);
+  }
 }

@@ -1122,4 +1122,33 @@ export class InvoicesService {
       await queryRunner.release();
     }
   }
+
+  /**
+   * Obtener las notas de crédito y débito asociadas a una factura o boleta
+   */
+  async findRelatedNotes(invoiceId: number): Promise<Invoice[]> {
+    // Verificar que el invoice existe y es una factura o boleta
+    const invoice = await this.invoiceRepository.findOne({
+      where: { id: invoiceId },
+    });
+
+    if (!invoice) {
+      throw new NotFoundException(`Comprobante con ID ${invoiceId} no encontrado`);
+    }
+
+    if (invoice.documentType !== DocumentType.INVOICE && invoice.documentType !== DocumentType.RECEIPT) {
+      throw new BadRequestException('Solo se pueden consultar notas para facturas o boletas');
+    }
+
+    // Buscar todas las notas de crédito y débito relacionadas
+    const notes = await this.invoiceRepository.find({
+      where: {
+        relatedInvoice: { id: invoiceId },
+      },
+      relations: ['items', 'createdBy'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return notes;
+  }
 }
