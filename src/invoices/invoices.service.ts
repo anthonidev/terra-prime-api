@@ -184,7 +184,7 @@ export class InvoicesService {
     return PaginationHelper.createPaginatedResponse(items, totalItems, filters);
   }
 
-  async findOne(paymentId: number): Promise<Invoice> {
+  async findOne(paymentId: number): Promise<Invoice & { notes?: Invoice[] }> {
     const invoice = await this.invoiceRepository.findOne({
       where: { payment: { id: paymentId } },
       relations: ['items', 'createdBy', 'relatedInvoice', 'payment'],
@@ -192,6 +192,17 @@ export class InvoicesService {
 
     if (!invoice) {
       throw new NotFoundException('Factura no encontrada para el pago especificado');
+    }
+
+    // Si es una factura o boleta, buscar las notas de crédito/débito asociadas
+    if (invoice.documentType === DocumentType.INVOICE || invoice.documentType === DocumentType.RECEIPT) {
+      const notes = await this.invoiceRepository.find({
+        where: { relatedInvoice: { id: invoice.id } },
+        relations: ['items', 'createdBy'],
+        order: { createdAt: 'DESC' },
+      });
+
+      return { ...invoice, notes };
     }
 
     return invoice;
