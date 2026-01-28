@@ -61,6 +61,10 @@ export class PaidInstallmentsAutoApprovedDto {
   @IsOptional()
   numberTicket?: string;
 
+  @IsString()
+  @IsOptional()
+  observation?: string;
+
   @Transform(({ value }) => {
     if (typeof value === 'string') {
       try {

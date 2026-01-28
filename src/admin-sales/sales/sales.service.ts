@@ -1732,7 +1732,7 @@ export class SalesService {
     firstPaymentDateHu?: string,
   ): void {
     // Validaciones básicas del lote
-    if (!interestRate)
+    if (interestRate === undefined || interestRate === null)
       throw new BadRequestException('El porcentaje de interés es requerido');
     if (!quantitySaleCoutes)
       throw new BadRequestException('La cantidad de cuotas es requerido');
@@ -3494,6 +3494,7 @@ export class SalesService {
     userId: string,
     dateOperation: string,
     numberTicket?: string,
+    observation?: string,
   ) {
     return await this.financingInstallmentsService.payInstallmentsAutoApproved(
       financingId,
@@ -3503,6 +3504,7 @@ export class SalesService {
       userId,
       dateOperation,
       numberTicket,
+      observation,
     );
   }
 
@@ -3518,6 +3520,7 @@ export class SalesService {
     userId: string,
     dateOperation: string,
     numberTicket?: string,
+    observation?: string,
   ) {
     return await this.financingInstallmentsService.payLateFeesAutoApproved(
       financingId,
@@ -3527,6 +3530,7 @@ export class SalesService {
       userId,
       dateOperation,
       numberTicket,
+      observation,
     );
   }
 }

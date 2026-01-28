@@ -194,6 +194,7 @@ export class FinancingInstallmentsService {
     userId: string,
     dateOperation: string,
     numberTicket?: string,
+    observation?: string,
   ): Promise<PaymentResponse> {
     if (amountPaid <= 0)
       throw new BadRequestException('El monto a pagar debe ser mayor a cero.');
@@ -281,6 +282,7 @@ export class FinancingInstallmentsService {
           dateOperation,
           numberTicket,
           queryRunner,
+          observation,
         );
       },
     );
@@ -914,6 +916,7 @@ export class FinancingInstallmentsService {
     userId: string,
     dateOperation: string,
     numberTicket?: string,
+    observation?: string,
   ): Promise<PaymentResponse> {
     if (amountPaid <= 0)
       throw new BadRequestException('El monto a pagar debe ser mayor a cero.');
@@ -978,6 +981,7 @@ export class FinancingInstallmentsService {
           dateOperation,
           numberTicket,
           queryRunner,
+          observation,
         );
       },
     );

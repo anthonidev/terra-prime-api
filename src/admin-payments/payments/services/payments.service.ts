@@ -54,7 +54,7 @@ export class PaymentsService {
     private readonly nexusApiService: NexusApiService,
     @Inject(forwardRef(() => InvoicesService))
     private readonly invoicesService: InvoicesService,
-  ) { }
+  ) {}
   // Methods for endpoints
   async create(
     createPaymentDto: CreatePaymentDto,
@@ -158,6 +158,7 @@ export class PaymentsService {
     dateOperation: string,
     numberTicket: string | undefined,
     queryRunner: QueryRunner,
+    observation?: string,
   ): Promise<PaymentResponse> {
     this.isValidPaymentsItems(
       createPaymentDto.amount,
@@ -195,6 +196,7 @@ export class PaymentsService {
         reviewedAt: new Date(),
         dateOperation: new Date(dateOperation),
         numberTicket: numberTicket,
+        observation: observation,
       });
 
       const savedPayment = await queryRunner.manager.save(payment);
@@ -619,7 +621,11 @@ export class PaymentsService {
       relations: ['details'],
     });
 
-    if (!payment || (!payment.metadata?.installmentsBackup && !payment.metadata?.['Cuotas afectadas'])) {
+    if (
+      !payment ||
+      (!payment.metadata?.installmentsBackup &&
+        !payment.metadata?.['Cuotas afectadas'])
+    ) {
       throw new BadRequestException(
         'No se encontró información de respaldo para revertir las cuotas',
       );
@@ -659,16 +665,19 @@ export class PaymentsService {
           // Para mantenerlo limpio, usaremos el financingId del pago
 
           const financingId = payment.relatedEntityId;
-          const installment = await queryRunner.manager.findOne('financing_installments', {
-            where: {
-              financing: { id: financingId },
-              numberCuote: numberCuote
-            }
-          } as any);
+          const installment = await queryRunner.manager.findOne(
+            'financing_installments',
+            {
+              where: {
+                financing: { id: financingId },
+                numberCuote: numberCuote,
+              },
+            } as any,
+          );
 
           if (installment) {
             // Revertir los montos
-            // La lógica inversa de application: 
+            // La lógica inversa de application:
             // 1. Restaurar principal (coutePaid -> coutePending)
             // 2. Restaurar mora (lateFeeAmountPaid -> lateFeeAmountPending)
 
@@ -684,23 +693,49 @@ export class PaymentsService {
 
             if (remainingToRevert > 0) {
               // Revertir Principal
-              const principalToRevert = Math.min(remainingToRevert, Number(installment.coutePaid || 0));
+              const principalToRevert = Math.min(
+                remainingToRevert,
+                Number(installment.coutePaid || 0),
+              );
 
               if (principalToRevert > 0) {
-                installment.coutePaid = Number((Number(installment.coutePaid) - principalToRevert).toFixed(2));
-                installment.coutePending = Number((Number(installment.coutePending) + principalToRevert).toFixed(2));
-                remainingToRevert = Number((remainingToRevert - principalToRevert).toFixed(2));
+                installment.coutePaid = Number(
+                  (Number(installment.coutePaid) - principalToRevert).toFixed(
+                    2,
+                  ),
+                );
+                installment.coutePending = Number(
+                  (
+                    Number(installment.coutePending) + principalToRevert
+                  ).toFixed(2),
+                );
+                remainingToRevert = Number(
+                  (remainingToRevert - principalToRevert).toFixed(2),
+                );
               }
             }
 
             if (remainingToRevert > 0) {
               // Revertir Mora
-              const lateFeeToRevert = Math.min(remainingToRevert, Number(installment.lateFeeAmountPaid || 0));
+              const lateFeeToRevert = Math.min(
+                remainingToRevert,
+                Number(installment.lateFeeAmountPaid || 0),
+              );
 
               if (lateFeeToRevert > 0) {
-                installment.lateFeeAmountPaid = Number((Number(installment.lateFeeAmountPaid) - lateFeeToRevert).toFixed(2));
-                installment.lateFeeAmountPending = Number((Number(installment.lateFeeAmountPending) + lateFeeToRevert).toFixed(2));
-                remainingToRevert = Number((remainingToRevert - lateFeeToRevert).toFixed(2));
+                installment.lateFeeAmountPaid = Number(
+                  (
+                    Number(installment.lateFeeAmountPaid) - lateFeeToRevert
+                  ).toFixed(2),
+                );
+                installment.lateFeeAmountPending = Number(
+                  (
+                    Number(installment.lateFeeAmountPending) + lateFeeToRevert
+                  ).toFixed(2),
+                );
+                remainingToRevert = Number(
+                  (remainingToRevert - lateFeeToRevert).toFixed(2),
+                );
               }
             }
 
@@ -710,7 +745,10 @@ export class PaymentsService {
             const now = new Date();
             const expectedDate = new Date(installment.expectedPaymentDate);
 
-            if (installment.coutePending > 0 || installment.lateFeeAmountPending > 0) {
+            if (
+              installment.coutePending > 0 ||
+              installment.lateFeeAmountPending > 0
+            ) {
               if (expectedDate < now) {
                 installment.status = 'EXPIRED'; // Usar string o importar enum si es necesario, pero string suele funcionar con TypeORM
               } else {
@@ -722,7 +760,9 @@ export class PaymentsService {
           }
         }
       } else {
-        throw new Error('No se encontró información de respaldo ni metadata de cuotas afectadas.');
+        throw new Error(
+          'No se encontró información de respaldo ni metadata de cuotas afectadas.',
+        );
       }
     } catch (error) {
       throw new BadRequestException(
@@ -768,7 +808,10 @@ export class PaymentsService {
     }
 
     // Validar que tenga el backup de cuotas O la metadata de cuotas afectadas
-    if (!payment.metadata?.installmentsBackup && !payment.metadata?.['Cuotas afectadas']) {
+    if (
+      !payment.metadata?.installmentsBackup &&
+      !payment.metadata?.['Cuotas afectadas']
+    ) {
       throw new BadRequestException(
         'El pago no tiene información de respaldo de cuotas. No se puede anular.',
       );
@@ -798,13 +841,16 @@ export class PaymentsService {
 
         // Anular factura asociada si existe (fuera de la transacción porque usa HTTP)
         // Se hace después de confirmar la transacción para no bloquear la anulación del payment
-        const annulledInvoice = await this.invoicesService.annulInvoiceByPaymentId(
-          paymentId,
-          `Anulación automática por cancelación de pago: ${cancellationReason}`,
-        );
+        const annulledInvoice =
+          await this.invoicesService.annulInvoiceByPaymentId(
+            paymentId,
+            `Anulación automática por cancelación de pago: ${cancellationReason}`,
+          );
 
         if (annulledInvoice) {
-          console.log(`✅ Factura ${annulledInvoice.id} anulada exitosamente en Nubefact`);
+          console.log(
+            `✅ Factura ${annulledInvoice.id} anulada exitosamente en Nubefact`,
+          );
         }
 
         return {
@@ -970,6 +1016,7 @@ export class PaymentsService {
         'payment.banckName',
         'payment.dateOperation',
         'payment.numberTicket',
+        'payment.observation',
         'payment.rejectionReason',
         'payment.relatedEntityType',
         'payment.relatedEntityId',
@@ -1020,7 +1067,7 @@ export class PaymentsService {
     reviewerId: string,
     completePaymentDto: CompletePaymentDto,
   ) {
-    const { numberTicket } = completePaymentDto;
+    const { numberTicket, observation, dateOperation } = completePaymentDto;
     if (!numberTicket)
       throw new BadRequestException('Se requiere el número de ticket');
 
@@ -1041,6 +1088,14 @@ export class PaymentsService {
 
         payment.numberTicket = numberTicket;
         payment.status = StatusPayment.COMPLETED;
+
+        if (observation !== undefined) {
+          payment.observation = observation;
+        }
+
+        if (dateOperation) {
+          payment.dateOperation = new Date(dateOperation);
+        }
 
         await queryRunner.manager.save(payment);
         return formatPaymentsResponse(payment);
@@ -1185,6 +1240,7 @@ export class PaymentsService {
           banckName: payment.banckName,
           dateOperation: payment.dateOperation,
           numberTicket: payment.numberTicket,
+          observation: payment.observation,
           paymentConfig: {
             code: payment.paymentConfig.code,
             name: payment.paymentConfig.name,
@@ -1220,25 +1276,25 @@ export class PaymentsService {
           currency: sale.lot.block?.stage?.project?.currency,
           client: sale.client
             ? {
-              address: sale.client.address,
-              documentType: sale.client.lead?.documentType,
-              email: sale.client.lead?.email,
-              lead: {
-                firstName: sale.client.lead?.firstName,
-                lastName: sale.client.lead?.lastName,
-                document: sale.client.lead?.document,
-              },
-            }
+                address: sale.client.address,
+                documentType: sale.client.lead?.documentType,
+                email: sale.client.lead?.email,
+                lead: {
+                  firstName: sale.client.lead?.firstName,
+                  lastName: sale.client.lead?.lastName,
+                  document: sale.client.lead?.document,
+                },
+              }
             : null,
 
           lot: sale.lot
             ? {
-              name: sale.lot.name,
-              lotPrice: sale.lot.lotPrice,
-              block: sale.lot.block?.name,
-              stage: sale.lot.block?.stage?.name,
-              project: sale.lot.block?.stage?.project?.name,
-            }
+                name: sale.lot.name,
+                lotPrice: sale.lot.lotPrice,
+                block: sale.lot.block?.name,
+                stage: sale.lot.block?.stage?.name,
+                project: sale.lot.block?.stage?.project?.name,
+              }
             : null,
         };
       }),
@@ -1400,9 +1456,8 @@ export class PaymentsService {
     }
 
     if (relatedEntityType === 'lateFee') {
-      paymentConfig = await this.paymentConfigService.findOneByCode(
-        'LATE_FEE_PAYMENT',
-      );
+      paymentConfig =
+        await this.paymentConfigService.findOneByCode('LATE_FEE_PAYMENT');
       const pendingPayment = await this.paymentRepository.findOne({
         where: {
           relatedEntityType,

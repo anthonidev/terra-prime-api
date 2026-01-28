@@ -1,12 +1,21 @@
-import { User } from "src/user/entities/user.entity";
-import { BeforeInsert, BeforeUpdate, Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
-import { MethodPayment } from "../enums/method-payment.enum";
-import { StatusPayment } from "../enums/status-payments.enum";
-import { PaymentDetails } from "./payment-details.entity";
-import { PaymentConfig } from "src/admin-payments/payments-config/entities/payments-config.entity";
-import { Timestamped } from "src/common/entities/timestamped.entity";
+import { User } from 'src/user/entities/user.entity';
+import {
+  BeforeInsert,
+  BeforeUpdate,
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { MethodPayment } from '../enums/method-payment.enum';
+import { StatusPayment } from '../enums/status-payments.enum';
+import { PaymentDetails } from './payment-details.entity';
+import { PaymentConfig } from 'src/admin-payments/payments-config/entities/payments-config.entity';
+import { Timestamped } from 'src/common/entities/timestamped.entity';
 
-@Entity('payments') 
+@Entity('payments')
 export class Payment extends Timestamped {
   @PrimaryGeneratedColumn()
   id: number;
@@ -40,48 +49,41 @@ export class Payment extends Timestamped {
   @Column({
     type: 'enum',
     enum: MethodPayment,
-    default: MethodPayment.VOUCHER
+    default: MethodPayment.VOUCHER,
   })
   methodPayment: MethodPayment;
 
   @Column({
     type: 'varchar',
     length: 25,
-    nullable: true
+    nullable: true,
   })
   banckName: string;
 
   @Column({
     nullable: true,
-    type: 'timestamp'
+    type: 'timestamp',
   })
   dateOperation: Date;
 
   @Column({
     type: 'varchar',
     length: 25,
-    nullable: true
+    nullable: true,
   })
   numberTicket: string;
 
   @Column({
     type: 'varchar',
     nullable: true,
-    length: 25
+    length: 25,
   })
   rejectionReason: string;
 
-  @OneToMany(
-    () => PaymentDetails,
-    (item) => item.payment,
-    { cascade: true }
-  )
+  @OneToMany(() => PaymentDetails, (item) => item.payment, { cascade: true })
   details: PaymentDetails[];
 
-  @ManyToOne(
-    () => User,
-    { nullable: true }
-  )
+  @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'reviewed_by_id' })
   reviewedBy: User;
 

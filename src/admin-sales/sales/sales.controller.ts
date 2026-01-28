@@ -348,6 +348,7 @@ export class SalesController {
       user.id,
       paidInstallmentsDto.dateOperation,
       paidInstallmentsDto.numberTicket,
+      paidInstallmentsDto.observation,
     );
   }
 
@@ -382,6 +383,7 @@ export class SalesController {
       user.id,
       paidLateFeesDto.dateOperation,
       paidLateFeesDto.numberTicket,
+      paidLateFeesDto.observation,
     );
   }
 }

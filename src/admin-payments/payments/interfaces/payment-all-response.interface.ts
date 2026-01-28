@@ -17,6 +17,7 @@ export interface PaymentAllResponse {
   banckName?: string;
   dateOperation?: Date;
   numberTicket?: string;
+  observation?: string;
   paymentConfig: {
     code: string;
     name: string;
