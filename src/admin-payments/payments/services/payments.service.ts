@@ -641,10 +641,10 @@ export class PaymentsService {
         for (const backup of installmentsBackup) {
           await this.financingInstallmentsService.updateAmountsPayment(
             backup.id,
-            backup.previousLateFeeAmountPending,
-            backup.previousLateFeeAmountPaid,
-            backup.previousCoutePending,
-            backup.previousCoutePaid,
+            Number(backup.previousLateFeeAmountPending ?? 0),
+            Number(backup.previousLateFeeAmountPaid ?? 0),
+            Number(backup.previousCoutePending ?? 0),
+            Number(backup.previousCoutePaid ?? 0),
             backup.previousStatus,
             queryRunner,
           );

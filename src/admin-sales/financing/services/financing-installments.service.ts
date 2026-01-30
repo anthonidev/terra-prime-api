@@ -482,10 +482,10 @@ export class FinancingInstallmentsService {
       throw new Error(
         `No se encontró una cuota de financiamiento con ID ${financingInstallmentsId}`,
       );
-    financingInstallments.lateFeeAmountPending = lateFeeAmountPending;
-    financingInstallments.lateFeeAmountPaid = lateFeeAmountPaid;
-    financingInstallments.coutePending = coutePending;
-    financingInstallments.coutePaid = cuotePaid;
+    financingInstallments.lateFeeAmountPending = Number(lateFeeAmountPending ?? 0);
+    financingInstallments.lateFeeAmountPaid = Number(lateFeeAmountPaid ?? 0);
+    financingInstallments.coutePending = Number(coutePending ?? 0);
+    financingInstallments.coutePaid = Number(cuotePaid ?? 0);
     financingInstallments.status = status;
     return await repository.save(financingInstallments);
   }

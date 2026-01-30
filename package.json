@@ -19,7 +19,13 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "strip-comments": "node scripts/regex-strip-comments.js",
-    "remove-unused": "node scripts/remove-unused-code-flat.mjs"
+    "remove-unused": "node scripts/remove-unused-code-flat.mjs",
+    "validate:amount": "ts-node scripts/validate-amounts.ts",
+    "resolve:amount": "ts-node scripts/resolve-amounts.ts",
+    "resolve:min-amount": "ts-node scripts/resolve-min-amounts.ts",
+    "resolve:positive-amount": "ts-node scripts/resolve-positive-amounts.ts",
+    "resolve:other-cases": "ts-node scripts/resolve-other-cases.ts",
+    "resolve:all": "ts-node scripts/resolve-all.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.815.0",

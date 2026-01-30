@@ -1,0 +1,240 @@
+================================================================================
+REPORTE DE DISCREPANCIAS - PAGOS vs CUOTAS PAGADAS
+Fecha de generación: 30/1/2026, 7:13:54 a. m.
+================================================================================
+
+Total de ventas con discrepancias: 32
+
+--------------------------------------------------------------------------------
+DETALLE DE DISCREPANCIAS:
+--------------------------------------------------------------------------------
+
+Sale ID: 1648b48a-a21d-492b-8fe6-f33b7cb87866
+Financing ID: aa49f610-a322-46f5-85d3-b42bb05bc616
+Total Pagos (APPROVED/COMPLETED): S/ 3793.56
+Total Cuotas Pagadas (coutePaid): S/ 4835.22
+Diferencia: S/ -1041.66
+----------------------------------------
+
+Sale ID: 566b30c6-0e46-47b4-af62-2c21ebba010b
+Financing ID: 75e3723f-b39d-41c3-8b5e-951c04bd7a64
+Total Pagos (APPROVED/COMPLETED): S/ 7600.00
+Total Cuotas Pagadas (coutePaid): S/ 11400.00
+Diferencia: S/ -3800.00
+----------------------------------------
+
+Sale ID: 6a661d03-e7fe-48a6-a25f-85e2345cd940
+Financing ID: 1b776be1-cbde-48ce-b9a0-047b6e42a85d
+Total Pagos (APPROVED/COMPLETED): S/ 3504.00
+Total Cuotas Pagadas (coutePaid): S/ 5256.00
+Diferencia: S/ -1752.00
+----------------------------------------
+
+Sale ID: 0a333668-aae9-4739-a6ee-8890b3d1a56e
+Financing ID: 2a3a52ce-3ed7-46e1-bcc0-e7be020663e8
+Total Pagos (APPROVED/COMPLETED): S/ 5444.60
+Total Cuotas Pagadas (coutePaid): S/ 7000.20
+Diferencia: S/ -1555.60
+----------------------------------------
+
+Sale ID: e3627954-c9db-4257-b554-9e29125a7ea1
+Financing ID: 2b29839b-350c-41f5-9b56-59d3626d0b47
+Total Pagos (APPROVED/COMPLETED): S/ 4784.00
+Total Cuotas Pagadas (coutePaid): S/ 4782.55
+Diferencia: S/ 1.45
+----------------------------------------
+
+Sale ID: 77a3e3d1-e4cf-4da4-bfef-bdd82dbf532f
+Financing ID: 19793395-de4a-4c25-93ca-64d625e8b1f0
+Total Pagos (APPROVED/COMPLETED): S/ 14000.00
+Total Cuotas Pagadas (coutePaid): S/ 22312.50
+Diferencia: S/ -8312.50
+----------------------------------------
+
+Sale ID: 5d2cbb2c-b11a-46ef-9134-2623940b3cce
+Financing ID: 8b536612-0c07-4de0-b1c4-717ecdf40c69
+Total Pagos (APPROVED/COMPLETED): S/ 8000.05
+Total Cuotas Pagadas (coutePaid): S/ 8000.00
+Diferencia: S/ 0.05
+----------------------------------------
+
+Sale ID: 2988de5e-42ee-449b-8943-4f9e406e1689
+Financing ID: f43c3fd5-9a03-4a49-9906-2353a2adcc55
+Total Pagos (APPROVED/COMPLETED): S/ 15000.00
+Total Cuotas Pagadas (coutePaid): S/ 34000.00
+Diferencia: S/ -19000.00
+----------------------------------------
+
+Sale ID: e83466f6-5975-4481-acc6-46fa14c9e241
+Financing ID: abab88d8-f64e-4f3b-ba74-178d176cdfbe
+Total Pagos (APPROVED/COMPLETED): S/ 8500.00
+Total Cuotas Pagadas (coutePaid): S/ 9000.00
+Diferencia: S/ -500.00
+----------------------------------------
+
+Sale ID: 698a9131-2211-43cc-abff-4da3856825be
+Financing ID: 09d880d1-0410-42c1-b804-077c2ead78dd
+Total Pagos (APPROVED/COMPLETED): S/ 16190.00
+Total Cuotas Pagadas (coutePaid): S/ 13812.50
+Diferencia: S/ 2377.50
+----------------------------------------
+
+Sale ID: 3616177b-2d9b-4d41-8e36-940917d0f2e5
+Financing ID: 7053895f-d875-46c8-931a-d71d3fe4e21d
+Total Pagos (APPROVED/COMPLETED): S/ 36832.00
+Total Cuotas Pagadas (coutePaid): S/ 17750.00
+Diferencia: S/ 19082.00
+----------------------------------------
+
+Sale ID: 8801ed12-9fa6-4fac-9a51-a0a58cad0310
+Financing ID: 435c271a-02b6-49b9-b172-5b741fd6804f
+Total Pagos (APPROVED/COMPLETED): S/ 42112.00
+Total Cuotas Pagadas (coutePaid): S/ 38412.00
+Diferencia: S/ 3700.00
+----------------------------------------
+
+Sale ID: 17e4115a-1115-4af3-a1ab-84e2e4e40c16
+Financing ID: f846c3ea-2ec4-4fd6-9652-a5ed6cd5f9d7
+Total Pagos (APPROVED/COMPLETED): S/ 24565.00
+Total Cuotas Pagadas (coutePaid): S/ 24560.00
+Diferencia: S/ 5.00
+----------------------------------------
+
+Sale ID: 46464034-d127-48e5-986c-3ecaed7a9bbc
+Financing ID: 909163d4-57d2-46c4-8275-3cf69fc69b1e
+Total Pagos (APPROVED/COMPLETED): S/ 25217.70
+Total Cuotas Pagadas (coutePaid): S/ 7175.00
+Diferencia: S/ 18042.70
+----------------------------------------
+
+Sale ID: d64192b1-e876-4b03-96a3-5bf1359f920a
+Financing ID: 49688757-acbd-4c3e-920b-e6062c38020d
+Total Pagos (APPROVED/COMPLETED): S/ 37556.12
+Total Cuotas Pagadas (coutePaid): S/ 35416.70
+Diferencia: S/ 2139.42
+----------------------------------------
+
+Sale ID: 4692ccc4-6c1d-4016-bbb8-bfe3cc4e7d53
+Financing ID: 4fa15368-365b-4763-99be-9bd3226227bb
+Total Pagos (APPROVED/COMPLETED): S/ 30681.72
+Total Cuotas Pagadas (coutePaid): S/ 30675.36
+Diferencia: S/ 6.36
+----------------------------------------
+
+Sale ID: a0ea8924-0cd0-4bc4-9087-205fae063a59
+Financing ID: c7139172-b6ea-478d-ae07-5600b6ab9f46
+Total Pagos (APPROVED/COMPLETED): S/ 36745.90
+Total Cuotas Pagadas (coutePaid): S/ 36053.11
+Diferencia: S/ 692.79
+----------------------------------------
+
+Sale ID: e7ef5513-df61-4bd7-ad82-184b8faae23e
+Financing ID: 21819ed5-5b26-4165-87e6-45641ecd32b0
+Total Pagos (APPROVED/COMPLETED): S/ 20000.00
+Total Cuotas Pagadas (coutePaid): S/ 19999.97
+Diferencia: S/ 0.03
+----------------------------------------
+
+Sale ID: 02f7efce-5915-417f-a800-d8ab4fceb3c5
+Financing ID: ed844724-375c-4831-ac33-602b85d66d0e
+Total Pagos (APPROVED/COMPLETED): S/ 44939.42
+Total Cuotas Pagadas (coutePaid): S/ 30989.42
+Diferencia: S/ 13950.00
+----------------------------------------
+
+Sale ID: 87a8ac77-500c-475b-9d46-37328cac0898
+Financing ID: 0f89cefb-0bcf-49f7-a450-0e773c3d6150
+Total Pagos (APPROVED/COMPLETED): S/ 7358.73
+Total Cuotas Pagadas (coutePaid): S/ 7338.69
+Diferencia: S/ 20.04
+----------------------------------------
+
+Sale ID: cddb572b-e93f-46fd-971e-f8ae139b65fc
+Financing ID: 1e3c76ce-0305-4b51-a55e-777428925fc3
+Total Pagos (APPROVED/COMPLETED): S/ 8870.02
+Total Cuotas Pagadas (coutePaid): S/ 8400.02
+Diferencia: S/ 470.00
+----------------------------------------
+
+Sale ID: b910a6bc-e586-441e-9544-f07563c53226
+Financing ID: dc877fb9-afc0-426f-b1f7-eca555604de7
+Total Pagos (APPROVED/COMPLETED): S/ 26943.00
+Total Cuotas Pagadas (coutePaid): S/ 26458.23
+Diferencia: S/ 484.77
+----------------------------------------
+
+Sale ID: b3d4f15a-cae3-4cb6-af6e-a7bc0b36a729
+Financing ID: 02d9d7e7-1f1a-4ef4-9959-30b170b80d5f
+Total Pagos (APPROVED/COMPLETED): S/ 10775.21
+Total Cuotas Pagadas (coutePaid): S/ 10484.60
+Diferencia: S/ 290.61
+----------------------------------------
+
+Sale ID: 3e18deb2-4607-49a8-8d5c-a60ca3e199d4
+Financing ID: b6c51222-0ffa-4a42-b226-64689dfa9321
+Total Pagos (APPROVED/COMPLETED): S/ 25901.70
+Total Cuotas Pagadas (coutePaid): S/ 25900.08
+Diferencia: S/ 1.62
+----------------------------------------
+
+Sale ID: 11264ad2-7f8b-4e4b-80f6-ea2ac7e1cf68
+Financing ID: e96a1fe4-da5f-4c28-9abe-662d913c4af9
+Total Pagos (APPROVED/COMPLETED): S/ 12875.16
+Total Cuotas Pagadas (coutePaid): S/ 10813.53
+Diferencia: S/ 2061.63
+----------------------------------------
+
+Sale ID: 10f7470e-bf7d-4149-ac75-d7adc1ef0c56
+Financing ID: 0cfccedf-b977-4ac2-9625-d59f1aefc2a6
+Total Pagos (APPROVED/COMPLETED): S/ 24600.00
+Total Cuotas Pagadas (coutePaid): S/ 4100.00
+Diferencia: S/ 20500.00
+----------------------------------------
+
+Sale ID: 3823b53c-353f-4250-8447-b89519148392
+Financing ID: 53da6121-1ea7-4cd8-84e4-82afe635daaa
+Total Pagos (APPROVED/COMPLETED): S/ 24011.88
+Total Cuotas Pagadas (coutePaid): S/ 23995.84
+Diferencia: S/ 16.04
+----------------------------------------
+
+Sale ID: aef1f6ae-d68c-4e3e-93f2-7aba585c371b
+Financing ID: 03faeaa1-e9fe-4002-955c-93081c3887af
+Total Pagos (APPROVED/COMPLETED): S/ 13305.03
+Total Cuotas Pagadas (coutePaid): S/ 13299.08
+Diferencia: S/ 5.95
+----------------------------------------
+
+Sale ID: c22edf9f-4a5a-4e54-b228-a91dae480324
+Financing ID: a4304284-49b2-49e2-8c07-8d0395b14e7d
+Total Pagos (APPROVED/COMPLETED): S/ 32616.31
+Total Cuotas Pagadas (coutePaid): S/ 32610.17
+Diferencia: S/ 6.14
+----------------------------------------
+
+Sale ID: b3645926-86e9-4ecf-bc4d-9f57c7778212
+Financing ID: bf515f19-d9e3-4554-b59c-6f9d9174de34
+Total Pagos (APPROVED/COMPLETED): S/ 20998.97
+Total Cuotas Pagadas (coutePaid): S/ 20998.96
+Diferencia: S/ 0.01
+----------------------------------------
+
+Sale ID: 90b43cdc-8773-48f7-b7e6-e345b179b843
+Financing ID: 9586f6a8-a38c-478e-976c-ffa443b31abd
+Total Pagos (APPROVED/COMPLETED): S/ 19001.19
+Total Cuotas Pagadas (coutePaid): S/ 19000.07
+Diferencia: S/ 1.12
+----------------------------------------
+
+Sale ID: 871e07bf-10d9-4dea-b24a-1aa026c82f2a
+Financing ID: 8219280b-fc53-48c7-bd9a-828eceff8cb5
+Total Pagos (APPROVED/COMPLETED): S/ 34118.38
+Total Cuotas Pagadas (coutePaid): S/ 34115.74
+Diferencia: S/ 2.64
+----------------------------------------
+
+================================================================================
+RESUMEN
+================================================================================
+Ventas con pagos > cuotas: 25 (Total: S/ 83857.87)
+Ventas con pagos < cuotas: 7 (Total: S/ 35961.76)
