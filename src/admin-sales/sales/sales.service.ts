@@ -1111,10 +1111,10 @@ export class SalesService {
         : null,
       maximumHoldPeriod: formattedSale.maximumHoldPeriod,
       fromReservation: formattedSale.fromReservation,
-      client: {
+      client: formattedSale.client ? {
         ...formattedSale.client,
         document: sale.client?.lead?.document ?? null,
-      },
+      } : null,
       secondaryClients: formattedSale.secondaryClients,
       lot: formattedSale.lot,
       radicationPdfUrl: formattedSale.radicationPdfUrl,
