@@ -11,6 +11,7 @@ import { Lead } from '../entities/lead.entity';
 import { Ubigeo } from '../entities/ubigeo.entity';
 import { LeadSource } from '../entities/lead-source.entity';
 import { LeadVisit } from '../entities/lead-visit.entity';
+import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
 import { CreateUpdateLeadDto } from '../dto/create-update-lead.dto';
 import { FindLeadByDocumentDto } from '../dto/find-by-document.dto';
 import { FindLeadsDto } from '../dto/find-leads.dto';
@@ -39,6 +40,8 @@ export class LeadService {
     private readonly leadSourceRepository: Repository<LeadSource>,
     @InjectRepository(LeadVisit)
     private readonly leadVisitRepository: Repository<LeadVisit>,
+    @InjectRepository(Sale)
+    private readonly saleRepository: Repository<Sale>,
     private readonly userService: UsersService,
     private readonly transactionService: TransactionService,
     private readonly participantsService: ParticipantsService,
@@ -281,6 +284,7 @@ export class LeadService {
         'visits.salesGeneralManager',
         'visits.postSale',
         'visits.closer',
+        'visits.generalDirector',
       ]
     });
     if (!lead) {
@@ -350,6 +354,7 @@ export class LeadService {
         'visits.salesManager',
         'visits.postSale',
         'visits.closer',
+        'visits.generalDirector',
       ]
     });
     return leads.map(formatLeadWithParticipants);
@@ -384,6 +389,7 @@ export class LeadService {
         'visits.salesManager',
         'visits.postSale',
         'visits.closer',
+        'visits.generalDirector',
       ]
     });
     return leads.map(formatLeadWithParticipants);
@@ -436,6 +442,7 @@ export class LeadService {
         { id: assignParticipantsDto.salesManagerId, type: ParticipantType.SALES_MANAGER, field: 'salesManager' },
         { id: assignParticipantsDto.postSaleId, type: ParticipantType.POST_SALE, field: 'postSale' },
         { id: assignParticipantsDto.closerId, type: ParticipantType.CLOSER, field: 'closer' },
+        { id: assignParticipantsDto.generalDirectorId, type: ParticipantType.GENERAL_DIRECTOR, field: 'generalDirector' },
       ];
 
       // Validar participantes que se están asignando
@@ -476,8 +483,12 @@ export class LeadService {
           'salesGeneralManager',
           'postSale',
           'closer',
+          'generalDirector',
         ]
       });
+
+      // Sincronizar participantes con las ventas asociadas a este leadVisit
+      await this.syncParticipantsToSales(leadVisitId, leadVisit);
 
       return leadVisit;
 
@@ -505,6 +516,7 @@ export class LeadService {
         'salesGeneralManager',
         'postSale',
         'closer',
+        'generalDirector',
       ]
     });
   }
@@ -672,6 +684,116 @@ export class LeadService {
         failed: updatedLeadsWithVendorIds.length,
         totalPoints: 0
       };
+    }
+  }
+
+  // ========== MÉTODOS DE SINCRONIZACIÓN BIDIRECCIONAL ==========
+
+  /**
+   * Sincroniza los participantes del leadVisit con las ventas asociadas
+   * Se llama cuando se actualizan participantes en un leadVisit
+   */
+  private async syncParticipantsToSales(leadVisitId: string, leadVisit: LeadVisit): Promise<void> {
+    try {
+      // Buscar ventas que tienen este leadVisit
+      const sales = await this.saleRepository.find({
+        where: { leadVisit: { id: leadVisitId } }
+      });
+
+      if (sales.length === 0) return;
+
+      // Actualizar cada venta con los participantes del leadVisit
+      for (const sale of sales) {
+        await this.saleRepository.update(sale.id, {
+          liner: leadVisit.linerParticipant || null,
+          telemarketingSupervisor: leadVisit.telemarketingSupervisor || null,
+          telemarketingConfirmer: leadVisit.telemarketingConfirmer || null,
+          telemarketer: leadVisit.telemarketer || null,
+          fieldManager: leadVisit.fieldManager || null,
+          fieldSupervisor: leadVisit.fieldSupervisor || null,
+          fieldSeller: leadVisit.fieldSeller || null,
+          salesManager: leadVisit.salesManager || null,
+          salesGeneralManager: leadVisit.salesGeneralManager || null,
+          postSale: leadVisit.postSale || null,
+          closer: leadVisit.closer || null,
+          generalDirector: leadVisit.generalDirector || null,
+        });
+      }
+
+      this.logger.log(`Sincronizados participantes del leadVisit ${leadVisitId} a ${sales.length} venta(s)`);
+    } catch (error) {
+      this.logger.error(`Error al sincronizar participantes a ventas: ${error.message}`);
+    }
+  }
+
+  /**
+   * Actualiza los participantes del leadVisit desde una venta (sincronización inversa)
+   * Se llama desde el SalesService cuando se actualizan participantes en una venta
+   * No sincroniza de vuelta a las ventas para evitar loops
+   */
+  async updateLeadVisitParticipantsFromSale(
+    leadVisitId: string,
+    participants: {
+      linerId?: string | null;
+      telemarketingSupervisorId?: string | null;
+      telemarketingConfirmerId?: string | null;
+      telemarketerId?: string | null;
+      fieldManagerId?: string | null;
+      fieldSupervisorId?: string | null;
+      fieldSellerId?: string | null;
+      salesManagerId?: string | null;
+      salesGeneralManagerId?: string | null;
+      postSaleId?: string | null;
+      closerId?: string | null;
+      generalDirectorId?: string | null;
+    }
+  ): Promise<void> {
+    try {
+      const updateData: any = {};
+
+      if (participants.linerId !== undefined) {
+        updateData.linerParticipant = participants.linerId ? { id: participants.linerId } : null;
+      }
+      if (participants.telemarketingSupervisorId !== undefined) {
+        updateData.telemarketingSupervisor = participants.telemarketingSupervisorId ? { id: participants.telemarketingSupervisorId } : null;
+      }
+      if (participants.telemarketingConfirmerId !== undefined) {
+        updateData.telemarketingConfirmer = participants.telemarketingConfirmerId ? { id: participants.telemarketingConfirmerId } : null;
+      }
+      if (participants.telemarketerId !== undefined) {
+        updateData.telemarketer = participants.telemarketerId ? { id: participants.telemarketerId } : null;
+      }
+      if (participants.fieldManagerId !== undefined) {
+        updateData.fieldManager = participants.fieldManagerId ? { id: participants.fieldManagerId } : null;
+      }
+      if (participants.fieldSupervisorId !== undefined) {
+        updateData.fieldSupervisor = participants.fieldSupervisorId ? { id: participants.fieldSupervisorId } : null;
+      }
+      if (participants.fieldSellerId !== undefined) {
+        updateData.fieldSeller = participants.fieldSellerId ? { id: participants.fieldSellerId } : null;
+      }
+      if (participants.salesManagerId !== undefined) {
+        updateData.salesManager = participants.salesManagerId ? { id: participants.salesManagerId } : null;
+      }
+      if (participants.salesGeneralManagerId !== undefined) {
+        updateData.salesGeneralManager = participants.salesGeneralManagerId ? { id: participants.salesGeneralManagerId } : null;
+      }
+      if (participants.postSaleId !== undefined) {
+        updateData.postSale = participants.postSaleId ? { id: participants.postSaleId } : null;
+      }
+      if (participants.closerId !== undefined) {
+        updateData.closer = participants.closerId ? { id: participants.closerId } : null;
+      }
+      if (participants.generalDirectorId !== undefined) {
+        updateData.generalDirector = participants.generalDirectorId ? { id: participants.generalDirectorId } : null;
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        await this.leadVisitRepository.update(leadVisitId, updateData);
+        this.logger.log(`Sincronizados participantes de venta al leadVisit ${leadVisitId}`);
+      }
+    } catch (error) {
+      this.logger.error(`Error al sincronizar participantes al leadVisit: ${error.message}`);
     }
   }
 }

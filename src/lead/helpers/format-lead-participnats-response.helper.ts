@@ -92,6 +92,7 @@ export const formatLeadWithParticipants = (lead: Lead) => {
     salesManager: formatParticipant(lastVisit?.salesManager),
     postSale: formatParticipant(lastVisit?.postSale),
     closer: formatParticipant(lastVisit?.closer),
+    generalDirector: formatParticipant(lastVisit?.generalDirector),
     reportPdfUrl: lastVisit?.reportPdfUrl || null,
   };
 };

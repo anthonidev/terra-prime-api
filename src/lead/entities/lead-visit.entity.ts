@@ -114,4 +114,8 @@ export class LeadVisit {
   @ManyToOne(() => Participant, (participant) => participant.leadVisitCloser, { nullable: true })
   @JoinColumn({ name: 'closer_id' })
   closer?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.leadVisitGeneralDirector, { nullable: true })
+  @JoinColumn({ name: 'general_director_id' })
+  generalDirector?: Participant;
 }

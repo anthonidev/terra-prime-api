@@ -18,9 +18,10 @@ import { BulkLeadService } from './services/bulk-lead.service';
 import { UsersModule } from 'src/user/user.module';
 import { CommonModule } from 'src/common/common.module';
 import { ParticipantsModule } from 'src/admin-sales/participants/participants.module';
+import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Lead, Liner, Ubigeo, LeadSource, LeadVisit]),
+    TypeOrmModule.forFeature([Lead, Liner, Ubigeo, LeadSource, LeadVisit, Sale]),
     UsersModule,
     CommonModule,
     ParticipantsModule,

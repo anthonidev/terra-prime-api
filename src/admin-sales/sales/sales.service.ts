@@ -434,6 +434,7 @@ export class SalesService {
       salesGeneralManager: leadVisit?.salesGeneralManager || null,
       postSale: leadVisit?.postSale || null,
       closer: leadVisit?.closer || null,
+      generalDirector: leadVisit?.generalDirector || null,
     });
 
     return await repository.save(sale);
@@ -482,7 +483,8 @@ export class SalesService {
       .leftJoinAndSelect('sale.salesGeneralManager', 'salesGeneralManager')
       .leftJoinAndSelect('sale.salesManager', 'salesManager')
       .leftJoinAndSelect('sale.postSale', 'postSale')
-      .leftJoinAndSelect('sale.closer', 'closer');
+      .leftJoinAndSelect('sale.closer', 'closer')
+      .leftJoinAndSelect('sale.generalDirector', 'generalDirector');
 
     if (userId) {
       queryBuilder.where('vendor.id = :userId', { userId });
@@ -554,7 +556,8 @@ export class SalesService {
       .leftJoinAndSelect('sale.salesGeneralManager', 'salesGeneralManager')
       .leftJoinAndSelect('sale.salesManager', 'salesManager')
       .leftJoinAndSelect('sale.postSale', 'postSale')
-      .leftJoinAndSelect('sale.closer', 'closer');
+      .leftJoinAndSelect('sale.closer', 'closer')
+      .leftJoinAndSelect('sale.generalDirector', 'generalDirector');
 
     if (userId) {
       queryBuilder.andWhere('vendor.id = :userId', { userId });
@@ -1436,6 +1439,11 @@ export class SalesService {
           type: ParticipantType.CLOSER,
           field: 'closer',
         },
+        {
+          id: assignParticipantsDto.generalDirectorId,
+          type: ParticipantType.GENERAL_DIRECTOR,
+          field: 'generalDirector',
+        },
       ];
 
       // Validar participantes que se están asignando
@@ -1465,6 +1473,33 @@ export class SalesService {
         );
 
       await this.saleRepository.save(saleToUpdate);
+
+      // Sincronizar participantes con el leadVisit asociado
+      const sale = await this.saleRepository.findOne({
+        where: { id: saleId },
+        relations: ['leadVisit'],
+      });
+
+      if (sale?.leadVisit?.id) {
+        await this.leadService.updateLeadVisitParticipantsFromSale(
+          sale.leadVisit.id,
+          {
+            linerId: assignParticipantsDto.linerId,
+            telemarketingSupervisorId: assignParticipantsDto.telemarketingSupervisorId,
+            telemarketingConfirmerId: assignParticipantsDto.telemarketingConfirmerId,
+            telemarketerId: assignParticipantsDto.telemarketerId,
+            fieldManagerId: assignParticipantsDto.fieldManagerId,
+            fieldSupervisorId: assignParticipantsDto.fieldSupervisorId,
+            fieldSellerId: assignParticipantsDto.fieldSellerId,
+            salesManagerId: assignParticipantsDto.salesManagerId,
+            salesGeneralManagerId: assignParticipantsDto.salesGeneralManagerId,
+            postSaleId: assignParticipantsDto.postSaleId,
+            closerId: assignParticipantsDto.closerId,
+            generalDirectorId: assignParticipantsDto.generalDirectorId,
+          }
+        );
+      }
+
       return await this.findOneById(saleId);
     } catch (error) {
       if (

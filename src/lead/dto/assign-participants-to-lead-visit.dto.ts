@@ -57,6 +57,11 @@ export class AssignParticipantsToLeadVisitDto {
   @Transform(({ value }) => value === '' ? null : value)
   closerId?: string | null;
 
+  @IsOptional()
+  @IsString({ message: 'El ID del Director General debe ser una cadena válida' })
+  @Transform(({ value }) => value === '' ? null : value)
+  generalDirectorId?: string | null;
+
   // Validación personalizada: al menos un campo debe estar presente
   @ValidateIf((dto) => {
     const fields = [
@@ -70,7 +75,8 @@ export class AssignParticipantsToLeadVisitDto {
       dto.salesManagerId,
       dto.salesGeneralManagerId,
       dto.postSaleId,
-      dto.closerId
+      dto.closerId,
+      dto.generalDirectorId
     ];
     return !fields.some(field => field !== undefined && field !== null && field !== '');
   })

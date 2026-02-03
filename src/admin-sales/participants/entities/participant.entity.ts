@@ -16,6 +16,7 @@ export enum ParticipantType {
   SALES_GENERAL_MANAGER = 'SALES_GENERAL_MANAGER',
   POST_SALE = 'POST_SALE',
   CLOSER = 'CLOSER',
+  GENERAL_DIRECTOR = 'GENERAL_DIRECTOR',
 }
 
 @Entity('participants')
@@ -128,6 +129,10 @@ export class Participant extends Timestamped {
   @OneToMany(() => Sale, (sale) => sale.closer)
   closer: Sale[];
 
+  // Ventas como Director General
+  @OneToMany(() => Sale, (sale) => sale.generalDirector)
+  generalDirector: Sale[];
+
   // La relación que ya tenías (probablemente como garante/guarantor)
   @OneToMany(() => Sale, (sale) => sale.guarantor)
   sales: Sale[];
@@ -166,4 +171,7 @@ export class Participant extends Timestamped {
 
   @OneToMany(() => LeadVisit, (leadVisit) => leadVisit.closer)
   leadVisitCloser: LeadVisit[];
+
+  @OneToMany(() => LeadVisit, (leadVisit) => leadVisit.generalDirector)
+  leadVisitGeneralDirector: LeadVisit[];
 }

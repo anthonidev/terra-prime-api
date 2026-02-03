@@ -215,4 +215,7 @@ export class Sale extends Timestamped {
 
   @ManyToOne(() => Participant, (participant) => participant.closer, { nullable: true })
   closer?: Participant;
+
+  @ManyToOne(() => Participant, (participant) => participant.generalDirector, { nullable: true })
+  generalDirector?: Participant;
 }

@@ -115,6 +115,12 @@ export function formatSaleListResponse(sale: Sale) {
           lastName: sale.closer.lastName,
         }
       : null,
+    generalDirector: sale.generalDirector
+      ? {
+          firstName: sale.generalDirector.firstName,
+          lastName: sale.generalDirector.lastName,
+        }
+      : null,
     vendor: sale.vendor
       ? {
           document: sale.vendor.document,

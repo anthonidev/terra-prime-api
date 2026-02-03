@@ -179,6 +179,10 @@ export function formatSaleResponse(sale: Sale) {
       firstName: sale.closer.firstName,
       lastName: sale.closer.lastName,
     } : null,
+    generalDirector: sale.generalDirector ? {
+      firstName: sale.generalDirector.firstName,
+      lastName: sale.generalDirector.lastName,
+    } : null,
     guarantor: sale.guarantor ? {
       firstName: sale.guarantor.firstName,
       lastName: sale.guarantor.lastName,

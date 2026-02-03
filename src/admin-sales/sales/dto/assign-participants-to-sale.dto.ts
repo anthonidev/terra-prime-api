@@ -58,6 +58,11 @@ export class AssignParticipantsToSaleDto {
   closerId?: string | null;
 
   @IsOptional()
+  @IsString({ message: 'El ID del Director General debe ser una cadena válida' })
+  @Transform(({ value }) => value === '' ? null : value)
+  generalDirectorId?: string | null;
+
+  @IsOptional()
   @IsString({ message: 'El ID del Garante debe ser una cadena válida' })
   @Transform(({ value }) => value === '' ? null : value)
   guarantorId?: string | null;
@@ -76,6 +81,7 @@ export class AssignParticipantsToSaleDto {
       dto.salesGeneralManagerId,
       dto.postSaleId,
       dto.closerId,
+      dto.generalDirectorId,
       dto.guarantorId
     ];
     return !fields.some(field => field !== undefined && field !== null && field !== '');

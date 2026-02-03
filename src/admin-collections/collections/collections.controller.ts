@@ -24,6 +24,7 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/user/entities/user.entity';
 import { PaidInstallmentsDto } from './dto/paid-installments.dto';
+import { PaidSpecificInstallmentDto } from './dto/paid-specific-installment.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { FindPaymentsDto } from 'src/admin-payments/payments/dto/find-payments.dto';
 import { CollectorStatisticsFiltersDto } from './dto/collector-statistics-filters.dto';
@@ -125,6 +126,38 @@ export class CollectionsController {
       financingId,
       paidInstallmentsDto.amountPaid,
       paidInstallmentsDto.payments,
+      files,
+      user.id,
+    );
+  }
+
+  @Post('financing/installment/paid/:installmentId')
+  @Roles('COB', 'SCO')
+  @UseInterceptors(FilesInterceptor('files'))
+  @UsePipes(new ValidationPipe({ transform: true }))
+  paidSpecificInstallment(
+    @Param('installmentId') installmentId: string,
+    @Body() paidSpecificInstallmentDto: PaidSpecificInstallmentDto,
+    @GetUser() user: User,
+    @UploadedFiles(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({
+          fileType: /(jpg|jpeg|png|webp)$/,
+        })
+        .addMaxSizeValidator({
+          maxSize: 1024 * 1024 * 2,
+        })
+        .build({
+          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+          fileIsRequired: false,
+        }),
+    )
+    files: Array<Express.Multer.File>,
+  ) {
+    return this.collectionsService.paidSpecificInstallment(
+      installmentId,
+      paidSpecificInstallmentDto.amountPaid,
+      paidSpecificInstallmentDto.payments,
       files,
       user.id,
     );
