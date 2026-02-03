@@ -12,17 +12,17 @@ export function formatSaleResponse(sale: Sale) {
     reservationAmount: sale.reservationAmount || null,
     maximumHoldPeriod: sale.maximumHoldPeriod || null,
     fromReservation: sale.fromReservation,
-    currency: sale.lot.block?.stage?.project?.currency,
-    client: {
-      address: sale.client?.address,
-      firstName: sale.client?.lead?.firstName,
-      lastName: sale.client?.lead?.lastName,
-      phone: sale.client?.lead?.phone,
+    currency: sale.lot?.block?.stage?.project?.currency,
+    client: sale.client ? {
+      address: sale.client.address,
+      firstName: sale.client.lead?.firstName,
+      lastName: sale.client.lead?.lastName,
+      phone: sale.client.lead?.phone,
       reportPdfUrl: sale.leadVisit?.reportPdfUrl ||
-                     (sale.client?.lead?.visits && sale.client.lead.visits.length > 0
+                     (sale.client.lead?.visits && sale.client.lead.visits.length > 0
                        ? sale.client.lead.visits[0].reportPdfUrl
                        : null),
-    },
+    } : null,
     secondaryClients: secondaryClientSales.length > 0 ?
       sale.secondaryClientSales.map((secondaryClientSale) => {
         return {
@@ -32,14 +32,14 @@ export function formatSaleResponse(sale: Sale) {
           phone: secondaryClientSale.secondaryClient.phone,
         };
       }): null,
-    lot: {
-      id: sale.lot?.id,
-      name: sale.lot?.name,
-      lotPrice: sale.lot?.lotPrice,
-      block : sale.lot?.block?.name,
-      stage : sale.lot?.block?.stage?.name,
-      project : sale.lot?.block?.stage?.project?.name,
-    },
+    lot: sale.lot ? {
+      id: sale.lot.id,
+      name: sale.lot.name,
+      lotPrice: sale.lot.lotPrice,
+      block: sale.lot.block?.name,
+      stage: sale.lot.block?.stage?.name,
+      project: sale.lot.block?.stage?.project?.name,
+    } : null,
     radicationPdfUrl: sale.radicationPdfUrl,
     paymentAcordPdfUrl: sale.paymentAcordPdfUrl,
     financing: sale.financing ? {
