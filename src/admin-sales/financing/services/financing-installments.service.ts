@@ -1,6 +1,6 @@
 import { InjectRepository } from '@nestjs/typeorm';
 import { FinancingInstallments } from '../entities/financing-installments.entity';
-import { QueryRunner, Repository } from 'typeorm';
+import { In, QueryRunner, Repository } from 'typeorm';
 import { CreateFinancingInstallmentsDto } from '../dto/create-financing-installments.dto';
 import { StatusFinancingInstallments } from '../enums/status-financing-installments.enum';
 import { CreateDetailPaymentDto } from 'src/admin-payments/payments/dto/create-detail-payment.dto';
@@ -8,6 +8,7 @@ import {
   BadRequestException,
   forwardRef,
   Inject,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { CreatePaymentDto } from 'src/admin-payments/payments/dto/create-payment.dto';
@@ -22,6 +23,8 @@ import { CreateDetailPaymentWithUrlDto } from 'src/admin-payments/payments/dto/c
 import { CreatePaymentWithUrlDto } from 'src/admin-payments/payments/dto/create-payment-with-url.dto';
 
 export class FinancingInstallmentsService {
+  private readonly logger = new Logger(FinancingInstallmentsService.name);
+
   constructor(
     @InjectRepository(FinancingInstallments)
     private readonly financingInstallmentsRepository: Repository<FinancingInstallments>,
@@ -108,13 +111,16 @@ export class FinancingInstallmentsService {
     const installmentsToPay = await this.financingInstallmentsRepository.find({
       where: {
         financing: { id: financingId },
-        status: StatusFinancingInstallments.PENDING,
+        status: In([
+          StatusFinancingInstallments.PENDING,
+          StatusFinancingInstallments.EXPIRED,
+        ]),
       },
       order: { expectedPaymentDate: 'ASC' },
     });
 
     if (installmentsToPay.length === 0)
-      throw new BadRequestException('No hay cuotas pendientes para pagar.');
+      throw new BadRequestException('No hay cuotas pendientes o vencidas para pagar.');
 
     return await this.transactionService.runInTransaction(
       async (queryRunner) => {
@@ -322,96 +328,111 @@ export class FinancingInstallmentsService {
     numberTicket?: string,
     observation?: string,
   ): Promise<PaymentResponse> {
-    if (amountPaid <= 0)
-      throw new BadRequestException('El monto a pagar debe ser mayor a cero.');
+    try {
+      this.logger.log(
+        `Iniciando pago auto-aprobado de cuotas - financingId: ${financingId}, amountPaid: ${amountPaid}, userId: ${userId}`,
+      );
 
-    await this.paymentsService.isValidPaymentConfig(
-      'financingInstallments',
-      financingId,
-    );
+      if (amountPaid <= 0)
+        throw new BadRequestException('El monto a pagar debe ser mayor a cero.');
 
-    const installmentsToPay = await this.financingInstallmentsRepository.find({
-      where: {
-        financing: { id: financingId },
-        status: StatusFinancingInstallments.PENDING,
-      },
-      order: { expectedPaymentDate: 'ASC' },
-    });
+      await this.paymentsService.isValidPaymentConfig(
+        'financingInstallments',
+        financingId,
+      );
 
-    if (installmentsToPay.length === 0)
-      throw new BadRequestException('No hay cuotas pendientes para pagar.');
+      const installmentsToPay = await this.financingInstallmentsRepository.find({
+        where: {
+          financing: { id: financingId },
+          status: In([
+            StatusFinancingInstallments.PENDING,
+            StatusFinancingInstallments.EXPIRED,
+          ]),
+        },
+        order: { expectedPaymentDate: 'ASC' },
+      });
 
-    return await this.transactionService.runInTransaction(
-      async (queryRunner) => {
-        // Solo considerar el principal pendiente (sin moras - las moras se pagan por separado)
-        const totalPendingAmount = parseFloat(
-          installmentsToPay
-            .reduce((sum, installment) => {
-              const currentPending = parseFloat(
-                Number(installment.coutePending ?? 0).toFixed(2),
-              );
-              return sum + currentPending;
-            }, 0)
-            .toFixed(2),
-        );
+      if (installmentsToPay.length === 0)
+        throw new BadRequestException('No hay cuotas pendientes o vencidas para pagar.');
 
-        if (amountPaid > totalPendingAmount)
-          throw new BadRequestException(
-            `El monto a pagar (${amountPaid.toFixed(2)}) excede el total pendiente de las cuotas (${totalPendingAmount.toFixed(2)}).`,
+      return await this.transactionService.runInTransaction(
+        async (queryRunner) => {
+          // Solo considerar el principal pendiente (sin moras - las moras se pagan por separado)
+          const totalPendingAmount = parseFloat(
+            installmentsToPay
+              .reduce((sum, installment) => {
+                const currentPending = parseFloat(
+                  Number(installment.coutePending ?? 0).toFixed(2),
+                );
+                return sum + currentPending;
+              }, 0)
+              .toFixed(2),
           );
 
-        // NUEVO: Guardar el estado anterior de las cuotas para poder revertir
-        const installmentsBackup = installmentsToPay.map((installment) => ({
-          id: installment.id,
-          previousLateFeeAmountPending: installment.lateFeeAmountPending,
-          previousLateFeeAmountPaid: installment.lateFeeAmountPaid,
-          previousCoutePending: installment.coutePending,
-          previousCoutePaid: installment.coutePaid,
-          previousStatus: installment.status,
-        }));
+          if (amountPaid > totalPendingAmount)
+            throw new BadRequestException(
+              `El monto a pagar (${amountPaid.toFixed(2)}) excede el total pendiente de las cuotas (${totalPendingAmount.toFixed(2)}).`,
+            );
 
-        // Calcular pagos y obtener detalles de cuotas afectadas
-        const affectedInstallmentsDetails = await this.calculateAmountInCoutesWithDetails(
-          installmentsToPay,
-          amountPaid,
-          queryRunner,
-        );
+          // NUEVO: Guardar el estado anterior de las cuotas para poder revertir
+          const installmentsBackup = installmentsToPay.map((installment) => ({
+            id: installment.id,
+            previousLateFeeAmountPending: installment.lateFeeAmountPending,
+            previousLateFeeAmountPaid: installment.lateFeeAmountPaid,
+            previousCoutePending: installment.coutePending,
+            previousCoutePaid: installment.coutePaid,
+            previousStatus: installment.status,
+          }));
 
-        // Construir metadata con el nuevo formato
-        const cuotasAfectadas: Record<string, any> = {};
-        for (const detail of affectedInstallmentsDetails) {
-          cuotasAfectadas[`Cuota ${detail.numberCuote}`] = {
-            Modo: detail.mode,
-            'Monto aplicado': detail.amountApplied,
-            'Pendiente después de este pago': detail.pendingAfterPayment,
+          // Calcular pagos y obtener detalles de cuotas afectadas
+          const affectedInstallmentsDetails = await this.calculateAmountInCoutesWithDetails(
+            installmentsToPay,
+            amountPaid,
+            queryRunner,
+          );
+
+          // Construir metadata con el nuevo formato
+          const cuotasAfectadas: Record<string, any> = {};
+          for (const detail of affectedInstallmentsDetails) {
+            cuotasAfectadas[`Cuota ${detail.numberCuote}`] = {
+              Modo: detail.mode,
+              'Monto aplicado': detail.amountApplied,
+              'Pendiente después de este pago': detail.pendingAfterPayment,
+            };
+          }
+
+          // Registrar el pago en el sistema de pagos general
+          const createPaymentDto: CreatePaymentDto = {
+            methodPayment: MethodPayment.VOUCHER,
+            amount: amountPaid,
+            relatedEntityType: 'financingInstallments',
+            relatedEntityId: financingId,
+            metadata: {
+              'Concepto de pago': 'Pago de cuotas de financiación (Auto-aprobado)',
+              'Cuotas afectadas': cuotasAfectadas,
+              installmentsBackup: JSON.stringify(installmentsBackup),
+            },
+            paymentDetails,
           };
-        }
 
-        // Registrar el pago en el sistema de pagos general
-        const createPaymentDto: CreatePaymentDto = {
-          methodPayment: MethodPayment.VOUCHER,
-          amount: amountPaid,
-          relatedEntityType: 'financingInstallments',
-          relatedEntityId: financingId,
-          metadata: {
-            'Concepto de pago': 'Pago de cuotas de financiación (Auto-aprobado)',
-            'Cuotas afectadas': cuotasAfectadas,
-            installmentsBackup: JSON.stringify(installmentsBackup),
-          },
-          paymentDetails,
-        };
-
-        return await this.paymentsService.createAutoApproved(
-          createPaymentDto,
-          files,
-          userId,
-          dateOperation,
-          numberTicket,
-          queryRunner,
-          observation,
-        );
-      },
-    );
+          return await this.paymentsService.createAutoApproved(
+            createPaymentDto,
+            files,
+            userId,
+            dateOperation,
+            numberTicket,
+            queryRunner,
+            observation,
+          );
+        },
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error en pago auto-aprobado de cuotas - financingId: ${financingId}, amountPaid: ${amountPaid}, userId: ${userId}`,
+        error.stack,
+      );
+      throw error;
+    }
   }
 
   /**
@@ -439,13 +460,16 @@ export class FinancingInstallmentsService {
     const installmentsToPay = await this.financingInstallmentsRepository.find({
       where: {
         financing: { id: financingId },
-        status: StatusFinancingInstallments.PENDING,
+        status: In([
+          StatusFinancingInstallments.PENDING,
+          StatusFinancingInstallments.EXPIRED,
+        ]),
       },
       order: { expectedPaymentDate: 'ASC' },
     });
 
     if (installmentsToPay.length === 0)
-      throw new BadRequestException('No hay cuotas pendientes para pagar.');
+      throw new BadRequestException('No hay cuotas pendientes o vencidas para pagar.');
 
     return await this.transactionService.runInTransaction(
       async (queryRunner) => {
