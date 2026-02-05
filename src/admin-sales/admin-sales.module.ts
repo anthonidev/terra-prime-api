@@ -10,6 +10,7 @@ import { SecondaryClientModule } from './secondary-client/secondary-client.modul
 import { SalesWithdrawalModule } from './sales-withdrawal/sales-withdrawal.module';
 import { ParticipantsModule } from './participants/participants.module';
 import { RadicationModule } from './radication/radication.module';
+import { SaleFilesModule } from './sale-files/sale-files.module';
 
 @Module({
   imports: [
@@ -23,7 +24,8 @@ import { RadicationModule } from './radication/radication.module';
     SecondaryClientModule,
     SalesWithdrawalModule,
     ParticipantsModule,
-    RadicationModule
+    RadicationModule,
+    SaleFilesModule,
   ]
 })
 export class AdminSalesModule {}

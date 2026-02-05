@@ -202,6 +202,58 @@ export class AwsS3Service {
         return this.uploadFile(file, folder);
     }
 
+    async uploadFileAnyType(
+        file: Express.Multer.File,
+        folder: string = 'uploads',
+    ): Promise<S3UploadResponse> {
+        try {
+            // Solo validar que el archivo exista y el tamaño
+            if (!file) {
+                throw new BadRequestException('No se proporcionó ningún archivo');
+            }
+
+            const maxSize = 10 * 1024 * 1024; // 10MB
+            if (file.size > maxSize) {
+                throw new BadRequestException('El archivo es demasiado grande. Máximo 10MB');
+            }
+
+            // Generar nombre único para el archivo
+            const fileExtension = file.originalname.split('.').pop();
+            const fileName = `${uuidv4()}.${fileExtension}`;
+            const key = `${folder}/${fileName}`;
+
+            // Configurar el comando de subida
+            const uploadCommand = new PutObjectCommand({
+                Bucket: this.bucketName,
+                Key: key,
+                Body: file.buffer,
+                ContentType: file.mimetype,
+                Metadata: {
+                    originalName: file.originalname,
+                    uploadedAt: new Date().toISOString(),
+                },
+            });
+
+            // Subir el archivo
+            await this.s3Client.send(uploadCommand);
+
+            // Construir la URL pública
+            const url = `https://${this.bucketName}.s3.${envs.awsRegion}.amazonaws.com/${key}`;
+
+            this.logger.log(`File uploaded successfully: ${key}`);
+
+            return {
+                url,
+                key,
+                bucket: this.bucketName,
+                location: url,
+            };
+        } catch (error) {
+            this.logger.error(`Error uploading file: ${error.message}`, error.stack);
+            throw new BadRequestException(`Error al subir el archivo: ${error.message}`);
+        }
+    }
+
     private validateFile(file: Express.Multer.File): void {
         if (!file) {
             throw new BadRequestException('No se proporcionó ningún archivo');
