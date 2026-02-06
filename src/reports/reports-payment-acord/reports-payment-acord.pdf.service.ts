@@ -1,41 +1,66 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PaymentAcordReportPdfData } from './interfaces/payment-acord-data.interface';
 import * as PDFDocument from 'pdfkit';
+
 import { AwsS3Service } from 'src/files/aws-s3.service';
 import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
 import { SaleType } from 'src/admin-sales/sales/enums/sale-type.enum';
-import { UrbanDevelopment } from '../../admin-sales/urban-development/entities/urban-development.entity';
-import { Financing } from 'src/admin-sales/financing/entities/financing.entity';
 
 @Injectable()
 export class ReportsPaymentAcordPdfService {
   private readonly logger = new Logger(ReportsPaymentAcordPdfService.name);
-  
+
+  private readonly ACCENT_COLOR = '#2c5234';
+  private readonly ACCENT_LIGHT = '#e8f0ea';
+  private readonly TEXT_PRIMARY = '#1a1a1a';
+  private readonly TEXT_MUTED = '#666666';
+  private readonly PAGE_BG = '#f3f4f6';
+  private readonly CARD_BG = '#ffffff';
+  private readonly CARD_BORDER = '#e2e4e8';
+  private readonly BORDER_COLOR = '#d0d0d0';
+  private readonly LEFT = 50;
+  private readonly RIGHT = 50;
+  private readonly ROW_H = 20;
+  private readonly GAP = 8;
+  private readonly CARD_PAD = 10;
+  private readonly CARD_RADIUS = 8;
+
   constructor(private readonly awsS3Service: AwsS3Service) {}
 
-  async generatePaymentAcordReportPdf(data: PaymentAcordReportPdfData): Promise<string> {
+  async generatePaymentAcordReportPdf(
+    data: PaymentAcordReportPdfData,
+  ): Promise<string> {
+    const { sale } = data;
+    this.logger.log(`Generating payment accord PDF for sale ${sale.id}`);
+
     try {
-      const { sale, additionalInfo } = data;
-      
-      // Crear nuevo documento PDF
-      const doc = new PDFDocument({ 
+      const doc = new PDFDocument({
         size: 'A4',
-        margins: { top: 50, bottom: 50, left: 50, right: 50 }
+        margins: { top: 40, bottom: 30, left: this.LEFT, right: this.RIGHT },
       });
 
-      // Buffer para almacenar el PDF
       const chunks: Buffer[] = [];
       doc.on('data', (chunk) => chunks.push(chunk));
-      
+
       return new Promise((resolve, reject) => {
         doc.on('end', async () => {
           try {
             const pdfBuffer = Buffer.concat(chunks);
             const fileName = `payment-acord-${sale.id}-${Date.now()}.pdf`;
-            const s3Url = await this.awsS3Service.uploadPdfFromBuffer(pdfBuffer, fileName, 'documents');
+            const s3Url = await this.awsS3Service.uploadPdfFromBuffer(
+              pdfBuffer,
+              fileName,
+              'documents',
+            );
+            this.logger.log(
+              `Payment accord PDF uploaded successfully for sale ${sale.id}`,
+            );
             resolve(s3Url);
           } catch (error) {
-            this.logger.error('Error uploading PDF to S3:', error);
+            this.logger.error(
+              `Error uploading payment accord PDF to S3 for sale ${sale.id}`,
+              error?.stack || error,
+            );
             reject(error);
           }
         });
@@ -43,521 +68,597 @@ export class ReportsPaymentAcordPdfService {
         doc.on('error', reject);
 
         try {
-          this.buildCompletePaymentAcordReportPdf(doc, data);
+          this.buildCompletePdf(doc, data);
           doc.end();
+          this.logger.log(
+            `Payment accord PDF built successfully for sale ${sale.id}`,
+          );
         } catch (error) {
-          this.logger.error('Error building PDF:', error);
+          this.logger.error(
+            `Error building payment accord PDF for sale ${sale.id}`,
+            error?.stack || error,
+          );
           reject(error);
         }
       });
     } catch (error) {
-      this.logger.error('Error generating PDF:', error);
+      this.logger.error(
+        `Error generating payment accord PDF for sale ${sale.id}`,
+        error?.stack || error,
+      );
       throw error;
     }
   }
 
-  private buildCompletePaymentAcordReportPdf(doc: PDFKit.PDFDocument, data: PaymentAcordReportPdfData): void {
+  private get contentWidth(): number {
+    return 595.28 - this.LEFT - this.RIGHT;
+  }
+
+  // ===================== MAIN BUILD =====================
+
+  private buildCompletePdf(
+    doc: PDFKit.PDFDocument,
+    data: PaymentAcordReportPdfData,
+  ): void {
     const { sale, additionalInfo } = data;
-    
-    // Configuración de colores
-    const primaryColor = '#2c5530'; // Verde oscuro
-    const lightGreen = '#e8f5e8';
 
-    // Logo y encabezado
-    this.addHeader(doc, sale, additionalInfo?.currentDate || '', primaryColor);
-    
-    // Título principal
-    this.addTitle(doc, primaryColor);
+    this.logger.debug(
+      `Building PDF - client: ${!!sale.client}, financing: ${!!sale.financing}, lot: ${!!sale.lot}, secondaryClients: ${sale.secondaryClientSales?.length || 0}`,
+    );
 
-    // Datos personales - TITULAR 1
-    let yPosition = this.addMainClientSection(doc, sale.client, primaryColor, lightGreen);
+    // Page background
+    doc
+      .rect(0, 0, doc.page.width, doc.page.height)
+      .fillColor(this.PAGE_BG)
+      .fill();
 
-    // Datos personales - TITULAR 2+ (si existen)
-    yPosition = this.addSecondaryClientsSection(doc, sale.secondaryClientSales, yPosition, primaryColor, lightGreen);
-
-    // Forma de pago
-    yPosition = this.addPaymentSection(doc, sale, yPosition, primaryColor, lightGreen);
-
-    // Firmas
-    this.addSignatureSection(doc, sale, yPosition + 40);
-
-    // Footer de la empresa
+    let y = this.addHeader(
+      doc,
+      sale,
+      additionalInfo?.currentDate || '',
+    );
+    y = this.addMainClientSection(doc, sale.client, y);
+    y = this.addSecondaryClientsSection(doc, sale.secondaryClientSales, y);
+    y = this.addPaymentSection(doc, sale, y);
+    this.addSignatureSection(doc, sale, y);
     this.addFooter(doc);
   }
 
-  private addFooter(doc: PDFKit.PDFDocument): void {
-    const pageHeight = doc.page.height;
-    const footerY = pageHeight - 70;
+  // ===================== CARD HELPER =====================
 
-    // Información de la empresa en una sola línea
-    doc.fontSize(9)
+  private drawCard(doc: PDFKit.PDFDocument, y: number, height: number): void {
+    const x = this.LEFT - 4;
+    const w = this.contentWidth + 8;
+
+    // Shadow
+    doc
+      .roundedRect(x + 1, y + 1, w, height, this.CARD_RADIUS)
+      .fillColor('#dcdee2')
+      .fill();
+
+    // White background
+    doc
+      .roundedRect(x, y, w, height, this.CARD_RADIUS)
+      .fillColor(this.CARD_BG)
+      .fill();
+
+    // Border
+    doc
+      .roundedRect(x, y, w, height, this.CARD_RADIUS)
+      .strokeColor(this.CARD_BORDER)
+      .lineWidth(0.5)
+      .stroke();
+  }
+
+  // ===================== SECTION HELPERS =====================
+
+  private drawSectionTitle(
+    doc: PDFKit.PDFDocument,
+    title: string,
+    y: number,
+  ): number {
+    doc
+      .rect(this.LEFT + 2, y + 2, 3, 13)
+      .fillColor(this.ACCENT_COLOR)
+      .fill();
+
+    doc
+      .fontSize(11)
+      .fillColor(this.TEXT_PRIMARY)
+      .font('Helvetica-Bold')
+      .text(title.toUpperCase(), this.LEFT + 12, y + 2);
+
+    doc.y = y + 20;
+    return y + 20;
+  }
+
+  private drawField(
+    doc: PDFKit.PDFDocument,
+    label: string,
+    value: string,
+    x: number,
+    y: number,
+  ): void {
+    doc.fontSize(9).font('Helvetica');
+    const lw = doc.widthOfString(label);
+
+    doc.fillColor(this.TEXT_MUTED).text(label, x, y);
+    doc
+      .fontSize(10)
+      .fillColor(this.TEXT_PRIMARY)
+      .font('Helvetica-Bold')
+      .text(value || '—', x + lw + 5, y);
+
+    doc.y = y;
+  }
+
+  private drawUnderline(
+    doc: PDFKit.PDFDocument,
+    x: number,
+    y: number,
+    width: number,
+  ): void {
+    doc
+      .save()
+      .strokeColor(this.BORDER_COLOR)
+      .lineWidth(0.5)
+      .moveTo(x, y)
+      .lineTo(x + width, y)
+      .stroke()
+      .restore();
+  }
+
+  // ===================== HEADER =====================
+
+  private addHeader(
+    doc: PDFKit.PDFDocument,
+    sale: Sale,
+    currentDate: string,
+  ): number {
+    doc
+      .fontSize(14)
+      .fillColor(this.ACCENT_COLOR)
+      .font('Helvetica-Bold')
+      .text('HUERTAS', this.LEFT, 28);
+
+    // Right side: date + lot info
+    const rightX = doc.page.width - this.RIGHT - 140;
+    doc
+      .fontSize(10)
+      .fillColor(this.TEXT_MUTED)
+      .font('Helvetica')
+      .text(
+        `Lima, ${currentDate}`,
+        rightX,
+        20,
+        { width: 140, align: 'right' },
+      );
+
+    if (sale.lot) {
+      doc
+        .fontSize(9)
+        .fillColor(this.TEXT_PRIMARY)
         .font('Helvetica')
-        .fillColor('#000000')
-        .text('ventas@inmobiliariashuertas.com      680-5314     Calle Luis Espejo 1097 - La Victoria', 50, footerY, { 
-          width: 500, 
-          align: 'center' 
-        });
-}
-
-  private addHeader(doc: PDFKit.PDFDocument, sale: Sale, currentDate: string, primaryColor: string): void {
-    const project = sale.lot.block.stage.project;
-    
-    // Logo del proyecto (usar logo desde BD o nombre como fallback)
-    if (project.logo) {
-      // TODO: Cargar imagen del logo desde URL si es necesario
-      // Por ahora usar el nombre del proyecto
-      doc.fillColor(primaryColor)
-         .fontSize(24)
-         .font('Helvetica-Bold')
-         .text(project.name, 50, 50);
-    } else {
-      doc.fillColor(primaryColor)
-         .fontSize(24)
-         .font('Helvetica-Bold')
-         .text(project.name, 50, 50);
+        .text(
+          `Mz. ${sale.lot.block?.name || ''} Lote ${sale.lot.name || ''}`,
+          rightX,
+          35,
+          { width: 140, align: 'right' },
+        )
+        .text(
+          `Área: ${sale.lot.area || sale.lot.lotPrice || ''}m²`,
+          rightX,
+          48,
+          { width: 140, align: 'right' },
+        )
+        .text(
+          `Etapa: ${sale.lot.block?.stage?.name || ''}`,
+          rightX,
+          61,
+          { width: 140, align: 'right' },
+        );
     }
-    
-    doc.fontSize(10)
-       .font('Helvetica')
-       .fillColor('#666666')
-       .text('Porque tu comodidad y satisfacción son nuestra prioridad.', 50, 80);
 
-    // Información del proyecto en la esquina superior derecha
-    const rightX = 400;
-    doc.fontSize(10)
-       .fillColor('#000000')
-       .text(`Lima, ${currentDate}`, rightX, 50)
-       .text(`Mz. ${sale.lot.block.name} Lote ${sale.lot.name}`, rightX, 65)
-       .text(`Área: ${sale.lot.area || sale.lot.lotPrice}m²`, rightX, 80)
-       .text(`Eta. ${sale.lot.block.stage.name}`, rightX, 95)
-       .text(`Vivienda`, rightX, 110);
+    // Title
+    doc
+      .fontSize(16)
+      .fillColor(this.ACCENT_COLOR)
+      .font('Helvetica-Bold')
+      .text('ACUERDO DE PAGO', this.LEFT, 75, {
+        width: this.contentWidth,
+        align: 'center',
+      });
+
+    doc.y = 98;
+    return 98;
   }
 
-  private addTitle(doc: PDFKit.PDFDocument, primaryColor: string): void {
-    doc.fontSize(16)
-       .font('Helvetica-Bold')
-       .fillColor(primaryColor)
-       .text('ACUERDO DE PAGO', 50, 130, { align: 'center' });
+  // ===================== MAIN CLIENT =====================
+
+  private addMainClientSection(
+    doc: PDFKit.PDFDocument,
+    client: any,
+    startY: number,
+  ): number {
+    this.logger.debug(
+      `Adding main client section - client: ${!!client}, lead: ${!!client?.lead}`,
+    );
+
+    const rows = 3;
+    const cardH = this.CARD_PAD + 20 + rows * this.ROW_H + this.CARD_PAD;
+    this.drawCard(doc, startY, cardH);
+
+    let y = startY + this.CARD_PAD;
+    y = this.drawSectionTitle(doc, 'Datos Personales - Titular 1', y);
+
+    const col1 = this.LEFT + 12;
+    const col2 = this.LEFT + this.contentWidth / 2;
+
+    const firstName = client?.lead?.firstName || '';
+    const lastName = client?.lead?.lastName || '';
+    this.drawField(
+      doc,
+      'Nombre',
+      `${firstName} ${lastName}`.trim().toUpperCase() || '—',
+      col1,
+      y,
+    );
+    this.drawField(doc, 'DNI', client?.lead?.document || '', col2, y);
+    y += this.ROW_H;
+
+    this.drawField(doc, 'Teléfono', client?.lead?.phone || '', col1, y);
+    this.drawField(doc, 'Dirección', client?.address || '', col2, y);
+    y += this.ROW_H;
+
+    this.drawField(doc, 'Email', client?.lead?.email || '', col1, y);
+    y += this.ROW_H;
+
+    return startY + cardH + this.GAP;
   }
 
-  private addMainClientSection(doc: PDFKit.PDFDocument, client: any, primaryColor: string, lightGreen: string): number {
-    let yPosition = 170;
+  // ===================== SECONDARY CLIENTS =====================
 
-    // Título de sección
-    doc.fontSize(12)
-       .font('Helvetica-Bold')
-       .fillColor('#000000')
-       .text('DATOS PERSONALES:', 50, yPosition);
-
-    yPosition += 20;
-
-    // Título TITULAR 1
-    doc.fontSize(10)
-       .font('Helvetica-Bold')
-       .text('TITULAR 1:', 50, yPosition);
-
-    yPosition += 15;
-
-    // Tabla de datos del cliente principal
-    this.addClientDataTable(doc, client, 50, yPosition, lightGreen);
-
-    return yPosition + 100; // Retorna la nueva posición Y
-  }
-
-  private addSecondaryClientsSection(doc: PDFKit.PDFDocument, secondaryClientSales: any[], yPosition: number, primaryColor: string, lightGreen: string): number {
+  private addSecondaryClientsSection(
+    doc: PDFKit.PDFDocument,
+    secondaryClientSales: any[],
+    startY: number,
+  ): number {
     if (!secondaryClientSales || secondaryClientSales.length === 0) {
-      // Agregar tabla vacía para TITULAR 2
-      doc.fontSize(10)
-         .font('Helvetica-Bold')
-         .text('TITULAR 2:', 50, yPosition);
-      
-      yPosition += 15;
-      this.addEmptyClientDataTable(doc, 50, yPosition, lightGreen);
-      return yPosition + 100;
+      // Empty card for Titular 2
+      const rows = 3;
+      const cardH = this.CARD_PAD + 20 + rows * this.ROW_H + this.CARD_PAD;
+      this.drawCard(doc, startY, cardH);
+
+      let y = startY + this.CARD_PAD;
+      y = this.drawSectionTitle(doc, 'Datos Personales - Titular 2', y);
+
+      const col1 = this.LEFT + 12;
+      const col2 = this.LEFT + this.contentWidth / 2;
+
+      this.drawField(doc, 'Nombre', '—', col1, y);
+      this.drawField(doc, 'DNI', '—', col2, y);
+      y += this.ROW_H;
+
+      this.drawField(doc, 'Teléfono', '—', col1, y);
+      this.drawField(doc, 'Dirección', '—', col2, y);
+      y += this.ROW_H;
+
+      this.drawField(doc, 'Email', '—', col1, y);
+
+      return startY + cardH + this.GAP;
     }
 
-    // Agregar cada cliente secundario
+    let currentY = startY;
+
     secondaryClientSales.forEach((clientSale, index) => {
       const client = clientSale.secondaryClient;
-      doc.fontSize(10)
-         .font('Helvetica-Bold')
-         .text(`TITULAR ${index + 2}:`, 50, yPosition);
-      
-      yPosition += 15;
-      this.addClientDataTable(doc, client, 50, yPosition, lightGreen);
-      yPosition += 105;
+      const rows = 3;
+      const cardH = this.CARD_PAD + 20 + rows * this.ROW_H + this.CARD_PAD;
+      this.drawCard(doc, currentY, cardH);
+
+      let y = currentY + this.CARD_PAD;
+      y = this.drawSectionTitle(
+        doc,
+        `Datos Personales - Titular ${index + 2}`,
+        y,
+      );
+
+      const col1 = this.LEFT + 12;
+      const col2 = this.LEFT + this.contentWidth / 2;
+
+      const firstName = client?.firstName || '';
+      const lastName = client?.lastName || '';
+      this.drawField(
+        doc,
+        'Nombre',
+        `${firstName} ${lastName}`.trim().toUpperCase() || '—',
+        col1,
+        y,
+      );
+      this.drawField(doc, 'DNI', client?.document || '', col2, y);
+      y += this.ROW_H;
+
+      this.drawField(doc, 'Teléfono', client?.phone || '', col1, y);
+      this.drawField(doc, 'Dirección', client?.address || '', col2, y);
+      y += this.ROW_H;
+
+      this.drawField(doc, 'Email', client?.email || '', col1, y);
+
+      currentY += cardH + this.GAP;
     });
 
-    return yPosition;
+    return currentY;
   }
 
-  private addClientDataTable(doc: PDFKit.PDFDocument, client: any, x: number, y: number, lightGreen: string): void {
-    const tableWidth = 500;
-    const rowHeight = 18;
-    const col1Width = 140;
-    const col2Width = tableWidth - col1Width;
+  // ===================== PAYMENT SECTION =====================
 
-    let clientData = [];
-    
-    // Verificar si es cliente principal (tiene lead) o secundario
-    if (client.lead) {
-      // Cliente principal
-      clientData = [
-        { label: 'Nombres y Apellidos', value: `${client.lead.firstName || ''} ${client.lead.lastName || ''}` },
-        { label: 'DNI', value: client.lead.document || '' },
-        { label: 'Teléfono de domicilio', value: client.lead.phone || '' },
-        { label: 'Dirección', value: client.address || '' },
-        { label: 'Correo electrónico', value: client.lead.email || '' }
-      ];
-    } else {
-      // Cliente secundario
-      clientData = [
-        { label: 'Nombres y Apellidos', value: `${client.firstName || ''} ${client.lastName || ''}` },
-        { label: 'DNI', value: client.document || '' },
-        { label: 'Teléfono de domicilio', value: client.phone || '' },
-        { label: 'Dirección', value: client.address || '' },
-        { label: 'Correo electrónico', value: client.email || '' }
-      ];
-    }
+  private addPaymentSection(
+    doc: PDFKit.PDFDocument,
+    sale: Sale,
+    startY: number,
+  ): number {
+    this.logger.debug(
+      `Adding payment section - financing: ${!!sale.financing}, urbanDevelopment: ${!!sale.urbanDevelopment}`,
+    );
 
-    clientData.forEach((row, index) => {
-      const rowY = y + (index * rowHeight);
-      
-      // Fondo alternado
-      if (index % 2 === 0) {
-        doc.rect(x, rowY, tableWidth, rowHeight)
-           .fillColor(lightGreen)
-           .fill();
-      }
+    // --- Main payment table ---
+    const tableHeaderH = 22;
+    const tableRowH = 22;
+    const mainTableH =
+      this.CARD_PAD + 20 + tableHeaderH + tableRowH + this.CARD_PAD;
 
-      // Bordes
-      doc.rect(x, rowY, col1Width, rowHeight)
-         .stroke();
-      doc.rect(x + col1Width, rowY, col2Width, rowHeight)
-         .stroke();
+    this.drawCard(doc, startY, mainTableH);
 
-      // Texto
-      doc.fillColor('#000000')
-         .fontSize(9)
-         .font('Helvetica-Bold')
-         .text(row.label, x + 5, rowY + 5, { width: col1Width - 10 });
-      
-      doc.font('Helvetica')
-         .text(row.value, x + col1Width + 5, rowY + 5, { width: col2Width - 10 });
-    });
-  }
+    let y = startY + this.CARD_PAD;
+    y = this.drawSectionTitle(doc, 'Forma de Pago', y);
 
-  private addEmptyClientDataTable(doc: PDFKit.PDFDocument, x: number, y: number, lightGreen: string): void {
-    const tableWidth = 500;
-    const rowHeight = 18;
-    const col1Width = 140;
-    const col2Width = tableWidth - col1Width;
-
-    const emptyRows = [
-      'Nombres y Apellidos',
-      'DNI', 
-      'Teléfono de domicilio',
-      'Dirección',
-      'Correo electrónico'
+    const headers = [
+      'LOTE',
+      'PRECIO VENTA',
+      'MONTO INICIAL',
+      'SEPARACIÓN',
+      'FECHA PAGO',
+      'MONTO',
     ];
+    const colWidths = [58, 88, 88, 82, 82, 82];
+    const tableX = this.LEFT + 6;
 
-    emptyRows.forEach((label, index) => {
-      const rowY = y + (index * rowHeight);
-      
-      // Fondo alternado
-      if (index % 2 === 0) {
-        doc.rect(x, rowY, tableWidth, rowHeight)
-           .fillColor(lightGreen)
-           .fill();
-      }
+    // Header row
+    // Draw full header row background with rounded corners
+    const totalTableW = colWidths.reduce((a, b) => a + b, 0);
+    doc
+      .roundedRect(tableX, y, totalTableW, tableHeaderH, 4)
+      .fillColor(this.ACCENT_LIGHT)
+      .fill();
 
-      // Bordes
-      doc.rect(x, rowY, col1Width, rowHeight)
-         .stroke();
-      doc.rect(x + col1Width, rowY, col2Width, rowHeight)
-         .stroke();
-
-      // Texto
-      doc.fillColor('#000000')
-         .fontSize(9)
-         .font('Helvetica-Bold')
-         .text(label, x + 5, rowY + 5, { width: col1Width - 10 });
-    });
-  }
-
-  private addPaymentSection(doc: PDFKit.PDFDocument, sale: Sale, yPosition: number, primaryColor: string, lightGreen: string): number {
-    // Título de sección
-    doc.fontSize(12)
-       .font('Helvetica-Bold')
-       .fillColor('#000000')
-       .text('FORMA DE PAGO:', 50, yPosition);
-
-    yPosition += 25;
-
-    // Tabla básica de pago
-    yPosition = this.addBasicPaymentTable(doc, sale, 50, yPosition, lightGreen);
-
-    // Si es financiado, agregar tabla adicional
-    // if (sale.type === SaleType.FINANCED && sale.financing) {
-    //   yPosition += 20;
-    //   yPosition = this.addFinancingTable(doc, sale.financing, 50, yPosition, lightGreen);
-    // }
-
-    yPosition += 20;
-    this.addFinancingHuTable(doc, sale, 50, yPosition, lightGreen);
-
-    return yPosition;
-  }
-
-  private addBasicPaymentTable(doc: PDFKit.PDFDocument, sale: Sale, x: number, y: number, lightGreen: string): number {
-    const headers = ['LOTE', 'PRECIO DE VENTA', 'MONTO INICIAL', 'SEPARACIÓN', 'FECHA DE PAGO', 'MONTO'];
-    const colWidths = [60, 90, 90, 90, 90, 80];
-    const rowHeight = 30;
-
-    // Encabezados
-    let currentX = x;
-    headers.forEach((header, index) => {
-      doc.rect(currentX, y, colWidths[index], rowHeight)
-         .fillColor(lightGreen)
-         .fill()
-         .stroke();
-      
-      doc.fillColor('#000000')
-         .fontSize(8)
-         .font('Helvetica-Bold')
-         .text(header, currentX + 5, y + 8, { 
-           width: colWidths[index] - 10,
-           align: 'center'
-         });
-      
-      currentX += colWidths[index];
+    let cx = tableX;
+    headers.forEach((header, i) => {
+      doc
+        .fontSize(7.5)
+        .fillColor(this.ACCENT_COLOR)
+        .font('Helvetica-Bold')
+        .text(header, cx + 3, y + 6, {
+          width: colWidths[i] - 6,
+          align: 'center',
+        });
+      cx += colWidths[i];
     });
 
-    // Fila de datos
-    const dataY = y + rowHeight;
-    currentX = x;
+    // Data row
+    y += tableHeaderH;
+    cx = tableX;
 
-    const paymentDate = sale.contractDate ? 
-      new Date(sale.contractDate).toLocaleDateString('es-PE') : '';
+    const currency = sale.lot?.block?.stage?.project?.currency || '';
+    const paymentDate = sale.contractDate
+      ? new Date(sale.contractDate).toLocaleDateString('es-PE')
+      : '';
     const initialPayment = Number(sale.financing?.initialAmount || 0);
     const reservationPayment = Number(sale.reservationAmount || 0);
     const totalAmount = Number(sale.totalAmount || 0);
 
     const rowData = [
       sale.type === SaleType.FINANCED ? 'FINANCIADO' : 'CONTADO',
-      `${totalAmount.toFixed(2)} ${sale.lot.block.stage.project.currency}`,
-      `${initialPayment.toFixed(2)} ${sale.lot.block.stage.project.currency}`,
-      `${reservationPayment.toFixed(2)} ${sale.lot.block.stage.project.currency}`,
+      `${totalAmount.toFixed(2)} ${currency}`,
+      `${initialPayment.toFixed(2)} ${currency}`,
+      `${reservationPayment.toFixed(2)} ${currency}`,
       paymentDate,
-      `${initialPayment.toFixed(2)} ${sale.lot.block.stage.project.currency}`
+      `${initialPayment.toFixed(2)} ${currency}`,
     ];
 
-    rowData.forEach((data, index) => {
-      doc.rect(currentX, dataY, colWidths[index], rowHeight)
-         .stroke();
-      
-      doc.fillColor('#000000')
-         .fontSize(8)
-         .font('Helvetica')
-         .text(data, currentX + 5, dataY + 8, { 
-           width: colWidths[index] - 10,
-           align: 'center'
-         });
-      
-      currentX += colWidths[index];
+    rowData.forEach((data, i) => {
+      doc
+        .rect(cx, y, colWidths[i], tableRowH)
+        .fillColor(this.CARD_BG)
+        .fill();
+      // Bottom border
+      doc
+        .save()
+        .strokeColor(this.CARD_BORDER)
+        .lineWidth(0.3)
+        .moveTo(cx, y + tableRowH)
+        .lineTo(cx + colWidths[i], y + tableRowH)
+        .stroke()
+        .restore();
+      doc
+        .fontSize(8)
+        .fillColor(this.TEXT_PRIMARY)
+        .font('Helvetica')
+        .text(data, cx + 3, y + 6, {
+          width: colWidths[i] - 6,
+          align: 'center',
+        });
+      cx += colWidths[i];
     });
 
-    return dataY + rowHeight;
-  }
+    let nextY = startY + mainTableH + this.GAP;
 
-  private addFinancingTable(doc: PDFKit.PDFDocument, sale: Sale, x: number, y: number, lightGreen: string): number {
-    // Título para la tabla de financiamiento
-    // doc.fontSize(10)
-    //    .font('Helvetica-Bold')
-    //    .fillColor('#000000')
-    //    .text('FINANCIAMIENTO DE LOTE', x, y);
+    // --- Urban development table ---
+    const huTableH =
+      this.CARD_PAD + 20 + tableHeaderH + tableRowH + this.CARD_PAD;
+    this.drawCard(doc, nextY, huTableH);
 
-    // y += 20;
+    y = nextY + this.CARD_PAD;
+    y = this.drawSectionTitle(doc, 'Habilitación Urbana', y);
 
-    const headers = ['INICIAL', '#CUOTAS', '1ª CUOTA', 'VALOR CUOTA'];
-    const colWidths = [125, 125, 125, 125];
-    const rowHeight = 25;
+    const huHeaders = ['TOTAL', '#CUOTAS', '1ª CUOTA', 'VALOR CUOTA'];
+    const huColWidths = [120, 120, 120, 120];
 
-    // Encabezados
-    let currentX = x;
-    headers.forEach((header, index) => {
-      doc.rect(currentX, y, colWidths[index], rowHeight)
-         .fillColor(lightGreen)
-         .fill()
-         .stroke();
-      
-      doc.fillColor('#000000')
-         .fontSize(8)
-         .font('Helvetica-Bold')
-         .text(header, currentX + 5, y + 8, { 
-           width: colWidths[index] - 10,
-           align: 'center'
-         });
-      
-      currentX += colWidths[index];
+    cx = tableX;
+    // Draw full HU header row background with rounded corners
+    const huTotalW = huColWidths.reduce((a, b) => a + b, 0);
+    doc
+      .roundedRect(tableX, y, huTotalW, tableHeaderH, 4)
+      .fillColor(this.ACCENT_LIGHT)
+      .fill();
+
+    huHeaders.forEach((header, i) => {
+      doc
+        .fontSize(8)
+        .fillColor(this.ACCENT_COLOR)
+        .font('Helvetica-Bold')
+        .text(header, cx + 3, y + 6, {
+          width: huColWidths[i] - 6,
+          align: 'center',
+        });
+      cx += huColWidths[i];
     });
 
-    // Fila de datos
-    const dataY = y + rowHeight;
-    currentX = x;
+    y += tableHeaderH;
+    cx = tableX;
 
-    const firstInstallment = sale.financing?.financingInstallments?.[0];
-    const firstInstallmentDate = firstInstallment?.expectedPaymentDate ? 
-      new Date(firstInstallment.expectedPaymentDate).toLocaleDateString('es-PE') : '';
-    const installmentAmount = Number(firstInstallment?.couteAmount || 0);
-    const initialAmount = Number(sale.financing?.initialAmount || 0);
-    const quantityCoutes = Number(sale.financing?.quantityCoutes || 0);
+    const huFinancing = sale.urbanDevelopment?.financing;
+    const huFirstInstallment = huFinancing?.financingInstallments?.[0];
+    const huFirstDate = huFirstInstallment?.expectedPaymentDate
+      ? new Date(huFirstInstallment.expectedPaymentDate).toLocaleDateString(
+          'es-PE',
+        )
+      : '';
+    const huInstallmentAmount = Number(huFirstInstallment?.couteAmount || 0);
+    const huTotal = Number(sale.urbanDevelopment?.amount || 0);
+    const huQuantity = Number(huFinancing?.quantityCoutes || 0);
 
-    const financingData = [
-      `${initialAmount.toFixed(2)} ${sale.lot.block.stage.project.currency}`,
-      quantityCoutes.toString(),
-      firstInstallmentDate,
-      `${installmentAmount.toFixed(2)} ${sale.lot.block.stage.project.currency}`
+    const huRowData = [
+      `${huTotal.toFixed(2)} ${currency}`,
+      huQuantity.toString(),
+      huFirstDate,
+      `${huInstallmentAmount.toFixed(2)} ${currency}`,
     ];
 
-    financingData.forEach((data, index) => {
-      doc.rect(currentX, dataY, colWidths[index], rowHeight)
-         .stroke();
-      
-      doc.fillColor('#000000')
-         .fontSize(8)
-         .font('Helvetica')
-         .text(data, currentX + 5, dataY + 8, { 
-           width: colWidths[index] - 10,
-           align: 'center'
-         });
-      
-      currentX += colWidths[index];
+    huRowData.forEach((data, i) => {
+      doc
+        .rect(cx, y, huColWidths[i], tableRowH)
+        .fillColor(this.CARD_BG)
+        .fill();
+      doc
+        .save()
+        .strokeColor(this.CARD_BORDER)
+        .lineWidth(0.3)
+        .moveTo(cx, y + tableRowH)
+        .lineTo(cx + huColWidths[i], y + tableRowH)
+        .stroke()
+        .restore();
+      doc
+        .fontSize(8)
+        .fillColor(this.TEXT_PRIMARY)
+        .font('Helvetica')
+        .text(data, cx + 3, y + 6, {
+          width: huColWidths[i] - 6,
+          align: 'center',
+        });
+      cx += huColWidths[i];
     });
 
-    return dataY + rowHeight;
+    return nextY + huTableH + this.GAP;
   }
 
-  private addFinancingHuTable(doc: PDFKit.PDFDocument, sale: Sale, x: number, y: number, lightGreen: string): number {
-    // Título para la tabla de financiamiento
-    doc.fontSize(10)
-       .font('Helvetica-Bold')
-       .fillColor('#000000')
-       .text('HABILITACIÓN URBANA', x, y);
+  // ===================== SIGNATURES =====================
 
-    y += 20;
+  private addSignatureSection(
+    doc: PDFKit.PDFDocument,
+    sale: Sale,
+    startY: number,
+  ): void {
+    const signatureW = 160;
+    const col1X = this.LEFT + 40;
+    const col2X = this.LEFT + this.contentWidth - signatureW - 40;
 
-    const headers = ['TOTAL', '#CUOTAS', '1ª CUOTA', 'VALOR CUOTA'];
-    const colWidths = [125, 125, 125, 125];
-    const rowHeight = 25;
+    let y = startY + 20;
 
-    // Encabezados
-    let currentX = x;
-    headers.forEach((header, index) => {
-      doc.rect(currentX, y, colWidths[index], rowHeight)
-         .fillColor(lightGreen)
-         .fill()
-         .stroke();
-      
-      doc.fillColor('#000000')
-         .fontSize(8)
-         .font('Helvetica-Bold')
-         .text(header, currentX + 5, y + 8, { 
-           width: colWidths[index] - 10,
-           align: 'center'
-         });
-      
-      currentX += colWidths[index];
-    });
-
-    // Fila de datos
-    const dataY = y + rowHeight;
-    currentX = x;
-
-    const firstInstallment = sale.urbanDevelopment?.financing?.financingInstallments?.[0];
-    const firstInstallmentDate = firstInstallment?.expectedPaymentDate ? 
-      new Date(firstInstallment.expectedPaymentDate).toLocaleDateString('es-PE') : '';
-    const installmentAmount = Number(firstInstallment?.couteAmount || 0);
-    const initialAmount = Number(sale.urbanDevelopment?.amount || 0);
-    const quantityCoutes = Number(sale.urbanDevelopment?.financing?.quantityCoutes || 0);
-
-    const financingData = [
-      `${initialAmount.toFixed(2)} ${sale.lot.block.stage.project.currency}`,
-      quantityCoutes.toString(),
-      firstInstallmentDate,
-      `${installmentAmount.toFixed(2)} ${sale.lot.block.stage.project.currency}`
-    ];
-
-    financingData.forEach((data, index) => {
-      doc.rect(currentX, dataY, colWidths[index], rowHeight)
-         .stroke();
-      
-      doc.fillColor('#000000')
-         .fontSize(8)
-         .font('Helvetica')
-         .text(data, currentX + 5, dataY + 8, { 
-           width: colWidths[index] - 10,
-           align: 'center'
-         });
-      
-      currentX += colWidths[index];
-    });
-
-    return dataY + rowHeight;
-  }
-
-  private addSignatureSection(doc: PDFKit.PDFDocument, sale: Sale, yPosition: number): void {
-    const signatureY = Math.max(yPosition, 700);
-
-    // Líneas de firma - TITULAR 1 y TITULAR 2 mejor centradas
-    const signatureWidth = 150;
-    const leftX = 120;  // Más centrado
-    const rightX = 330; // Más centrado
-
-    // Firma TITULAR 1
-    doc.moveTo(leftX, signatureY)
-      .lineTo(leftX + signatureWidth, signatureY)
-      .stroke();
-    
-    doc.fontSize(10)
+    // Titular 1
+    this.drawUnderline(doc, col1X, y, signatureW);
+    doc
+      .fontSize(9)
+      .fillColor(this.TEXT_PRIMARY)
       .font('Helvetica-Bold')
-      .fillColor('#000000')
-      .text('FIRMA TITULAR 1', leftX, signatureY + 10, { 
-        width: signatureWidth,
-        align: 'center'
+      .text('FIRMA TITULAR 1', col1X, y + 5, {
+        width: signatureW,
+        align: 'center',
       });
 
-    // Firma TITULAR 2
-    doc.moveTo(rightX, signatureY)
-      .lineTo(rightX + signatureWidth, signatureY)
-      .stroke();
-    
-    doc.text('FIRMA TITULAR 2', rightX, signatureY + 10, { 
-      width: signatureWidth,
-      align: 'center'
-    });
+    // Titular 2
+    this.drawUnderline(doc, col2X, y, signatureW);
+    doc
+      .fontSize(9)
+      .fillColor(this.TEXT_PRIMARY)
+      .font('Helvetica-Bold')
+      .text('FIRMA TITULAR 2', col2X, y + 5, {
+        width: signatureW,
+        align: 'center',
+      });
 
-    // Supervisor y Asesor (línea inferior) - mejor balanceados
-    const bottomSignatureY = signatureY + 40;
+    y += 40;
 
-    // Supervisor (línea vacía)
-    doc.fontSize(10)
+    // Supervisor
+    doc
+      .fontSize(9)
+      .fillColor(this.TEXT_MUTED)
       .font('Helvetica')
-      .text('Supervisor:', leftX, bottomSignatureY);
+      .text('Supervisor:', col1X, y);
+    this.drawUnderline(doc, col1X + 65, y + 8, signatureW - 65);
 
-    doc.moveTo(leftX + 70, bottomSignatureY + 7)
-      .lineTo(leftX + signatureWidth, bottomSignatureY + 7)
-      .stroke();
-
-    // Asesor (vendedor de la venta)
-    const vendorName = sale.vendor ? 
-      `${sale.vendor.firstName || ''} ${sale.vendor.lastName || ''}`.trim() : '';
-    
-    doc.text('Asesor:', rightX, bottomSignatureY);
-    
+    // Asesor
+    const vendorName = sale.vendor
+      ? `${sale.vendor.firstName || ''} ${sale.vendor.lastName || ''}`.trim()
+      : '';
+    doc
+      .fontSize(9)
+      .fillColor(this.TEXT_MUTED)
+      .font('Helvetica')
+      .text('Asesor:', col2X, y);
     if (vendorName) {
-      doc.font('Helvetica-Bold')
-        .text(vendorName, rightX + 50, bottomSignatureY);
+      doc
+        .fontSize(9)
+        .fillColor(this.TEXT_PRIMARY)
+        .font('Helvetica-Bold')
+        .text(vendorName, col2X + 50, y);
+    } else {
+      this.drawUnderline(doc, col2X + 50, y + 8, signatureW - 50);
     }
+  }
+
+  // ===================== FOOTER =====================
+
+  private addFooter(doc: PDFKit.PDFDocument): void {
+    const footerY = doc.page.height - 50;
+
+    doc
+      .save()
+      .strokeColor(this.ACCENT_COLOR)
+      .lineWidth(1)
+      .moveTo(this.LEFT, footerY - 8)
+      .lineTo(this.LEFT + this.contentWidth, footerY - 8)
+      .stroke()
+      .restore();
+
+    doc
+      .fontSize(8.5)
+      .fillColor(this.TEXT_MUTED)
+      .font('Helvetica')
+      .text(
+        '984 403 259   |   Calle Luis Espejo 1097 Of. 803 - La Victoria   |   ventas@inmobiliariahuertas.com',
+        this.LEFT,
+        footerY + 10,
+        { width: this.contentWidth, align: 'center' },
+      );
   }
 }

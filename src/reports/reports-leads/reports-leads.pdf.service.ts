@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { LeadReportPdfData } from './interfaces/leads-response.interface';
 import * as PDFDocument from 'pdfkit';
-import * as path from 'path';
+
 import { AwsS3Service } from 'src/files/aws-s3.service';
 import { Lead } from 'src/lead/entities/lead.entity';
 import { LeadVisit } from 'src/lead/entities/lead-visit.entity';
@@ -129,18 +129,11 @@ export class ReportsLeadsPdfService {
   // ===================== HEADER =====================
 
   private addHeader(doc: PDFKit.PDFDocument): number {
-    const logoPath = path.join(__dirname, 'img', 'logo.png');
-
-    try {
-      doc.image(logoPath, this.LEFT, 18, { height: 45 });
-    } catch {
-      this.logger.warn('Logo not found, using text fallback');
-      doc
-        .fontSize(14)
-        .fillColor(this.ACCENT_COLOR)
-        .font('Helvetica-Bold')
-        .text('HUERTAS', this.LEFT, 28);
-    }
+    doc
+      .fontSize(14)
+      .fillColor(this.ACCENT_COLOR)
+      .font('Helvetica-Bold')
+      .text('HUERTAS', this.LEFT, 28);
 
     const currentDate = new Date().toLocaleDateString('es-PE', {
       day: '2-digit',

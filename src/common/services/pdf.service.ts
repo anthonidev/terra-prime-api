@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as PDFDocument from 'pdfkit';
-import { AwsS3Service } from '../../files/aws-s3.service'; 
+
+import { AwsS3Service } from '../../files/aws-s3.service';
 import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
 import { SaleType } from 'src/admin-sales/sales/enums/sale-type.enum';
 
@@ -20,32 +21,55 @@ export interface RadicationPdfData {
 export class PdfService {
   private readonly logger = new Logger(PdfService.name);
 
+  private readonly ACCENT_COLOR = '#2c5234';
+  private readonly ACCENT_LIGHT = '#e8f0ea';
+  private readonly TEXT_PRIMARY = '#1a1a1a';
+  private readonly TEXT_MUTED = '#666666';
+  private readonly PAGE_BG = '#f3f4f6';
+  private readonly CARD_BG = '#ffffff';
+  private readonly CARD_BORDER = '#e2e4e8';
+  private readonly BORDER_COLOR = '#d0d0d0';
+  private readonly LEFT = 50;
+  private readonly RIGHT = 50;
+  private readonly ROW_H = 20;
+  private readonly GAP = 8;
+  private readonly CARD_PAD = 10;
+  private readonly CARD_RADIUS = 8;
+
   constructor(private readonly awsS3Service: AwsS3Service) {}
 
   async generateRadicationPdf(data: RadicationPdfData): Promise<string> {
+    const { sale } = data;
+    this.logger.log(`Building radication PDF for sale ${sale.id}`);
+
     try {
-      const { sale, urbanDevelopment } = data;
-      
-      // Crear nuevo documento PDF
-      const doc = new PDFDocument({ 
+      const doc = new PDFDocument({
         size: 'A4',
-        margins: { top: 50, bottom: 50, left: 50, right: 50 }
+        margins: { top: 40, bottom: 30, left: this.LEFT, right: this.RIGHT },
       });
 
-      // Buffer para almacenar el PDF
       const chunks: Buffer[] = [];
       doc.on('data', (chunk) => chunks.push(chunk));
-      
+
       return new Promise((resolve, reject) => {
         doc.on('end', async () => {
           try {
             const pdfBuffer = Buffer.concat(chunks);
             const fileName = `radication-${sale.id}-${Date.now()}.pdf`;
-            // Usar tu servicio S3 existente
-            const s3Url = await this.awsS3Service.uploadPdfFromBuffer(pdfBuffer, fileName, 'documents');
+            const s3Url = await this.awsS3Service.uploadPdfFromBuffer(
+              pdfBuffer,
+              fileName,
+              'documents',
+            );
+            this.logger.log(
+              `Radication PDF uploaded successfully for sale ${sale.id}`,
+            );
             resolve(s3Url);
           } catch (error) {
-            this.logger.error('Error uploading PDF to S3:', error);
+            this.logger.error(
+              `Error uploading radication PDF to S3 for sale ${sale.id}`,
+              error?.stack || error,
+            );
             reject(error);
           }
         });
@@ -55,283 +79,416 @@ export class PdfService {
         try {
           this.buildRadicationPdf(doc, data);
           doc.end();
+          this.logger.log(
+            `Radication PDF built successfully for sale ${sale.id}`,
+          );
         } catch (error) {
-          this.logger.error('Error building PDF:', error);
+          this.logger.error(
+            `Error building radication PDF for sale ${sale.id}`,
+            error?.stack || error,
+          );
           reject(error);
         }
       });
     } catch (error) {
-      this.logger.error('Error generating PDF:', error);
+      this.logger.error(
+        `Error generating radication PDF for sale ${sale.id}`,
+        error?.stack || error,
+      );
       throw error;
     }
   }
 
-  private buildRadicationPdf(doc: PDFKit.PDFDocument, data: RadicationPdfData): void {
+  private get contentWidth(): number {
+    return 595.28 - this.LEFT - this.RIGHT;
+  }
+
+  // ===================== MAIN BUILD =====================
+
+  private buildRadicationPdf(
+    doc: PDFKit.PDFDocument,
+    data: RadicationPdfData,
+  ): void {
     const { sale, urbanDevelopment } = data;
-    
-    // Configuración de fuentes y colores
-    const primaryColor = '#2c5234';
-    const secondaryColor = '#666666';
 
-    // Header con logo y título
-    this.addHeader(doc, primaryColor, sale);
-    
-    // Título principal
-    doc.fontSize(18)
-       .fillColor(primaryColor)
-       .text('HOJA DE RADICACIÓN DE VENTAS', 50, 160, { align: 'center' });
+    if (!sale.lot) this.logger.warn(`Sale ${sale.id}: lot relation is null`);
+    if (!sale.client)
+      this.logger.warn(`Sale ${sale.id}: client relation is null`);
+    if (!sale.financing)
+      this.logger.warn(`Sale ${sale.id}: financing relation is null`);
 
-    let yPosition = 220;
+    // Page background
+    doc
+      .rect(0, 0, doc.page.width, doc.page.height)
+      .fillColor(this.PAGE_BG)
+      .fill();
 
-    // Sección 1: Información básica de la venta
-    yPosition = this.addBasicSaleInfo(doc, sale, yPosition, primaryColor, secondaryColor);
-    
-    // Sección 2: Información de habilitación urbana (si aplica)
+    let y = this.addHeader(doc, sale);
+    y = this.addSaleInfoSection(doc, sale, y);
+
     if (urbanDevelopment) {
-      yPosition = this.addUrbanDevelopmentInfo(doc, urbanDevelopment, yPosition, primaryColor, secondaryColor);
+      y = this.addUrbanDevelopmentSection(doc, urbanDevelopment, y);
     }
-    
-    // Sección 3: Participantes
-    yPosition = this.addParticipantsInfo(doc, sale, yPosition, primaryColor, secondaryColor);
 
-    // Footer
+    y = this.addParticipantsSection(doc, sale, y);
     this.addFooter(doc);
   }
 
-  private addHeader(doc: PDFKit.PDFDocument, primaryColor: string, sale: Sale): void {
-    // Rectángulo header
-    doc.rect(0, 0, doc.page.width, 120)
-       .fillColor('#f8f9fa')
-       .fill();
+  // ===================== CARD HELPER =====================
 
-    // Logo placeholder (puedes agregar imagen real aquí)
-    doc.rect(50, 20, 80, 80)
-      //  .fillColor('')
-       .fill();
-    
-    doc.fontSize(18)
-       .fillColor(primaryColor)
-       .text(sale.lot.block.stage.project.name, 55, 55);
+  private drawCard(doc: PDFKit.PDFDocument, y: number, height: number): void {
+    const x = this.LEFT - 4;
+    const w = this.contentWidth + 8;
 
-    // Información de contabilidad
-    doc.fontSize(10)
-       .fillColor('#000000')
-       .text('CONTABILIDAD', doc.page.width - 150, 30)
-       .text(`N°: _____________`, doc.page.width - 150, 50)
-       .text(`Fecha: ___/___/___`, doc.page.width - 150, 70);
+    // Shadow
+    doc
+      .roundedRect(x + 1, y + 1, w, height, this.CARD_RADIUS)
+      .fillColor('#dcdee2')
+      .fill();
+
+    // White background
+    doc
+      .roundedRect(x, y, w, height, this.CARD_RADIUS)
+      .fillColor(this.CARD_BG)
+      .fill();
+
+    // Border
+    doc
+      .roundedRect(x, y, w, height, this.CARD_RADIUS)
+      .strokeColor(this.CARD_BORDER)
+      .lineWidth(0.5)
+      .stroke();
   }
 
-  private addBasicSaleInfo(
-    doc: PDFKit.PDFDocument, 
-    sale: Sale, 
-    startY: number, 
-    primaryColor: string, 
-    secondaryColor: string
+  // ===================== SECTION HELPERS =====================
+
+  private drawSectionTitle(
+    doc: PDFKit.PDFDocument,
+    title: string,
+    y: number,
   ): number {
-    let yPos = startY;
+    doc
+      .rect(this.LEFT + 2, y + 2, 3, 13)
+      .fillColor(this.ACCENT_COLOR)
+      .fill();
 
-    // Título de sección
-    doc.fontSize(12)
-       .fillColor(primaryColor)
-       .text('INFORMACIÓN DE LA VENTA', 50, yPos);
-    
-    yPos += 30;
+    doc
+      .fontSize(11)
+      .fillColor(this.TEXT_PRIMARY)
+      .font('Helvetica-Bold')
+      .text(title.toUpperCase(), this.LEFT + 12, y + 2);
 
-    // Información en dos columnas
-    const leftCol = 50;
-    const rightCol = 300;
-    const lineHeight = 25;
-
-    // Fecha
-    doc.fontSize(10)
-       .fillColor('#000000')
-       .text('FECHA:', leftCol, yPos)
-       .text(sale.createdAt ? sale.createdAt.toLocaleDateString() : '_____________', leftCol + 60, yPos);
-
-    yPos += lineHeight;
-
-    // Cliente
-    const clientName = `${sale.client.lead.firstName} ${sale.client.lead.lastName}`;
-    doc.text('CLIENTE:', leftCol, yPos)
-       .text(clientName, leftCol + 60, yPos);
-
-    yPos += lineHeight;
-
-    // Manzana y Lote
-    doc.text('MANZANA:', leftCol, yPos)
-       .text(sale.lot.block.name, leftCol + 80, yPos)
-       .text('LOTE:', rightCol, yPos)
-       .text(sale.lot.name + ' ' + sale.lot.block.stage.project.currency, rightCol + 40, yPos);
-
-    yPos += lineHeight;
-
-    // Separación (Reserva)
-    doc.text('SEPARACIÓN:', leftCol, yPos);
-    const reservationAmount = (sale.reservationAmount? sale.reservationAmount.toString(): '0.00') + ' ' + sale.lot.block.stage.project.currency;
-    doc.text(reservationAmount, leftCol + 80, yPos);
-
-    // Cuota inicial
-    doc.text('CUOTA INICIAL:', rightCol, yPos);
-    const currency = sale.lot.block.stage.project.currency;
-    const initialAmount = sale.financing?.initialAmount?.toString() || '';
-    doc.text(initialAmount + ' ' + currency, rightCol + 90, yPos);
-
-    yPos += lineHeight;
-
-    // Total
-    doc.text('TOTAL:', leftCol, yPos)
-       .text(sale.totalAmount.toString() + ' ' + sale.lot.block.stage.project.currency, leftCol + 60, yPos);
-
-    // Tipo de venta
-    doc.text('CASH:', rightCol, yPos);
-    const isCash = sale.type === SaleType.DIRECT_PAYMENT;
-    this.drawCheckbox(doc, rightCol + 35, yPos - 2, isCash);
-
-    doc.text('FINANCIAMIENTO:', rightCol + 60, yPos);
-    const isFinanced = sale.type === SaleType.FINANCED;
-    this.drawCheckbox(doc, rightCol + 150, yPos - 2, isFinanced);
-
-    return yPos + 40;
+    doc.y = y + 20;
+    return y + 20;
   }
 
-  private drawCheckbox(doc: PDFKit.PDFDocument, x: number, y: number, checked: boolean): void {
-    const size = 12;
-    
-    doc.rect(x, y, size, size)
-       .stroke('#000000');
-    
+  private drawField(
+    doc: PDFKit.PDFDocument,
+    label: string,
+    value: string,
+    x: number,
+    y: number,
+  ): void {
+    doc.fontSize(9).font('Helvetica');
+    const lw = doc.widthOfString(label);
+
+    doc.fillColor(this.TEXT_MUTED).text(label, x, y);
+    doc
+      .fontSize(10)
+      .fillColor(this.TEXT_PRIMARY)
+      .font('Helvetica-Bold')
+      .text(value || '—', x + lw + 5, y);
+
+    doc.y = y;
+  }
+
+  private drawCheckbox(
+    doc: PDFKit.PDFDocument,
+    x: number,
+    y: number,
+    checked: boolean,
+  ): void {
+    const size = 10;
     if (checked) {
-      doc.save()
-         .strokeColor('#000000')
-         .lineWidth(1.5)
-         .moveTo(x + 2, y + 6)
-         .lineTo(x + 5, y + 9)
-         .lineTo(x + 10, y + 3)
-         .stroke()
-         .restore();
+      doc.roundedRect(x, y, size, size, 2).fillColor(this.ACCENT_COLOR).fill();
+      doc
+        .save()
+        .strokeColor('#ffffff')
+        .lineWidth(1.5)
+        .moveTo(x + 2, y + 5)
+        .lineTo(x + 4, y + 7.5)
+        .lineTo(x + 8, y + 2.5)
+        .stroke()
+        .restore();
+    } else {
+      doc
+        .roundedRect(x, y, size, size, 2)
+        .strokeColor(this.BORDER_COLOR)
+        .lineWidth(0.5)
+        .stroke();
     }
   }
 
-  private drawUnderline(doc: PDFKit.PDFDocument, x: number, y: number, width: number): void {
-    doc.save()
-       .strokeColor('#000000')
-       .lineWidth(0.5)
-       .moveTo(x, y)
-       .lineTo(x + width, y)
-       .stroke()
-       .restore();
+  // ===================== HEADER =====================
+
+  private addHeader(doc: PDFKit.PDFDocument, sale: Sale): number {
+    doc
+      .fontSize(14)
+      .fillColor(this.ACCENT_COLOR)
+      .font('Helvetica-Bold')
+      .text('HUERTAS', this.LEFT, 28);
+
+    // Right side: contabilidad info
+    const rightX = doc.page.width - this.RIGHT - 130;
+    doc
+      .fontSize(9)
+      .fillColor(this.TEXT_PRIMARY)
+      .font('Helvetica-Bold')
+      .text('CONTABILIDAD', rightX, 25, { width: 130, align: 'right' });
+    doc
+      .fontSize(9)
+      .fillColor(this.TEXT_MUTED)
+      .font('Helvetica')
+      .text('N°: _____________', rightX, 40, { width: 130, align: 'right' })
+      .text('Fecha: ___/___/___', rightX, 55, { width: 130, align: 'right' });
+
+    // Title
+    doc
+      .fontSize(16)
+      .fillColor(this.ACCENT_COLOR)
+      .font('Helvetica-Bold')
+      .text('HOJA DE RADICACIÓN DE VENTAS', this.LEFT, 80, {
+        width: this.contentWidth,
+        align: 'center',
+      });
+
+    doc.y = 105;
+    return 105;
   }
 
-  private addUrbanDevelopmentInfo(
-    doc: PDFKit.PDFDocument, 
-    urbanDevelopment: any, 
-    startY: number, 
-    primaryColor: string, 
-    secondaryColor: string
+  // ===================== SALE INFO =====================
+
+  private addSaleInfoSection(
+    doc: PDFKit.PDFDocument,
+    sale: Sale,
+    startY: number,
   ): number {
-    let yPos = startY;
+    const rows = 4;
+    const cardH = this.CARD_PAD + 20 + rows * this.ROW_H + this.CARD_PAD;
+    this.drawCard(doc, startY, cardH);
 
-    // Fondo gris para la sección
-    doc.rect(50, yPos - 10, doc.page.width - 100, 100)
-       .fillColor('#f0f0f0')
-       .fill();
+    let y = startY + this.CARD_PAD;
+    y = this.drawSectionTitle(doc, 'Información de la Venta', y);
 
-    // Título de sección
-    doc.fontSize(12)
-       .fillColor(primaryColor)
-       .text('HABILITACIÓN URBANA', 50, yPos);
-    
-    yPos += 30;
+    const col1 = this.LEFT + 12;
+    const col2 = this.LEFT + this.contentWidth / 2;
 
-    const leftCol = 70;
-    const rightCol = 300;
-    const lineHeight = 25;
+    // Row 1
+    const saleDate = sale.createdAt
+      ? sale.createdAt.toLocaleDateString('es-PE')
+      : '';
+    const clientName = sale.client?.lead
+      ? `${sale.client.lead.firstName} ${sale.client.lead.lastName}`
+      : '';
+    this.drawField(doc, 'Fecha', saleDate, col1, y);
+    this.drawField(doc, 'Cliente', clientName, col2, y);
+    y += this.ROW_H;
 
-    // Monto de habilitación urbana
-    doc.fontSize(10)
-       .fillColor('#000000')
-       .text('HABILITACIÓN URBANA:', leftCol, yPos)
-       .text(urbanDevelopment.financing.initialAmount?.toString() || '', leftCol + 150, yPos);
+    // Row 2
+    const manzana = sale.lot?.block?.name || '';
+    const lote =
+      (sale.lot?.name || '') +
+      ' ' +
+      (sale.lot?.block?.stage?.project?.currency || '');
+    this.drawField(doc, 'Manzana', manzana, col1, y);
+    this.drawField(doc, 'Lote', lote, col2, y);
+    y += this.ROW_H;
 
-    yPos += lineHeight;
+    // Row 3
+    const currency = sale.lot?.block?.stage?.project?.currency || '';
+    const reservationAmount = sale.reservationAmount
+      ? `${sale.reservationAmount} ${currency}`
+      : '';
+    const initialAmount = sale.financing?.initialAmount
+      ? `${sale.financing.initialAmount} ${currency}`
+      : '';
+    this.drawField(doc, 'Separación', reservationAmount, col1, y);
+    this.drawField(doc, 'Cuota Inicial', initialAmount, col2, y);
+    y += this.ROW_H;
 
-    // Número de cuotas
-    doc.text('NÚMERO DE CUOTAS:', leftCol, yPos)
-       .text(urbanDevelopment.financing.quantityCoutes?.toString() || '', leftCol + 130, yPos);
+    // Row 4: Total + checkboxes
+    const totalAmount = sale.totalAmount
+      ? `${sale.totalAmount} ${currency}`
+      : '';
+    this.drawField(doc, 'Total', totalAmount, col1, y);
 
-    // Valor de cuota
-    doc.text('VALOR DE CUOTA:', rightCol, yPos)
-       .text('_____________', rightCol + 100, yPos);
+    // Checkboxes for sale type
+    const cbX = col2;
+    const isCash = sale.type === SaleType.DIRECT_PAYMENT;
+    const isFinanced = sale.type === SaleType.FINANCED;
 
-    yPos += lineHeight;
+    doc
+      .fontSize(9)
+      .fillColor(this.TEXT_MUTED)
+      .font('Helvetica')
+      .text('Cash', cbX, y);
+    this.drawCheckbox(doc, cbX + 30, y, isCash);
 
-    // Fecha de pago
-    doc.text('FECHA DE PAGO:', leftCol, yPos)
-       .text('___/___/___', leftCol + 100, yPos);
+    doc
+      .fontSize(9)
+      .fillColor(this.TEXT_MUTED)
+      .font('Helvetica')
+      .text('Financiamiento', cbX + 60, y);
+    this.drawCheckbox(doc, cbX + 145, y, isFinanced);
+    doc.y = y;
 
-    return yPos + 50;
+    return startY + cardH + this.GAP;
   }
 
-  private addParticipantsInfo(
-    doc: PDFKit.PDFDocument, 
-    sale: Sale, 
-    startY: number, 
-    primaryColor: string, 
-    secondaryColor: string
+  // ===================== URBAN DEVELOPMENT =====================
+
+  private addUrbanDevelopmentSection(
+    doc: PDFKit.PDFDocument,
+    urbanDevelopment: RadicationPdfData['urbanDevelopment'],
+    startY: number,
   ): number {
-    let yPos = startY;
+    const rows = 2;
+    const cardH = this.CARD_PAD + 20 + rows * this.ROW_H + this.CARD_PAD;
+    this.drawCard(doc, startY, cardH);
 
-    // Título de sección
-    doc.fontSize(12)
-       .fillColor(primaryColor)
-       .text('PARTICIPANTES', 50, yPos);
-    
-    yPos += 30;
+    let y = startY + this.CARD_PAD;
+    y = this.drawSectionTitle(doc, 'Habilitación Urbana', y);
 
-    const lineHeight = 20;
+    const col1 = this.LEFT + 12;
+    const col2 = this.LEFT + this.contentWidth / 2;
 
-    // Lista de participantes
-    const participants = [
-      { type: 'JEFE DE VENTAS', name: sale.fieldManager ? `${sale.fieldManager.firstName} ${sale.fieldManager.lastName}` : '' },
-      { type: 'CIERRE', name: sale.fieldSeller ? `${sale.fieldSeller.firstName} ${sale.fieldSeller.lastName}` : '' },
-      { type: 'LÍNEA', name: sale.liner ? `${sale.liner.firstName} ${sale.liner.lastName}` : '' },
-      { type: 'SUPERVISOR DE TLMK', name: sale.telemarketingSupervisor ? `${sale.telemarketingSupervisor.firstName} ${sale.telemarketingSupervisor.lastName}` : '' },
-      { type: 'CONFIRMADOR TLMK', name: sale.telemarketingConfirmer ? `${sale.telemarketingConfirmer.firstName} ${sale.telemarketingConfirmer.lastName}` : '' },
-      { type: 'TLMK', name: sale.telemarketer ? `${sale.telemarketer.firstName} ${sale.telemarketer.lastName}` : '' },
-    ];
+    this.drawField(
+      doc,
+      'Monto HU',
+      urbanDevelopment.financing.initialAmount?.toString() || '',
+      col1,
+      y,
+    );
+    this.drawField(
+      doc,
+      '#Cuotas',
+      urbanDevelopment.financing.quantityCoutes?.toString() || '',
+      col2,
+      y,
+    );
+    y += this.ROW_H;
 
-    participants.forEach((participant) => {
-      if (participant.name) {
-        doc.fontSize(10)
-           .fillColor('#000000')
-           .text(`${participant.type}:`, 70, yPos)
-           .text(participant.name, 200, yPos);
-        yPos += lineHeight;
-      } else {
-        doc.fontSize(10)
-           .fillColor('#000000')
-           .text(`${participant.type}:`, 70, yPos)
-           .text('_____________________', 200, yPos);
-        yPos += lineHeight;
-      }
-    });
+    this.drawField(doc, 'Valor Cuota', '—', col1, y);
+    this.drawField(doc, 'Fecha Pago', '___/___/___', col2, y);
 
-    return yPos + 30;
+    return startY + cardH + this.GAP;
   }
+
+  // ===================== PARTICIPANTS =====================
+
+  private addParticipantsSection(
+    doc: PDFKit.PDFDocument,
+    sale: Sale,
+    startY: number,
+  ): number {
+    const rows = 3;
+    const cardH = this.CARD_PAD + 20 + rows * this.ROW_H + this.CARD_PAD;
+    this.drawCard(doc, startY, cardH);
+
+    let y = startY + this.CARD_PAD;
+    y = this.drawSectionTitle(doc, 'Participantes', y);
+
+    const col1 = this.LEFT + 12;
+    const col2 = this.LEFT + this.contentWidth / 2;
+
+    // Row 1
+    this.drawField(
+      doc,
+      'Jefe Ventas',
+      this.getParticipantName(sale.fieldManager),
+      col1,
+      y,
+    );
+    this.drawField(
+      doc,
+      'Cierre',
+      this.getParticipantName(sale.fieldSeller),
+      col2,
+      y,
+    );
+    y += this.ROW_H;
+
+    // Row 2
+    this.drawField(
+      doc,
+      'Línea',
+      this.getParticipantName(sale.liner),
+      col1,
+      y,
+    );
+    this.drawField(
+      doc,
+      'Supervisor TLMK',
+      this.getParticipantName(sale.telemarketingSupervisor),
+      col2,
+      y,
+    );
+    y += this.ROW_H;
+
+    // Row 3
+    this.drawField(
+      doc,
+      'Confirmador TLMK',
+      this.getParticipantName(sale.telemarketingConfirmer),
+      col1,
+      y,
+    );
+    this.drawField(
+      doc,
+      'TLMK',
+      this.getParticipantName(sale.telemarketer),
+      col2,
+      y,
+    );
+
+    return startY + cardH + this.GAP;
+  }
+
+  // ===================== FOOTER =====================
 
   private addFooter(doc: PDFKit.PDFDocument): void {
-    const footerY = doc.page.height - 80;
-    
-    doc.fontSize(8)
-       .fillColor('#666666')
-       .text('Calle Luis Espejo 1097 - La Victoria    Teléfono: 680 5314    Calle Luis Espejo 1097 - La Victoria', 50, footerY, { align: 'center' })
-      //  .text('Teléfono: 680 5314', 50, footerY + 15, { align: 'center' });
+    const footerY = doc.page.height - 50;
+
+    doc
+      .save()
+      .strokeColor(this.ACCENT_COLOR)
+      .lineWidth(1)
+      .moveTo(this.LEFT, footerY - 8)
+      .lineTo(this.LEFT + this.contentWidth, footerY - 8)
+      .stroke()
+      .restore();
+
+    doc
+      .fontSize(8.5)
+      .fillColor(this.TEXT_MUTED)
+      .font('Helvetica')
+      .text(
+        '984 403 259   |   Calle Luis Espejo 1097 Of. 803 - La Victoria   |   ventas@inmobiliariahuertas.com',
+        this.LEFT,
+        footerY + 10,
+        { width: this.contentWidth, align: 'center' },
+      );
   }
 
-  private formatDate(date: Date): string {
-    const day = date.getDate().toString().padStart(2, '0');
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const year = date.getFullYear();
-    return `${day}/${month}/${year}`;
+  // ===================== UTILITY HELPERS =====================
+
+  private getParticipantName(participant?: {
+    firstName: string;
+    lastName: string;
+  }): string {
+    if (!participant) return '';
+    const first = participant.firstName?.split(' ')[0] || '';
+    const last = participant.lastName?.split(' ')[0] || '';
+    return `${first} ${last}`.trim();
   }
 }

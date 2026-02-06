@@ -1,5 +1,20 @@
 import { Sale } from '../entities/sale.entity';
 
+function formatParticipant(p: any) {
+  if (!p) return null;
+  return {
+    id: p.id,
+    firstName: p.firstName,
+    lastName: p.lastName,
+    email: p.email || null,
+    document: p.document,
+    documentType: p.documentType,
+    phone: p.phone,
+    address: p.address,
+    participantType: p.participantType,
+  };
+}
+
 export function formatSaleListResponse(sale: Sale) {
   return {
     id: sale.id,
@@ -49,80 +64,21 @@ export function formatSaleListResponse(sale: Sale) {
           initialAmountPending: sale.urbanDevelopment.financing?.initialAmountPending || sale.urbanDevelopment.financing?.initialAmount || null,
         }
       : null,
-    liner: sale.liner
-      ? {
-          firstName: sale.liner.firstName,
-          lastName: sale.liner.lastName,
-        }
-      : null,
-    telemarketingSupervisor: sale.telemarketingSupervisor
-      ? {
-          firstName: sale.telemarketingSupervisor.firstName,
-          lastName: sale.telemarketingSupervisor.lastName,
-        }
-      : null,
-    telemarketingConfirmer: sale.telemarketingConfirmer
-      ? {
-          firstName: sale.telemarketingConfirmer.firstName,
-          lastName: sale.telemarketingConfirmer.lastName,
-        }
-      : null,
-    telemarketer: sale.telemarketer
-      ? {
-          firstName: sale.telemarketer.firstName,
-          lastName: sale.telemarketer.lastName,
-        }
-      : null,
-    fieldManager: sale.fieldManager
-      ? {
-          firstName: sale.fieldManager.firstName,
-          lastName: sale.fieldManager.lastName,
-        }
-      : null,
-    fieldSupervisor: sale.fieldSupervisor
-      ? {
-          firstName: sale.fieldSupervisor.firstName,
-          lastName: sale.fieldSupervisor.lastName,
-        }
-      : null,
-    fieldSeller: sale.fieldSeller
-      ? {
-          firstName: sale.fieldSeller.firstName,
-          lastName: sale.fieldSeller.lastName,
-        }
-      : null,
-    salesGeneralManager: sale.salesGeneralManager
-      ? {
-          firstName: sale.salesGeneralManager.firstName,
-          lastName: sale.salesGeneralManager.lastName,
-        }
-      : null,
-    salesManager: sale.salesManager
-      ? {
-          firstName: sale.salesManager.firstName,
-          lastName: sale.salesManager.lastName,
-        }
-      : null,
-    postSale: sale.postSale
-      ? {
-          firstName: sale.postSale.firstName,
-          lastName: sale.postSale.lastName,
-        }
-      : null,
-    closer: sale.closer
-      ? {
-          firstName: sale.closer.firstName,
-          lastName: sale.closer.lastName,
-        }
-      : null,
-    generalDirector: sale.generalDirector
-      ? {
-          firstName: sale.generalDirector.firstName,
-          lastName: sale.generalDirector.lastName,
-        }
-      : null,
+    liner: formatParticipant(sale.liner),
+    telemarketingSupervisor: formatParticipant(sale.telemarketingSupervisor),
+    telemarketingConfirmer: formatParticipant(sale.telemarketingConfirmer),
+    telemarketer: formatParticipant(sale.telemarketer),
+    fieldManager: formatParticipant(sale.fieldManager),
+    fieldSupervisor: formatParticipant(sale.fieldSupervisor),
+    fieldSeller: formatParticipant(sale.fieldSeller),
+    salesGeneralManager: formatParticipant(sale.salesGeneralManager),
+    salesManager: formatParticipant(sale.salesManager),
+    postSale: formatParticipant(sale.postSale),
+    closer: formatParticipant(sale.closer),
+    generalDirector: formatParticipant(sale.generalDirector),
     vendor: sale.vendor
       ? {
+          id: sale.vendor.id,
           document: sale.vendor.document,
           firstName: sale.vendor.firstName,
           lastName: sale.vendor.lastName,

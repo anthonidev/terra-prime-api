@@ -4,11 +4,7 @@
   "sourceRoot": "src",
   "compilerOptions": {
     "assets": [
-      "src/chatbot/context/*.json",
-      {
-        "include": "reports/reports-leads/img/*.png",
-        "outDir": "dist"
-      }
+      "src/chatbot/context/*.json"
     ],
     "watchAssets": true,
     "deleteOutDir": true

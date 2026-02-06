@@ -20,40 +20,31 @@ export class ReportsPaymentAcordService {
 
   async generatePaymentAcordReportPdf(saleId: string): Promise<PaymentAcordReportGenerationResponse> {
     try {
-      // Verificar si ya existe un PDF (asumir que agregaste este campo a Sale entity)
       const existingSale = await this.getSaleWithRelations(saleId);
-      
-      if (existingSale.paymentAcordPdfUrl) { // Campo a agregar en Sale entity
-        // Verificar si el archivo aún existe en S3
-        const fileExists = await this.awsS3Service.fileExistsByUrl(existingSale.paymentAcordPdfUrl);
-        
-        if (fileExists) {
-          return {
-            saleId: existingSale.id,
-            documentUrl: existingSale.paymentAcordPdfUrl,
-            generatedAt: existingSale.updatedAt,
-            clientName: `${existingSale.client.lead.firstName} ${existingSale.client.lead.lastName}`,
-            lotName: existingSale.lot.name,
-            saleInfo: {
-              type: existingSale.type,
-              totalAmount: existingSale.totalAmount,
-              projectName: existingSale.lot.block.stage.project.name,
-            },
-            isNewDocument: false,
-          };
-        } else {
-          // El archivo no existe en S3, generar uno nuevo
-          this.logger.warn(`PDF file not found in S3 for sale ${saleId}, generating new one`);
-        }
+
+      // Si ya existe URL, devolver directamente sin verificar en S3
+      if (existingSale.paymentAcordPdfUrl) {
+        return {
+          saleId: existingSale.id,
+          documentUrl: existingSale.paymentAcordPdfUrl,
+          generatedAt: existingSale.updatedAt,
+          clientName: `${existingSale.client.lead.firstName} ${existingSale.client.lead.lastName}`,
+          lotName: existingSale.lot.name,
+          saleInfo: {
+            type: existingSale.type,
+            totalAmount: existingSale.totalAmount,
+            projectName: existingSale.lot.block.stage.project.name,
+          },
+          isNewDocument: false,
+        };
       }
 
-      // Generar nuevo PDF
       return await this.createNewPaymentAcordReportPdf(existingSale);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`Error generating payment acord report PDF for sale ${saleId}:`, error);
+      this.logger.error(`Error generating payment acord report PDF for sale ${saleId}:`, error?.stack || error);
       throw new InternalServerErrorException('Error al generar el PDF del acuerdo de pago');
     }
   }
@@ -61,15 +52,9 @@ export class ReportsPaymentAcordService {
   async getPaymentAcordReportDocument(saleId: string): Promise<PaymentAcordReportDocumentResponse> {
     try {
       const sale = await this.getSaleWithRelations(saleId);
-      
+
       if (!sale.paymentAcordPdfUrl) {
         throw new NotFoundException('No se ha generado un acuerdo de pago para esta venta');
-      }
-
-      // Verificar que el archivo existe en S3
-      const fileExists = await this.awsS3Service.fileExistsByUrl(sale.paymentAcordPdfUrl);
-      if (!fileExists) {
-        throw new NotFoundException('El documento del acuerdo de pago no se encuentra disponible');
       }
 
       return {
@@ -88,7 +73,7 @@ export class ReportsPaymentAcordService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`Error getting payment acord report document for sale ${saleId}:`, error);
+      this.logger.error(`Error getting payment acord report document for sale ${saleId}:`, error?.stack || error);
       throw new InternalServerErrorException('Error al obtener el documento del acuerdo de pago');
     }
   }
@@ -96,24 +81,20 @@ export class ReportsPaymentAcordService {
   async regeneratePaymentAcordReportPdf(saleId: string): Promise<PaymentAcordReportGenerationResponse> {
     try {
       const sale = await this.getSaleWithRelations(saleId);
-      
-      // Eliminar el archivo anterior si existe
+
+      // Eliminar el archivo anterior en background (no bloquea)
       if (sale.paymentAcordPdfUrl) {
-        try {
-          await this.awsS3Service.deleteFileByUrl(sale.paymentAcordPdfUrl);
-          this.logger.log(`Previous payment acord report PDF deleted for sale ${saleId}`);
-        } catch (error) {
-          this.logger.warn(`Failed to delete previous PDF for sale ${saleId}:`, error);
-        }
+        this.awsS3Service.deleteFileByUrl(sale.paymentAcordPdfUrl).catch((error) => {
+          this.logger.warn(`Failed to delete previous PDF for sale ${saleId}: ${error.message}`);
+        });
       }
 
-      // Generar nuevo PDF
       return await this.createNewPaymentAcordReportPdf(sale);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`Error regenerating payment acord report PDF for sale ${saleId}:`, error);
+      this.logger.error(`Error regenerating payment acord report PDF for sale ${saleId}:`, error?.stack || error);
       throw new InternalServerErrorException('Error al regenerar el PDF del acuerdo de pago');
     }
   }
@@ -123,27 +104,42 @@ export class ReportsPaymentAcordService {
       where: { id: saleId },
       relations: [
         'client',
-        'client.lead',                              // Cliente principal
-        'secondaryClientSales',                // Relación con clientes secundarios
-        'secondaryClientSales.secondaryClient', // Clientes secundarios
-        'lot',                                 // Lote
-        'lot.block',                          // Manzana
-        'lot.block.stage',                    // Etapa
-        'lot.block.stage.project',            // Proyecto
-        'financing',                          // Financiamiento
-        'financing.financingInstallments',    // Cuotas de financiamiento
-        // 'reservation',                        // Reserva
-        'guarantor',                          // Garante
-        'vendor',                             // Vendedor
+        'client.lead',
+        'secondaryClientSales',
+        'secondaryClientSales.secondaryClient',
+        'lot',
+        'lot.block',
+        'lot.block.stage',
+        'lot.block.stage.project',
+        'financing',
+        'guarantor',
+        'vendor',
         'liner',
         'urbanDevelopment',
         'urbanDevelopment.financing',
-        'urbanDevelopment.financing.financingInstallments',
       ],
     });
 
     if (!sale) {
       throw new NotFoundException(`Venta con ID ${saleId} no encontrada`);
+    }
+
+    // Cargar solo la primera cuota de financiamiento del lote (si existe)
+    if (sale.financing?.id) {
+      const firstInstallment = await this.saleRepository.manager.query(
+        `SELECT "expectedPaymentDate", "couteAmount" FROM "financing_installments" WHERE "financingId" = $1 ORDER BY "expectedPaymentDate" ASC LIMIT 1`,
+        [sale.financing.id],
+      );
+      (sale.financing as any).financingInstallments = firstInstallment || [];
+    }
+
+    // Cargar solo la primera cuota de habilitación urbana (si existe)
+    if (sale.urbanDevelopment?.financing?.id) {
+      const firstHuInstallment = await this.saleRepository.manager.query(
+        `SELECT "expectedPaymentDate", "couteAmount" FROM "financing_installments" WHERE "financingId" = $1 ORDER BY "expectedPaymentDate" ASC LIMIT 1`,
+        [sale.urbanDevelopment.financing.id],
+      );
+      (sale.urbanDevelopment.financing as any).financingInstallments = firstHuInstallment || [];
     }
 
     return sale;
@@ -162,12 +158,10 @@ export class ReportsPaymentAcordService {
         }
       };
 
-      // Generar PDF y subir a S3
       const s3Url = await this.reportsPaymentAcordPdfService.generatePaymentAcordReportPdf(pdfData);
-      
-      // Actualizar la venta con la URL del PDF
+
       await this.saleRepository.update(sale.id, {
-        paymentAcordPdfUrl: s3Url, // Campo a agregar en Sale entity
+        paymentAcordPdfUrl: s3Url,
       });
 
       return {
@@ -184,7 +178,7 @@ export class ReportsPaymentAcordService {
         isNewDocument: true,
       };
     } catch (error) {
-      this.logger.error('Error creating new payment acord report PDF:', error);
+      this.logger.error(`Error creating new payment acord report PDF for sale ${sale.id}:`, error?.stack || error);
       throw new InternalServerErrorException('Error al crear el PDF del acuerdo de pago');
     }
   }
