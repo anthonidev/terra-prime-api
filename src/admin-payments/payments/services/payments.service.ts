@@ -1442,13 +1442,16 @@ export class PaymentsService {
 
     if (relatedEntityType === 'reservation') {
       sale = await this.salesService.findOneById(relatedEntityId);
-      if (sale.status !== StatusSale.RESERVATION_PENDING)
-        throw new BadRequestException(
-          `La reserva no está en estado pendiente de pago.`,
-        );
       if (sale.status === StatusSale.RESERVATION_PENDING_APPROVAL)
         throw new BadRequestException(
-          `La reserva ya tiene un pago pendiente en curso.`,
+          `La reserva ya tiene un pago pendiente de aprobación.`,
+        );
+      if (
+        sale.status !== StatusSale.RESERVATION_PENDING &&
+        sale.status !== StatusSale.RESERVATION_IN_PAYMENT
+      )
+        throw new BadRequestException(
+          `La reserva no está en estado pendiente de pago.`,
         );
       paymentConfig = await this.paymentConfigService.findOneByCode(
         'RESERVATION_PAYMENT',

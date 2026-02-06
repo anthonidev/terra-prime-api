@@ -1,6 +1,5 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Body, Controller, Post } from '@nestjs/common';
 import { CreateFinancingDto } from './dto/create-financing.dto';
-import { UpdateFinancingDto } from './dto/update-financing.dto';
 import { FinancingService } from './services/financing.service';
 
 @Controller('financing')

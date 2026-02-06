@@ -23,9 +23,9 @@ import { FindLeadSourcesDto } from '../dto/find-lead-sources.dto';
 @Controller('lead-sources')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class LeadSourceController {
-  constructor(private readonly leadSourceService: LeadSourceService) { }
+  constructor(private readonly leadSourceService: LeadSourceService) {}
   @Post()
-  @Roles('SYS', 'ADM', 'REC')
+  @Roles('SYS', 'ADM', 'REC', 'JVE')
   async create(@Body() createLeadSourceDto: CreateLeadSourceDto) {
     try {
       const leadSource =
@@ -50,7 +50,7 @@ export class LeadSourceController {
     }
   }
   @Patch(':id')
-  @Roles('SYS', 'ADM', 'REC')
+  @Roles('SYS', 'ADM', 'REC', 'JVE')
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateLeadSourceDto: UpdateLeadSourceDto,
@@ -80,7 +80,7 @@ export class LeadSourceController {
     }
   }
   @Get(':id')
-  @Roles('SYS', 'ADM', 'REC', 'VEN')
+  @Roles('SYS', 'ADM', 'REC', 'VEN', 'JVE')
   async findOne(@Param('id', ParseIntPipe) id: number) {
     try {
       const leadSource = await this.leadSourceService.findById(id);
@@ -103,10 +103,10 @@ export class LeadSourceController {
     }
   }
   @Get()
-  @Roles('SYS', 'ADM', 'REC', 'VEN')
+  @Roles('SYS', 'ADM', 'REC', 'VEN', 'JVE')
   async findAll(@Query() filters: FindLeadSourcesDto) {
     try {
-      console.log("SOLICITUD DE LISTADO DE FUENTES", filters);
+      console.log('SOLICITUD DE LISTADO DE FUENTES', filters);
       const result = await this.leadSourceService.findAll(filters);
       return {
         success: true,
@@ -128,7 +128,7 @@ export class LeadSourceController {
     }
   }
   @Get('active/list')
-  @Roles('SYS', 'ADM', 'REC', 'VEN')
+  @Roles('SYS', 'ADM', 'REC', 'VEN', 'JVE')
   async findAllActive() {
     try {
       const leadSources = await this.leadSourceService.findAllActive();

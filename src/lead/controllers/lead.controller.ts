@@ -26,7 +26,7 @@ import { AssignParticipantsToLeadVisitDto } from '../dto/assign-participants-to-
 export class LeadController {
   constructor(private readonly leadService: LeadService) {}
   @Post('find-by-document')
-  @Roles('SYS', 'REC', 'VEN')
+  @Roles('SYS', 'REC', 'VEN', 'JVE', 'ADM')
   async findByDocument(@Body() findDto: FindLeadByDocumentDto) {
     try {
       const { lead, isInOffice } =
@@ -185,7 +185,7 @@ export class LeadController {
   }
 
   @Post('register-departure/:id')
-  @Roles('SYS', 'REC')
+  @Roles('SYS', 'REC', 'JVE')
   async registerDeparture(@Param('id') id: string) {
     try {
       const lead = await this.leadService.registerDeparture(id);

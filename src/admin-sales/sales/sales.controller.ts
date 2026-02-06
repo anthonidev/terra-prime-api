@@ -200,7 +200,7 @@ export class SalesController {
   }
 
   @Post('financing/calculate-amortization')
-  @Roles('JVE', 'VEN')
+  @Roles('JVE', 'VEN', 'ADM')
   async calculateAmortization(
     @Body() calculateAmortizationDto: CalculateAmortizationDto,
   ) {
