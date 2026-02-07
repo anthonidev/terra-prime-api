@@ -387,6 +387,41 @@ export class SalesController {
     );
   }
 
+  @Post('reservation/paid-approved/:saleId')
+  @Roles('ADM')
+  @UseInterceptors(FilesInterceptor('files'))
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async paidReservationAutoApproved(
+    @Param('saleId', ParseUUIDPipe) saleId: string,
+    @Body() paidReservationDto: PaidInstallmentsAutoApprovedDto,
+    @GetUser() user: User,
+    @UploadedFiles(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({
+          fileType: /(jpg|jpeg|png|webp)$/,
+        })
+        .addMaxSizeValidator({
+          maxSize: 1024 * 1024 * 2,
+        })
+        .build({
+          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+          fileIsRequired: false,
+        }),
+    )
+    files: Array<Express.Multer.File>,
+  ) {
+    return this.salesService.paidReservationAutoApproved(
+      saleId,
+      paidReservationDto.amountPaid,
+      paidReservationDto.payments,
+      files,
+      user.id,
+      paidReservationDto.dateOperation,
+      paidReservationDto.numberTicket,
+      paidReservationDto.observation,
+    );
+  }
+
   @Post('financing/late-fees/paid-approved/:financingId')
   @Roles('ADM')
   @UseInterceptors(FilesInterceptor('files'))

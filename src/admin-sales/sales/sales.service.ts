@@ -3570,6 +3570,75 @@ export class SalesService {
   }
 
   // ============================================================
+  // PAGO DE RESERVA AUTO-APROBADO (ADM)
+  // ============================================================
+
+  async paidReservationAutoApproved(
+    saleId: string,
+    amountPaid: number,
+    paymentDetails: CreateDetailPaymentDto[],
+    files: Express.Multer.File[],
+    userId: string,
+    dateOperation: string,
+    numberTicket?: string,
+    observation?: string,
+  ) {
+    if (amountPaid <= 0)
+      throw new BadRequestException('El monto a pagar debe ser mayor a cero.');
+
+    await this.paymentsService.isValidPaymentConfig('reservation', saleId);
+
+    const sale = await this.findOneById(saleId);
+
+    if (!sale)
+      throw new NotFoundException(
+        `La venta con ID ${saleId} no se encuentra registrada`,
+      );
+
+    const realPending = Number(
+      (Number(sale.reservationAmountPending) || Number(sale.reservationAmount) - Number(sale.reservationAmountPaid || 0)).toFixed(2),
+    );
+
+    if (realPending <= 0)
+      throw new BadRequestException(
+        'La reserva ya se encuentra completamente pagada.',
+      );
+
+    if (amountPaid > realPending)
+      throw new BadRequestException(
+        `El monto a pagar (${amountPaid.toFixed(2)}) excede el monto pendiente de la reserva (${realPending.toFixed(2)}).`,
+      );
+
+    return await this.transactionService.runInTransaction(
+      async (queryRunner) => {
+        const createPaymentDto: CreatePaymentDto = {
+          methodPayment: MethodPayment.VOUCHER,
+          amount: amountPaid,
+          relatedEntityType: 'reservation',
+          relatedEntityId: saleId,
+          metadata: {
+            'Concepto de pago': 'Pago de reserva (Auto-aprobado)',
+            'Monto de reserva total': sale.reservationAmount,
+            'Monto pendiente antes de este pago': realPending,
+            'Monto pagado en esta operación': amountPaid,
+          },
+          paymentDetails,
+        };
+
+        return await this.paymentsService.createAutoApproved(
+          createPaymentDto,
+          files,
+          userId,
+          dateOperation,
+          numberTicket,
+          queryRunner,
+          observation,
+        );
+      },
+    );
+  }
+
+  // ============================================================
   // PAGO DE MORAS AUTO-APROBADO (ADM)
   // ============================================================
 

@@ -658,7 +658,17 @@ export class PaymentsService {
         // Iterar sobre las claves (e.g., "Cuota 1", "Cuota 2")
         for (const [key, data] of Object.entries(affectedInstallments)) {
           const numberCuote = parseInt(key.replace('Cuota ', ''));
-          const amountApplied = Number(data['Monto aplicado']);
+
+          const rawAmount =
+            data['Monto aplicado'] ?? data['Aplicado a cuota'];
+
+          if (rawAmount === undefined || rawAmount === null) {
+            throw new BadRequestException(
+              `No se encontró el monto aplicado para ${key}. Se esperaba "Monto aplicado" o "Aplicado a cuota" en la metadata.`,
+            );
+          }
+
+          const amountApplied = Number(rawAmount);
 
           // Buscar la cuota específica
           // Nota: Necesitamos encontrar la cuota por número y financingId
@@ -827,8 +837,53 @@ export class PaymentsService {
     await this.salesService.updateStatusSale(sale.id, newStatus, queryRunner);
   }
 
+  private async revertReservationPayment(
+    payment: Payment,
+    queryRunner: QueryRunner,
+  ): Promise<void> {
+    const sale = await this.salesService.findOneById(payment.relatedEntityId);
+
+    // Revertir montos de reserva
+    const newPaid = Number(
+      (
+        Number(sale.reservationAmountPaid || 0) - Number(payment.amount)
+      ).toFixed(2),
+    );
+    const newPending = Number(
+      (Number(sale.reservationAmount) - newPaid).toFixed(2),
+    );
+
+    await queryRunner.manager.update(
+      'sales',
+      { id: sale.id },
+      {
+        reservationAmountPaid: newPaid > 0 ? newPaid : 0,
+        reservationAmountPending:
+          newPending > 0 ? newPending : sale.reservationAmount,
+      },
+    );
+
+    // Determinar nuevo estado de la venta
+    const updatedSale = await queryRunner.manager.findOne('sales', {
+      where: { id: sale.id },
+    } as any);
+
+    let newStatus: StatusSale;
+    if (Number(updatedSale.reservationAmountPaid || 0) === 0) {
+      newStatus = StatusSale.RESERVATION_PENDING;
+    } else {
+      newStatus = StatusSale.RESERVATION_IN_PAYMENT;
+    }
+
+    await this.salesService.updateStatusSale(
+      payment.relatedEntityId,
+      newStatus,
+      queryRunner,
+    );
+  }
+
   /**
-   * Anula un pago de cuotas o cuota inicial de financiamiento que ya fue aprobado
+   * Anula un pago de cuotas, cuota inicial o reserva que ya fue aprobado
    * Revierte todos los montos afectados
    */
   async cancelInstallmentPayment(
@@ -847,10 +902,10 @@ export class PaymentsService {
     }
 
     // Validar que sea un pago de cuotas o de cuota inicial
-    const allowedTypes = ['financingInstallments', 'financing'];
+    const allowedTypes = ['financingInstallments', 'financing', 'reservation'];
     if (!allowedTypes.includes(payment.relatedEntityType)) {
       throw new BadRequestException(
-        'Solo se pueden anular pagos de cuotas o cuota inicial de financiamiento',
+        'Solo se pueden anular pagos de cuotas, cuota inicial o reserva',
       );
     }
 
@@ -902,6 +957,10 @@ export class PaymentsService {
 
         if (payment.relatedEntityType === 'financing') {
           await this.revertFinancingInitialPayment(payment, queryRunner);
+        }
+
+        if (payment.relatedEntityType === 'reservation') {
+          await this.revertReservationPayment(payment, queryRunner);
         }
 
         // Anular factura asociada si existe
