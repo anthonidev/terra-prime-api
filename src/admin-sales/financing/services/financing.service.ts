@@ -1,16 +1,37 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  forwardRef,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { CreateFinancingDto } from '../dto/create-financing.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Financing } from '../entities/financing.entity';
 import { QueryRunner, Repository } from 'typeorm';
 import { CreateFinancingInstallmentsDto } from '../dto/create-financing-installments.dto';
 import { CombinedAmortizationResponse, CombinedInstallment } from '../interfaces/combined-amortization-response.interface';
+import { PaymentsService } from 'src/admin-payments/payments/services/payments.service';
+import { TransactionService } from 'src/common/services/transaction.service';
+import { CreateDetailPaymentDto } from 'src/admin-payments/payments/dto/create-detail-payment.dto';
+import { CreatePaymentDto } from 'src/admin-payments/payments/dto/create-payment.dto';
+import { MethodPayment } from 'src/admin-payments/payments/enums/method-payment.enum';
+import { PaymentResponse } from 'src/admin-payments/payments/interfaces/payment-response.interface';
+import { SalesService } from 'src/admin-sales/sales/sales.service';
 
 @Injectable()
 export class FinancingService {
+  private readonly logger = new Logger(FinancingService.name);
+
   constructor(
     @InjectRepository(Financing)
     private readonly financingRepository: Repository<Financing>,
+    @Inject(forwardRef(() => PaymentsService))
+    private readonly paymentsService: PaymentsService,
+    private readonly transactionService: TransactionService,
+    @Inject(forwardRef(() => SalesService))
+    private readonly salesService: SalesService,
   ) {}
   async create(
     createFinancingDto: CreateFinancingDto,
@@ -357,5 +378,102 @@ export class FinancingService {
 
     // Ahora eliminar el financing
     await financingRepository.remove(financing);
+  }
+
+  // ============================================================
+  // PAGO DE CUOTA INICIAL AUTO-APROBADO (ADM)
+  // ============================================================
+
+  async payInitialAmountAutoApproved(
+    financingId: string,
+    amountPaid: number,
+    paymentDetails: CreateDetailPaymentDto[],
+    files: Express.Multer.File[],
+    userId: string,
+    dateOperation: string,
+    numberTicket?: string,
+    observation?: string,
+  ): Promise<PaymentResponse> {
+    try {
+      this.logger.log(
+        `Iniciando pago auto-aprobado de cuota inicial - financingId: ${financingId}, amountPaid: ${amountPaid}, userId: ${userId}`,
+      );
+
+      if (amountPaid <= 0)
+        throw new BadRequestException('El monto a pagar debe ser mayor a cero.');
+
+      await this.paymentsService.isValidPaymentConfig(
+        'financing',
+        financingId,
+      );
+
+      const financing = await this.financingRepository.findOne({
+        where: { id: financingId },
+        relations: ['sale'],
+      });
+
+      if (!financing)
+        throw new NotFoundException(
+          `El financiamiento con ID ${financingId} no se encuentra registrado`,
+        );
+
+      const sale = await this.salesService.findOneByIdFinancing(financingId);
+
+      // Calcular el pendiente real de la cuota inicial
+      const initialToPay = Number(
+        (
+          Number(financing.initialAmount) -
+          Number(sale.reservationAmount || 0)
+        ).toFixed(2),
+      );
+      const currentPaid = Number(financing.initialAmountPaid || 0);
+      const realPending = Number((initialToPay - currentPaid).toFixed(2));
+
+      if (realPending <= 0)
+        throw new BadRequestException(
+          'La cuota inicial ya se encuentra completamente pagada.',
+        );
+
+      if (amountPaid > realPending)
+        throw new BadRequestException(
+          `El monto a pagar (${amountPaid.toFixed(2)}) excede el monto pendiente de la cuota inicial (${realPending.toFixed(2)}).`,
+        );
+
+      return await this.transactionService.runInTransaction(
+        async (queryRunner) => {
+          const createPaymentDto: CreatePaymentDto = {
+            methodPayment: MethodPayment.VOUCHER,
+            amount: amountPaid,
+            relatedEntityType: 'financing',
+            relatedEntityId: financingId,
+            metadata: {
+              'Concepto de pago':
+                'Pago de cuota inicial de financiación (Auto-aprobado)',
+              'Monto inicial total': financing.initialAmount,
+              'Monto de reserva descontado': sale.reservationAmount || 0,
+              'Monto pendiente antes de este pago': realPending,
+              'Monto pagado en esta operación': amountPaid,
+            },
+            paymentDetails,
+          };
+
+          return await this.paymentsService.createAutoApproved(
+            createPaymentDto,
+            files,
+            userId,
+            dateOperation,
+            numberTicket,
+            queryRunner,
+            observation,
+          );
+        },
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error en pago auto-aprobado de cuota inicial - financingId: ${financingId}, amountPaid: ${amountPaid}, userId: ${userId}`,
+        error.stack,
+      );
+      throw error;
+    }
   }
 }

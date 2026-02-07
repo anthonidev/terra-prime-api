@@ -7,11 +7,13 @@ import { FinancingService } from './services/financing.service';
 import { FinancingInstallmentsService } from './services/financing-installments.service';
 import { PaymentsModule } from 'src/admin-payments/payments/payments.module';
 import { CommonModule } from 'src/common/common.module';
+import { SalesModule } from 'src/admin-sales/sales/sales.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Financing, FinancingInstallments]), 
+    TypeOrmModule.forFeature([Financing, FinancingInstallments]),
     forwardRef(() => PaymentsModule),
+    forwardRef(() => SalesModule),
     CommonModule,
 ],
   controllers: [FinancingController],

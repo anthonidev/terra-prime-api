@@ -81,7 +81,7 @@ export class PaymentsController {
   }
 
   @Get('details/:id')
-  @Roles('FAC', 'ADM')
+  @Roles('FAC', 'ADM', 'JVE', 'VEN')
   async findOnePayment(@Param('id') id: number) {
     return this.paymentsService.findOne(id);
   }

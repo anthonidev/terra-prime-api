@@ -3544,6 +3544,32 @@ export class SalesService {
   }
 
   // ============================================================
+  // PAGO DE CUOTA INICIAL AUTO-APROBADO (ADM)
+  // ============================================================
+
+  async paidInitialAmountAutoApproved(
+    financingId: string,
+    amountPaid: number,
+    paymentDetails: CreateDetailPaymentDto[],
+    files: Express.Multer.File[],
+    userId: string,
+    dateOperation: string,
+    numberTicket?: string,
+    observation?: string,
+  ) {
+    return await this.financingService.payInitialAmountAutoApproved(
+      financingId,
+      amountPaid,
+      paymentDetails,
+      files,
+      userId,
+      dateOperation,
+      numberTicket,
+      observation,
+    );
+  }
+
+  // ============================================================
   // PAGO DE MORAS AUTO-APROBADO (ADM)
   // ============================================================
 

@@ -48,6 +48,7 @@ export class PaymentsService {
     private readonly salesService: SalesService,
     private readonly transactionService: TransactionService,
     private readonly financingInstallmentsService: FinancingInstallmentsService,
+    @Inject(forwardRef(() => FinancingService))
     private readonly financingService: FinancingService,
     private readonly reservationService: ReservationsService,
     private readonly lotService: LotService,
@@ -771,9 +772,64 @@ export class PaymentsService {
     }
   }
 
+  private async revertFinancingInitialPayment(
+    payment: Payment,
+    queryRunner: QueryRunner,
+  ): Promise<void> {
+    const sale = await this.salesService.findOneByIdFinancing(
+      payment.relatedEntityId,
+    );
+
+    const financing = await queryRunner.manager.findOne('financing', {
+      where: { id: payment.relatedEntityId },
+    } as any);
+
+    if (!financing)
+      throw new BadRequestException(
+        `No se encontró el financiamiento con ID ${payment.relatedEntityId}`,
+      );
+
+    // Revertir montos de cuota inicial
+    const newPaid = Number(
+      (
+        Number(financing.initialAmountPaid || 0) - Number(payment.amount)
+      ).toFixed(2),
+    );
+    const initialToPay = Number(
+      (
+        Number(financing.initialAmount) -
+        Number(sale.reservationAmount || 0)
+      ).toFixed(2),
+    );
+    const newPending = Number((initialToPay - newPaid).toFixed(2));
+
+    await queryRunner.manager.update(
+      'financing',
+      { id: financing.id },
+      {
+        initialAmountPaid: newPaid > 0 ? newPaid : 0,
+        initialAmountPending: newPending > 0 ? newPending : initialToPay,
+      },
+    );
+
+    // Determinar nuevo estado de la venta
+    const updatedFinancing = await queryRunner.manager.findOne('financing', {
+      where: { id: payment.relatedEntityId },
+    } as any);
+
+    let newStatus: StatusSale;
+    if (Number(updatedFinancing.initialAmountPaid || 0) === 0) {
+      newStatus = StatusSale.PENDING;
+    } else {
+      newStatus = StatusSale.IN_PAYMENT;
+    }
+
+    await this.salesService.updateStatusSale(sale.id, newStatus, queryRunner);
+  }
+
   /**
-   * Anula un pago de cuotas de financiamiento que ya fue aprobado
-   * Revierte todos los montos de las cuotas afectadas
+   * Anula un pago de cuotas o cuota inicial de financiamiento que ya fue aprobado
+   * Revierte todos los montos afectados
    */
   async cancelInstallmentPayment(
     paymentId: number,
@@ -790,10 +846,11 @@ export class PaymentsService {
       throw new NotFoundException(`Pago con ID ${paymentId} no encontrado`);
     }
 
-    // Validar que sea un pago de cuotas
-    if (payment.relatedEntityType !== 'financingInstallments') {
+    // Validar que sea un pago de cuotas o de cuota inicial
+    const allowedTypes = ['financingInstallments', 'financing'];
+    if (!allowedTypes.includes(payment.relatedEntityType)) {
       throw new BadRequestException(
-        'Solo se pueden anular pagos de cuotas de financiamiento',
+        'Solo se pueden anular pagos de cuotas o cuota inicial de financiamiento',
       );
     }
 
@@ -807,14 +864,16 @@ export class PaymentsService {
       );
     }
 
-    // Validar que tenga el backup de cuotas O la metadata de cuotas afectadas
-    if (
-      !payment.metadata?.installmentsBackup &&
-      !payment.metadata?.['Cuotas afectadas']
-    ) {
-      throw new BadRequestException(
-        'El pago no tiene información de respaldo de cuotas. No se puede anular.',
-      );
+    // Validar metadata según tipo de pago
+    if (payment.relatedEntityType === 'financingInstallments') {
+      if (
+        !payment.metadata?.installmentsBackup &&
+        !payment.metadata?.['Cuotas afectadas']
+      ) {
+        throw new BadRequestException(
+          'El pago no tiene información de respaldo de cuotas. No se puede anular.',
+        );
+      }
     }
 
     // Ejecutar la anulación en una transacción
@@ -822,7 +881,7 @@ export class PaymentsService {
       async (queryRunner) => {
         // Cambiar estado a CANCELLED
         payment.status = StatusPayment.CANCELLED;
-        payment.rejectionReason = cancellationReason; // Reutilizar el campo rejectionReason
+        payment.rejectionReason = cancellationReason;
         payment.reviewedBy = { id: canceledById } as any;
         payment.reviewedAt = new Date();
 
@@ -836,11 +895,16 @@ export class PaymentsService {
 
         const canceledPayment = await queryRunner.manager.save(payment);
 
-        // Revertir las cuotas a su estado anterior
-        await this.revertInstallmentsPayment(paymentId, queryRunner);
+        // Revertir según tipo de pago
+        if (payment.relatedEntityType === 'financingInstallments') {
+          await this.revertInstallmentsPayment(paymentId, queryRunner);
+        }
 
-        // Anular factura asociada si existe (fuera de la transacción porque usa HTTP)
-        // Se hace después de confirmar la transacción para no bloquear la anulación del payment
+        if (payment.relatedEntityType === 'financing') {
+          await this.revertFinancingInitialPayment(payment, queryRunner);
+        }
+
+        // Anular factura asociada si existe
         const annulledInvoice =
           await this.invoicesService.annulInvoiceByPaymentId(
             paymentId,
@@ -905,7 +969,7 @@ export class PaymentsService {
         .leftJoin(
           'financing',
           'financing',
-          `financing.id = "payment"."relatedEntityId"::uuid AND "payment"."relatedEntityType" IN ('financing', 'financingInstallments')`,
+          `financing.id = "payment"."relatedEntityId"::uuid AND "payment"."relatedEntityType" IN ('financing', 'financingInstallments', 'lateFee')`,
         )
         .leftJoin('financing.sale', 'financingSale')
         .leftJoin('financingSale.client', 'financingClient')
@@ -1261,6 +1325,9 @@ export class PaymentsService {
               return await this.financingInstallmentsService.findOneWithPayments(
                 id,
               );
+            case 'lateFee':
+              return (await this.financingService.findOneWithPayments(id))
+                ?.sale;
             case 'reservation':
               return await this.salesService.findOneSaleWithPayments(id);
             default:
@@ -1676,6 +1743,7 @@ export class PaymentsService {
 
       await this.salesService.updateStatusSale(sale.id, newStatus, queryRunner);
     }
+
   }
 
   private async notifyNexusPaymentApproved(

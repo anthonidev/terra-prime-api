@@ -49,7 +49,7 @@ export class DetailPaymentAutoApprovedDto {
 export class PaidInstallmentsAutoApprovedDto {
   @IsNotEmpty({ message: 'El monto a pagar es requerido' })
   @IsNumber({}, { message: 'El monto a pagar debe ser un número válido' })
-  @Min(1, { message: 'El monto a pagar debe ser mayor a cero.' })
+  @Min(0.01, { message: 'El monto a pagar debe ser mayor a cero.' })
   @Type(() => Number)
   amountPaid: number;
 

@@ -11,7 +11,7 @@ import { CreateDetailPaymentDto } from 'src/admin-payments/payments/dto/create-d
 export class PaidInstallmentsDto {
   @IsNotEmpty({ message: 'El ID de la cuota de financiamiento es requerido' })
   @IsNumber({}, { message: 'El monto a pagar debe ser un número válido' })
-  @Min(1, { message: 'El monto a pagar debe ser mayor a cero.' })
+  @Min(0.01, { message: 'El monto a pagar debe ser mayor a cero.' })
   @Type(() => Number)
   amountPaid: number;
 
