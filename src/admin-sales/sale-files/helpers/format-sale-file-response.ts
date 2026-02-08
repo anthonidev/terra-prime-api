@@ -6,6 +6,7 @@ export const formatSaleFileResponse = (saleFile: SaleFile): SaleFileResponse => 
     id: saleFile.id,
     url: saleFile.url,
     description: saleFile.description,
+    metadata: saleFile.metadata,
     createdAt: saleFile.createdAt,
   };
 };

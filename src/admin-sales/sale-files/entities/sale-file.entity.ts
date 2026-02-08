@@ -7,6 +7,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
+import { SaleFileMetadata } from '../interfaces/sale-file-metadata.interface';
 
 @Entity('sale_files')
 export class SaleFile extends Timestamped {
@@ -37,4 +38,10 @@ export class SaleFile extends Timestamped {
     nullable: true,
   })
   description?: string;
+
+  @Column({
+    type: 'jsonb',
+    nullable: true,
+  })
+  metadata?: SaleFileMetadata;
 }

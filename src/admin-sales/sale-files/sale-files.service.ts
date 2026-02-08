@@ -7,6 +7,7 @@ import { Sale } from '../sales/entities/sale.entity';
 import { AwsS3Service } from 'src/files/aws-s3.service';
 import { formatSaleFileResponse, formatSaleFilesResponse } from './helpers/format-sale-file-response';
 import { SaleFileResponse } from './interfaces/sale-file-response.interface';
+import { extractFileMetadata } from './helpers/extract-file-metadata';
 
 @Injectable()
 export class SaleFilesService {
@@ -40,12 +41,16 @@ export class SaleFilesService {
     // Subir archivo a S3 (permite cualquier tipo de archivo)
     const s3Response = await this.awsS3Service.uploadFileAnyType(file, 'sale-files');
 
+    // Extraer metadata del archivo
+    const metadata = extractFileMetadata(file);
+
     // Crear el registro
     const saleFile = this.saleFileRepository.create({
       sale,
       url: s3Response.url,
       urlKey: s3Response.key,
       description: createSaleFileDto.description,
+      metadata,
     });
 
     await this.saleFileRepository.save(saleFile);
