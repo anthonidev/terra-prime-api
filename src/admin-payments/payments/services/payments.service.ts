@@ -782,6 +782,112 @@ export class PaymentsService {
     }
   }
 
+  private async revertLateFeePayment(
+    paymentId: number,
+    queryRunner: QueryRunner,
+  ): Promise<void> {
+    const payment = await queryRunner.manager.getRepository(Payment).findOne({
+      where: { id: paymentId },
+      relations: ['details'],
+    });
+
+    if (
+      !payment ||
+      (!payment.metadata?.installmentsBackup &&
+        !payment.metadata?.['Moras afectadas'])
+    ) {
+      throw new BadRequestException(
+        'No se encontró información de respaldo para revertir las moras',
+      );
+    }
+
+    try {
+      if (payment.metadata?.installmentsBackup) {
+        // Restaurar desde backup completo
+        const installmentsBackup = JSON.parse(
+          payment.metadata.installmentsBackup,
+        );
+
+        for (const backup of installmentsBackup) {
+          await this.financingInstallmentsService.updateAmountsPayment(
+            backup.id,
+            Number(backup.previousLateFeeAmountPending ?? 0),
+            Number(backup.previousLateFeeAmountPaid ?? 0),
+            Number(backup.previousCoutePending ?? 0),
+            Number(backup.previousCoutePaid ?? 0),
+            backup.previousStatus,
+            queryRunner,
+          );
+        }
+      } else if (payment.metadata?.['Moras afectadas']) {
+        // Fallback: Restaurar usando "Moras afectadas"
+        const affectedInstallments = payment.metadata['Moras afectadas'];
+        const financingId = payment.relatedEntityId;
+
+        for (const [key, data] of Object.entries(affectedInstallments)) {
+          const numberCuote = parseInt(key.replace('Cuota ', ''));
+
+          const rawAmount = (data as any)['Mora aplicada'];
+
+          if (rawAmount === undefined || rawAmount === null) {
+            throw new BadRequestException(
+              `No se encontró el monto de mora aplicada para ${key}.`,
+            );
+          }
+
+          const amountApplied = Number(rawAmount);
+
+          const installment = await queryRunner.manager.findOne(
+            'financing_installments',
+            {
+              where: {
+                financing: { id: financingId },
+                numberCuote: numberCuote,
+              },
+            } as any,
+          );
+
+          if (installment) {
+            // Revertir mora: restar de paid, sumar a pending
+            const lateFeeToRevert = Math.min(
+              amountApplied,
+              Number(installment.lateFeeAmountPaid || 0),
+            );
+
+            if (lateFeeToRevert > 0) {
+              installment.lateFeeAmountPaid = Number(
+                (Number(installment.lateFeeAmountPaid) - lateFeeToRevert).toFixed(2),
+              );
+              installment.lateFeeAmountPending = Number(
+                (Number(installment.lateFeeAmountPending) + lateFeeToRevert).toFixed(2),
+              );
+            }
+
+            // Restaurar estado
+            const hasPrincipalPending = Number(installment.coutePending ?? 0) > 0;
+            const hasLateFeePending = installment.lateFeeAmountPending > 0;
+
+            if (hasLateFeePending) {
+              installment.status = 'EXPIRED';
+            } else if (hasPrincipalPending) {
+              const now = new Date();
+              const expectedDate = new Date(installment.expectedPaymentDate);
+              installment.status = expectedDate < now ? 'EXPIRED' : 'PENDING';
+            } else {
+              installment.status = 'PAID';
+            }
+
+            await queryRunner.manager.save(installment);
+          }
+        }
+      }
+    } catch (error) {
+      throw new BadRequestException(
+        'Error al revertir las moras: ' + error.message,
+      );
+    }
+  }
+
   private async revertFinancingInitialPayment(
     payment: Payment,
     queryRunner: QueryRunner,
@@ -901,11 +1007,11 @@ export class PaymentsService {
       throw new NotFoundException(`Pago con ID ${paymentId} no encontrado`);
     }
 
-    // Validar que sea un pago de cuotas o de cuota inicial
-    const allowedTypes = ['financingInstallments', 'financing', 'reservation'];
+    // Validar que sea un pago de cuotas, cuota inicial, reserva o moras
+    const allowedTypes = ['financingInstallments', 'financing', 'reservation', 'lateFee'];
     if (!allowedTypes.includes(payment.relatedEntityType)) {
       throw new BadRequestException(
-        'Solo se pueden anular pagos de cuotas, cuota inicial o reserva',
+        'Solo se pueden anular pagos de cuotas, cuota inicial, reserva o moras',
       );
     }
 
@@ -927,6 +1033,17 @@ export class PaymentsService {
       ) {
         throw new BadRequestException(
           'El pago no tiene información de respaldo de cuotas. No se puede anular.',
+        );
+      }
+    }
+
+    if (payment.relatedEntityType === 'lateFee') {
+      if (
+        !payment.metadata?.installmentsBackup &&
+        !payment.metadata?.['Moras afectadas']
+      ) {
+        throw new BadRequestException(
+          'El pago no tiene información de respaldo de moras. No se puede anular.',
         );
       }
     }
@@ -961,6 +1078,10 @@ export class PaymentsService {
 
         if (payment.relatedEntityType === 'reservation') {
           await this.revertReservationPayment(payment, queryRunner);
+        }
+
+        if (payment.relatedEntityType === 'lateFee') {
+          await this.revertLateFeePayment(paymentId, queryRunner);
         }
 
         // Anular factura asociada si existe

@@ -1555,7 +1555,7 @@ export class FinancingInstallmentsService {
       if (amountLeft <= 0) break;
 
       const lateFeeAmountPending = Number(
-        (installment.lateFeeAmountPending ?? 0).toFixed(2),
+        Number(installment.lateFeeAmountPending ?? 0).toFixed(2),
       );
 
       if (lateFeeAmountPending > 0) {
@@ -1623,7 +1623,7 @@ export class FinancingInstallmentsService {
       if (amountLeft <= 0) break;
 
       const lateFeeAmountPending = Number(
-        (installment.lateFeeAmountPending ?? 0).toFixed(2),
+        Number(installment.lateFeeAmountPending ?? 0).toFixed(2),
       );
 
       if (lateFeeAmountPending > 0) {
@@ -1660,7 +1660,7 @@ export class FinancingInstallmentsService {
           mode: isLateFeePaidCompletely ? 'Total' : 'Parcial',
           amountApplied: paymentAmount,
           pendingAfterPayment: Number(
-            installment.lateFeeAmountPending.toFixed(2),
+            Number(installment.lateFeeAmountPending).toFixed(2),
           ),
         });
       }

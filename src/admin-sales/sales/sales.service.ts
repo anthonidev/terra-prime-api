@@ -902,7 +902,26 @@ export class SalesService {
       installmentPayments.push(...huInstallmentPayments);
     }
 
-    // 4. Pagos de reserva
+    // 4. Pagos de moras
+    const lateFeePayments = [];
+    if (sale.financing) {
+      const financingLateFeePayments =
+        await this.paymentsService.findPaymentsByRelatedEntity(
+          'lateFee',
+          sale.financing.id,
+        );
+      lateFeePayments.push(...financingLateFeePayments);
+    }
+    if (sale.urbanDevelopment?.financing) {
+      const huLateFeePayments =
+        await this.paymentsService.findPaymentsByRelatedEntity(
+          'lateFee',
+          sale.urbanDevelopment.financing.id,
+        );
+      lateFeePayments.push(...huLateFeePayments);
+    }
+
+    // 5. Pagos de reserva
     let reservationPayments = [];
     if (sale.fromReservation || sale.reservationAmount > 0) {
       reservationPayments =
@@ -918,6 +937,7 @@ export class SalesService {
       ...financingPayments,
       ...reservationPayments,
       ...installmentPayments,
+      ...lateFeePayments,
     ].sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
