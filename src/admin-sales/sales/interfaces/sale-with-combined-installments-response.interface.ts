@@ -12,6 +12,7 @@ export interface FinancingInstallmentDetail {
   lateFeeAmountPending: number;
   lateFeeAmountPaid: number;
   status: string;
+  isParked: boolean;
 }
 
 export interface FinancingDetail {

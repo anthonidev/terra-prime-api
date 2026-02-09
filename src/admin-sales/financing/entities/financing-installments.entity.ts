@@ -84,4 +84,10 @@ export class FinancingInstallments extends Timestamped {
     default: StatusFinancingInstallments.PENDING,
   })
   status: StatusFinancingInstallments
+
+  @Column({
+    type: 'boolean',
+    default: false,
+  })
+  isParked: boolean;
 }

@@ -561,12 +561,6 @@ export class SalesService {
 
     if (userId) {
       queryBuilder.andWhere('vendor.id = :userId', { userId });
-    } else {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      queryBuilder.andWhere('sale.createdAt >= :thirtyDaysAgo', {
-        thirtyDaysAgo,
-      });
     }
 
     if (status) {
@@ -1049,6 +1043,7 @@ export class SalesService {
           lateFeeAmountPending: Number(inst.lateFeeAmountPending || 0),
           lateFeeAmountPaid: Number(inst.lateFeeAmountPaid || 0),
           status: inst.status,
+          isParked: inst.isParked,
         }));
 
       return {
@@ -3518,6 +3513,32 @@ export class SalesService {
   }
 
   // ============================================================
+  // PAGO DE CUOTA ESPECÍFICA AUTO-APROBADO (ADM)
+  // ============================================================
+
+  async paidSpecificInstallmentAutoApproved(
+    installmentId: string,
+    amountPaid: number,
+    paymentDetails: CreateDetailPaymentDto[],
+    files: Express.Multer.File[],
+    userId: string,
+    dateOperation: string,
+    numberTicket?: string,
+    observation?: string,
+  ) {
+    return await this.financingInstallmentsService.paySpecificInstallmentAutoApproved(
+      installmentId,
+      amountPaid,
+      paymentDetails,
+      files,
+      userId,
+      dateOperation,
+      numberTicket,
+      observation,
+    );
+  }
+
+  // ============================================================
   // PAGO DE CUOTAS AUTO-APROBADO (ADM)
   // ============================================================
 
@@ -3654,6 +3675,32 @@ export class SalesService {
   ) {
     return await this.financingInstallmentsService.payLateFeesAutoApproved(
       financingId,
+      amountPaid,
+      paymentDetails,
+      files,
+      userId,
+      dateOperation,
+      numberTicket,
+      observation,
+    );
+  }
+
+  // ============================================================
+  // PAGO DE MORA DE CUOTA ESPECÍFICA AUTO-APROBADO (ADM)
+  // ============================================================
+
+  async paidSpecificInstallmentLateFeeAutoApproved(
+    installmentId: string,
+    amountPaid: number,
+    paymentDetails: CreateDetailPaymentDto[],
+    files: Express.Multer.File[],
+    userId: string,
+    dateOperation: string,
+    numberTicket?: string,
+    observation?: string,
+  ) {
+    return await this.financingInstallmentsService.paySpecificInstallmentLateFeeAutoApproved(
+      installmentId,
       amountPaid,
       paymentDetails,
       files,
