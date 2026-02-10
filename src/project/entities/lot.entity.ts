@@ -11,7 +11,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-import { Transform } from 'class-transformer';
 import { Reservation } from 'src/admin-sales/reservations/entities/reservation.entity';
 import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
 import { Block } from './block.entity';
@@ -29,7 +28,6 @@ export class Lot {
   @PrimaryGeneratedColumn('uuid')
   id: string;
   @Column()
-  @Transform(({ value }) => value?.trim())
   name: string;
   @Column('decimal', { precision: 10, scale: 2 })
   area: number;

@@ -3020,6 +3020,7 @@ export class SalesService {
         stage: string;
         project: string;
       };
+      currency: string | null;
     };
     financing: {
       id: string;
@@ -3093,7 +3094,7 @@ export class SalesService {
           .leftJoin('block.stage', 'stage')
           .addSelect(['stage.name'])
           .leftJoin('stage.project', 'project')
-          .addSelect(['project.name'])
+          .addSelect(['project.name', 'project.currency'])
           .leftJoin('sale.financing', 'financing')
           .addSelect([
             'financing.id',
@@ -3205,6 +3206,7 @@ export class SalesService {
           stage: saleData.lot.block.stage.name,
           project: saleData.lot.block.stage.project.name,
         },
+        currency: saleData.lot?.block?.stage?.project?.currency || null,
       },
       financing: {
         id: saleData.financing.id,

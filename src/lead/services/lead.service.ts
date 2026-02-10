@@ -21,7 +21,6 @@ import {
 } from 'src/common/helpers/pagination.helper';
 import { UsersService } from 'src/user/user.service';
 import { TransactionService } from 'src/common/services/transaction.service';
-import { CutsResponse } from 'src/cuts/interfaces/cuts-response.interface';
 import { AssignParticipantsToLeadVisitDto } from '../dto/assign-participants-to-lead-visit.dto';
 import { ParticipantType } from 'src/admin-sales/participants/entities/participant.entity';
 import { ParticipantsService } from 'src/admin-sales/participants/participants.service';
@@ -537,7 +536,7 @@ export class LeadService {
     return lead;
   }
 
-  async updateIsOfficeAndAssignVendor(): Promise<CutsResponse> {
+  async updateIsOfficeAndAssignVendor(): Promise<{ processed: number; successful: number; failed: number; totalPoints: number }> {
     return await this.transactionService.runInTransaction(async (queryRunner) => {
     let processed = 0;
     let successful = 0;
@@ -567,7 +566,7 @@ export class LeadService {
 
   async updateIsOffice(
   queryRunner?: QueryRunner,
-  ): Promise<CutsResponse> {
+  ): Promise<{ processed: number; successful: number; failed: number; totalPoints: number }> {
     const repository = queryRunner
       ? queryRunner.manager.getRepository(Lead)
       : this.leadRepository;
