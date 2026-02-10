@@ -45,6 +45,7 @@ import { UpdateReservationPeriodDto } from './dto/update-reservation-period.dto'
 import { UpdateFinancingInstallmentsDto } from './dto/update-financing-installments.dto';
 import { CreateFinancingAmendmentDto } from './dto/create-financing-amendment.dto';
 import { PaidInstallmentsAutoApprovedDto } from './dto/paid-installments-auto-approved.dto';
+import { AdjustLateFeeDto } from './dto/adjust-late-fee.dto';
 import { Response } from 'express';
 
 @Controller('sales')
@@ -524,6 +525,21 @@ export class SalesController {
       paidLateFeeDto.dateOperation,
       paidLateFeeDto.numberTicket,
       paidLateFeeDto.observation,
+    );
+  }
+
+  @Patch('financing/installment/:installmentId/late-fee/adjust')
+  @Roles('ADM')
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async adjustInstallmentLateFee(
+    @Param('installmentId', ParseUUIDPipe) installmentId: string,
+    @Body() adjustLateFeeDto: AdjustLateFeeDto,
+    @GetUser() user: User,
+  ) {
+    return this.salesService.adjustInstallmentLateFee(
+      installmentId,
+      adjustLateFeeDto,
+      user.id,
     );
   }
 }

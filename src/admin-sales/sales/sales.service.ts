@@ -106,6 +106,7 @@ import {
   AmendmentInstallmentStatus,
 } from './dto/create-financing-amendment.dto';
 import Decimal from 'decimal.js';
+import { AdjustLateFeeDto } from './dto/adjust-late-fee.dto';
 
 // SERVICIO ACTUALIZADO - UN SOLO ENDPOINT PARA VENTA/RESERVA
 
@@ -3728,6 +3729,22 @@ export class SalesService {
       dateOperation,
       numberTicket,
       observation,
+    );
+  }
+
+  // ============================================================
+  // AJUSTE MANUAL DE MORA DE CUOTA (ADM)
+  // ============================================================
+
+  async adjustInstallmentLateFee(
+    installmentId: string,
+    dto: AdjustLateFeeDto,
+    userId: string,
+  ) {
+    return await this.financingInstallmentsService.adjustInstallmentLateFee(
+      installmentId,
+      dto,
+      userId,
     );
   }
 }

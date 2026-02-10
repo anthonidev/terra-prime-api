@@ -21,6 +21,8 @@ import { InstallmentWithPayments } from '../interfaces/installment-with-payments
 import { PaymentContribution } from '../interfaces/payment-contribution.interface';
 import { CreateDetailPaymentWithUrlDto } from 'src/admin-payments/payments/dto/create-detail-payment-with-url.dto';
 import { CreatePaymentWithUrlDto } from 'src/admin-payments/payments/dto/create-payment-with-url.dto';
+import { LateFeeAction } from '../enums/late-fee-action.enum';
+import { AdjustLateFeeDto } from 'src/admin-sales/sales/dto/adjust-late-fee.dto';
 
 export class FinancingInstallmentsService {
   private readonly logger = new Logger(FinancingInstallmentsService.name);
@@ -1027,6 +1029,69 @@ export class FinancingInstallmentsService {
         }
       }
     }
+  }
+
+  /**
+   * Ajustar manualmente el monto de mora de una cuota específica (ADD o REMOVE)
+   */
+  async adjustInstallmentLateFee(
+    installmentId: string,
+    dto: AdjustLateFeeDto,
+    userId: string,
+  ): Promise<FinancingInstallments> {
+    const installment = await this.financingInstallmentsRepository.findOne({
+      where: { id: installmentId },
+    });
+
+    if (!installment)
+      throw new NotFoundException(`Cuota con ID ${installmentId} no encontrada.`);
+
+    if (installment.status === StatusFinancingInstallments.PAID)
+      throw new BadRequestException('No se puede ajustar la mora de una cuota ya pagada.');
+
+    const { action, amount } = dto;
+
+    if (action === LateFeeAction.REMOVE) {
+      const currentPending = Number(installment.lateFeeAmountPending ?? 0);
+      if (amount > currentPending)
+        throw new BadRequestException(
+          `El monto a remover (${amount.toFixed(2)}) excede la mora pendiente de la cuota (${currentPending.toFixed(2)}).`,
+        );
+    }
+
+    if (action === LateFeeAction.ADD) {
+      installment.lateFeeAmount = Number(
+        (Number(installment.lateFeeAmount ?? 0) + amount).toFixed(2),
+      );
+      installment.lateFeeAmountPending = Number(
+        (Number(installment.lateFeeAmountPending ?? 0) + amount).toFixed(2),
+      );
+
+      // Si estaba PENDING, cambiar a EXPIRED porque ahora tiene mora
+      if (installment.status === StatusFinancingInstallments.PENDING) {
+        installment.status = StatusFinancingInstallments.EXPIRED;
+      }
+    } else {
+      installment.lateFeeAmount = Number(
+        (Number(installment.lateFeeAmount ?? 0) - amount).toFixed(2),
+      );
+      installment.lateFeeAmountPending = Number(
+        (Number(installment.lateFeeAmountPending ?? 0) - amount).toFixed(2),
+      );
+
+      // Recalcular status
+      const hasLateFee = installment.lateFeeAmountPending > 0;
+      const hasPrincipalPending = Number(installment.coutePending ?? 0) > 0;
+
+      if (!hasLateFee && !hasPrincipalPending) {
+        installment.status = StatusFinancingInstallments.PAID;
+      } else if (!hasLateFee && hasPrincipalPending) {
+        installment.status = StatusFinancingInstallments.PENDING;
+      }
+      // Si aún tiene mora, se queda en EXPIRED
+    }
+
+    return await this.financingInstallmentsRepository.save(installment);
   }
 
   async increaseLateFeesForOverdueInstallments(): Promise<{

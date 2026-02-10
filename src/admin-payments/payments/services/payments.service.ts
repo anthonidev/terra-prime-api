@@ -244,7 +244,7 @@ export class PaymentsService {
 
       // Actualizar estado al aprobar el pago
       savedPayment.details = createdVouchers as any;
-      await this.updateStatusApprovedPayment(savedPayment, queryRunner);
+      await this.updateStatusApprovedPayment(savedPayment, queryRunner, true);
 
       return {
         ...formatPaymentsResponse(savedPayment),
@@ -339,9 +339,9 @@ export class PaymentsService {
         }),
       );
 
-      // Actualizar estado al aprobar el pago
+      // Actualizar estado al aprobar el pago (skip validación de estado para ADM)
       savedPayment.details = createdVouchers as any;
-      await this.updateStatusApprovedPayment(savedPayment, queryRunner);
+      await this.updateStatusApprovedPayment(savedPayment, queryRunner, true);
 
       return {
         ...formatPaymentsResponse(savedPayment),
@@ -1755,6 +1755,7 @@ export class PaymentsService {
   async updateStatusApprovedPayment(
     payment: Payment,
     queryRunner: QueryRunner,
+    skipStatusValidation = false,
   ) {
     let sale;
 
@@ -1767,6 +1768,7 @@ export class PaymentsService {
 
       // Validar estado
       if (
+        !skipStatusValidation &&
         sale.status !== StatusSale.RESERVATION_PENDING_APPROVAL &&
         sale.status !== StatusSale.RESERVATION_IN_PAYMENT
       )
@@ -1816,6 +1818,7 @@ export class PaymentsService {
 
       // Validar estado
       if (
+        !skipStatusValidation &&
         sale.status !== StatusSale.PENDING_APPROVAL &&
         sale.status !== StatusSale.IN_PAYMENT
       )
@@ -1870,6 +1873,7 @@ export class PaymentsService {
 
       // Validar estado
       if (
+        !skipStatusValidation &&
         sale.status !== StatusSale.PENDING_APPROVAL &&
         sale.status !== StatusSale.IN_PAYMENT
       )
