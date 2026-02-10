@@ -1046,18 +1046,7 @@ export class FinancingInstallmentsService {
     if (!installment)
       throw new NotFoundException(`Cuota con ID ${installmentId} no encontrada.`);
 
-    if (installment.status === StatusFinancingInstallments.PAID)
-      throw new BadRequestException('No se puede ajustar la mora de una cuota ya pagada.');
-
     const { action, amount } = dto;
-
-    if (action === LateFeeAction.REMOVE) {
-      const currentPending = Number(installment.lateFeeAmountPending ?? 0);
-      if (amount > currentPending)
-        throw new BadRequestException(
-          `El monto a remover (${amount.toFixed(2)}) excede la mora pendiente de la cuota (${currentPending.toFixed(2)}).`,
-        );
-    }
 
     if (action === LateFeeAction.ADD) {
       installment.lateFeeAmount = Number(
@@ -1067,8 +1056,9 @@ export class FinancingInstallmentsService {
         (Number(installment.lateFeeAmountPending ?? 0) + amount).toFixed(2),
       );
 
-      // Si estaba PENDING, cambiar a EXPIRED porque ahora tiene mora
-      if (installment.status === StatusFinancingInstallments.PENDING) {
+      // Cambiar a EXPIRED si la fecha de pago ya venció
+      const now = new Date();
+      if (installment.expectedPaymentDate < now) {
         installment.status = StatusFinancingInstallments.EXPIRED;
       }
     } else {
