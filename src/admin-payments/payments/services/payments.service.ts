@@ -34,6 +34,8 @@ import { NexusApiService } from 'src/external-api/nexus-api.service';
 import { CreatePaymentWithUrlDto } from '../dto/create-payment-with-url.dto';
 import { BulkCreatePaymentsDto } from '../dto/bulk-create-payments.dto';
 import { InvoicesService } from 'src/invoices/invoices.service';
+import { FinancingInstallments } from 'src/admin-sales/financing/entities/financing-installments.entity';
+import { StatusFinancingInstallments } from 'src/admin-sales/financing/enums/status-financing-installments.enum';
 
 @Injectable()
 export class PaymentsService {
@@ -622,158 +624,105 @@ export class PaymentsService {
       relations: ['details'],
     });
 
-    if (
-      !payment ||
-      (!payment.metadata?.installmentsBackup &&
-        !payment.metadata?.['Cuotas afectadas'])
-    ) {
+    if (!payment) {
       throw new BadRequestException(
-        'No se encontró información de respaldo para revertir las cuotas',
+        'No se encontró el pago para revertir las cuotas',
       );
     }
 
     try {
-      if (payment.metadata?.installmentsBackup) {
-        // Lógica existente: Restaurar desde backup completo
-        const installmentsBackup = JSON.parse(
-          payment.metadata.installmentsBackup,
-        );
+      const financingId = payment.relatedEntityId;
+      let remainingToRevert = Number(payment.amount);
 
-        for (const backup of installmentsBackup) {
-          await this.financingInstallmentsService.updateAmountsPayment(
-            backup.id,
-            Number(backup.previousLateFeeAmountPending ?? 0),
-            Number(backup.previousLateFeeAmountPaid ?? 0),
-            Number(backup.previousCoutePending ?? 0),
-            Number(backup.previousCoutePaid ?? 0),
-            backup.previousStatus,
-            queryRunner,
-          );
-        }
-      } else if (payment.metadata?.['Cuotas afectadas']) {
-        // Lógica de respaldo: Restaurar usando "Cuotas afectadas"
-        // Este es un fallback para pagos antiguos que no tienen installmentsBackup
+      // Path A: Intentar revertir usando metadata "Cuotas afectadas"
+      if (payment.metadata?.['Cuotas afectadas']) {
         const affectedInstallments = payment.metadata['Cuotas afectadas'];
 
-        // Iterar sobre las claves (e.g., "Cuota 1", "Cuota 2")
         for (const [key, data] of Object.entries(affectedInstallments)) {
+          if (remainingToRevert <= 0) break;
+
           const numberCuote = parseInt(key.replace('Cuota ', ''));
-
           const rawAmount =
-            data['Monto aplicado'] ?? data['Aplicado a cuota'];
+            (data as any)['Monto aplicado'] ??
+            (data as any)['Aplicado a cuota'];
 
-          if (rawAmount === undefined || rawAmount === null) {
-            throw new BadRequestException(
-              `No se encontró el monto aplicado para ${key}. Se esperaba "Monto aplicado" o "Aplicado a cuota" en la metadata.`,
-            );
-          }
+          if (rawAmount === undefined || rawAmount === null) continue;
 
           const amountApplied = Number(rawAmount);
 
-          // Buscar la cuota específica
-          // Nota: Necesitamos encontrar la cuota por número y financingId
-          // Como no tenemos método directo por número en service, usamos repository directo aquí o añadimos método
-          // Para mantenerlo limpio, usaremos el financingId del pago
-
-          const financingId = payment.relatedEntityId;
           const installment = await queryRunner.manager.findOne(
-            'financing_installments',
+            FinancingInstallments,
             {
               where: {
                 financing: { id: financingId },
                 numberCuote: numberCuote,
               },
-            } as any,
+            },
           );
 
-          if (installment) {
-            // Revertir los montos
-            // La lógica inversa de application:
-            // 1. Restaurar principal (coutePaid -> coutePending)
-            // 2. Restaurar mora (lateFeeAmountPaid -> lateFeeAmountPending)
+          if (!installment) continue;
 
-            let remainingToRevert = amountApplied;
+          // Revertir principal
+          const principalToRevert = Math.min(
+            amountApplied,
+            Number(installment.coutePaid || 0),
+          );
 
-            // Cuánto se pagó de principal en esta transacción?
-            // Es difícil saberlo exacto sin el backup, pero podemos deducirlo
-            // Asumimos que lo último que se pagó fue lo que se aplicó
-
-            // Estrategia: Revertir del Principal primero, luego Mora (inverso al pago)
-            // Al pagar hacemos: Mora primero, luego Principal
-            // Al revertir: Principal primero, luego Mora
-
-            if (remainingToRevert > 0) {
-              // Revertir Principal
-              const principalToRevert = Math.min(
-                remainingToRevert,
-                Number(installment.coutePaid || 0),
-              );
-
-              if (principalToRevert > 0) {
-                installment.coutePaid = Number(
-                  (Number(installment.coutePaid) - principalToRevert).toFixed(
-                    2,
-                  ),
-                );
-                installment.coutePending = Number(
-                  (
-                    Number(installment.coutePending) + principalToRevert
-                  ).toFixed(2),
-                );
-                remainingToRevert = Number(
-                  (remainingToRevert - principalToRevert).toFixed(2),
-                );
-              }
-            }
-
-            if (remainingToRevert > 0) {
-              // Revertir Mora
-              const lateFeeToRevert = Math.min(
-                remainingToRevert,
-                Number(installment.lateFeeAmountPaid || 0),
-              );
-
-              if (lateFeeToRevert > 0) {
-                installment.lateFeeAmountPaid = Number(
-                  (
-                    Number(installment.lateFeeAmountPaid) - lateFeeToRevert
-                  ).toFixed(2),
-                );
-                installment.lateFeeAmountPending = Number(
-                  (
-                    Number(installment.lateFeeAmountPending) + lateFeeToRevert
-                  ).toFixed(2),
-                );
-                remainingToRevert = Number(
-                  (remainingToRevert - lateFeeToRevert).toFixed(2),
-                );
-              }
-            }
-
-            // Restaurar estado
-            // Si estaba PAID, ahora debe ser PENDING (o EXPIRED si la fecha pasó)
-            // Verificamos si la fecha de vencimiento ya pasó para decidir entre PENDING/EXPIRED
-            const now = new Date();
-            const expectedDate = new Date(installment.expectedPaymentDate);
-
-            if (
-              installment.coutePending > 0 ||
-              installment.lateFeeAmountPending > 0
-            ) {
-              if (expectedDate < now) {
-                installment.status = 'EXPIRED'; // Usar string o importar enum si es necesario, pero string suele funcionar con TypeORM
-              } else {
-                installment.status = 'PENDING';
-              }
-            }
-
-            await queryRunner.manager.save(installment);
+          if (principalToRevert > 0) {
+            installment.coutePaid = Number(
+              (Number(installment.coutePaid) - principalToRevert).toFixed(2),
+            );
+            installment.coutePending = Number(
+              (Number(installment.coutePending) + principalToRevert).toFixed(2),
+            );
+            remainingToRevert = Number(
+              (remainingToRevert - principalToRevert).toFixed(2),
+            );
           }
+
+          // Recalcular status
+          this.recalculateInstallmentStatus(installment);
+          await queryRunner.manager.save(installment);
         }
-      } else {
-        throw new Error(
-          'No se encontró información de respaldo ni metadata de cuotas afectadas.',
+      }
+
+      // Path B (fallback): Si queda monto por revertir, buscar cuotas de atrás hacia adelante
+      if (remainingToRevert > 0) {
+        const installments = await queryRunner.manager.find(
+          FinancingInstallments,
+          {
+            where: {
+              financing: { id: financingId },
+            },
+            order: { expectedPaymentDate: 'DESC' },
+          },
         );
+
+        for (const installment of installments) {
+          if (remainingToRevert <= 0) break;
+          if (Number(installment.coutePaid || 0) <= 0) continue;
+
+          const principalToRevert = Math.min(
+            remainingToRevert,
+            Number(installment.coutePaid),
+          );
+
+          if (principalToRevert > 0) {
+            installment.coutePaid = Number(
+              (Number(installment.coutePaid) - principalToRevert).toFixed(2),
+            );
+            installment.coutePending = Number(
+              (Number(installment.coutePending) + principalToRevert).toFixed(2),
+            );
+            remainingToRevert = Number(
+              (remainingToRevert - principalToRevert).toFixed(2),
+            );
+          }
+
+          // Recalcular status
+          this.recalculateInstallmentStatus(installment);
+          await queryRunner.manager.save(installment);
+        }
       }
     } catch (error) {
       throw new BadRequestException(
@@ -791,100 +740,128 @@ export class PaymentsService {
       relations: ['details'],
     });
 
-    if (
-      !payment ||
-      (!payment.metadata?.installmentsBackup &&
-        !payment.metadata?.['Moras afectadas'])
-    ) {
+    if (!payment) {
       throw new BadRequestException(
-        'No se encontró información de respaldo para revertir las moras',
+        'No se encontró el pago para revertir las moras',
       );
     }
 
     try {
-      if (payment.metadata?.installmentsBackup) {
-        // Restaurar desde backup completo
-        const installmentsBackup = JSON.parse(
-          payment.metadata.installmentsBackup,
-        );
+      const financingId = payment.relatedEntityId;
+      let remainingToRevert = Number(payment.amount);
 
-        for (const backup of installmentsBackup) {
-          await this.financingInstallmentsService.updateAmountsPayment(
-            backup.id,
-            Number(backup.previousLateFeeAmountPending ?? 0),
-            Number(backup.previousLateFeeAmountPaid ?? 0),
-            Number(backup.previousCoutePending ?? 0),
-            Number(backup.previousCoutePaid ?? 0),
-            backup.previousStatus,
-            queryRunner,
-          );
-        }
-      } else if (payment.metadata?.['Moras afectadas']) {
-        // Fallback: Restaurar usando "Moras afectadas"
+      // Path A: Intentar revertir usando metadata "Moras afectadas"
+      if (payment.metadata?.['Moras afectadas']) {
         const affectedInstallments = payment.metadata['Moras afectadas'];
-        const financingId = payment.relatedEntityId;
 
         for (const [key, data] of Object.entries(affectedInstallments)) {
-          const numberCuote = parseInt(key.replace('Cuota ', ''));
+          if (remainingToRevert <= 0) break;
 
+          const numberCuote = parseInt(key.replace('Cuota ', ''));
           const rawAmount = (data as any)['Mora aplicada'];
 
-          if (rawAmount === undefined || rawAmount === null) {
-            throw new BadRequestException(
-              `No se encontró el monto de mora aplicada para ${key}.`,
-            );
-          }
+          if (rawAmount === undefined || rawAmount === null) continue;
 
           const amountApplied = Number(rawAmount);
 
           const installment = await queryRunner.manager.findOne(
-            'financing_installments',
+            FinancingInstallments,
             {
               where: {
                 financing: { id: financingId },
                 numberCuote: numberCuote,
               },
-            } as any,
+            },
           );
 
-          if (installment) {
-            // Revertir mora: restar de paid, sumar a pending
-            const lateFeeToRevert = Math.min(
-              amountApplied,
-              Number(installment.lateFeeAmountPaid || 0),
+          if (!installment) continue;
+
+          const lateFeeToRevert = Math.min(
+            amountApplied,
+            Number(installment.lateFeeAmountPaid || 0),
+          );
+
+          if (lateFeeToRevert > 0) {
+            installment.lateFeeAmountPaid = Number(
+              (Number(installment.lateFeeAmountPaid) - lateFeeToRevert).toFixed(2),
             );
-
-            if (lateFeeToRevert > 0) {
-              installment.lateFeeAmountPaid = Number(
-                (Number(installment.lateFeeAmountPaid) - lateFeeToRevert).toFixed(2),
-              );
-              installment.lateFeeAmountPending = Number(
-                (Number(installment.lateFeeAmountPending) + lateFeeToRevert).toFixed(2),
-              );
-            }
-
-            // Restaurar estado
-            const hasPrincipalPending = Number(installment.coutePending ?? 0) > 0;
-            const hasLateFeePending = installment.lateFeeAmountPending > 0;
-
-            if (hasLateFeePending) {
-              installment.status = 'EXPIRED';
-            } else if (hasPrincipalPending) {
-              const now = new Date();
-              const expectedDate = new Date(installment.expectedPaymentDate);
-              installment.status = expectedDate < now ? 'EXPIRED' : 'PENDING';
-            } else {
-              installment.status = 'PAID';
-            }
-
-            await queryRunner.manager.save(installment);
+            installment.lateFeeAmountPending = Number(
+              (Number(installment.lateFeeAmountPending) + lateFeeToRevert).toFixed(2),
+            );
+            remainingToRevert = Number(
+              (remainingToRevert - lateFeeToRevert).toFixed(2),
+            );
           }
+
+          // Recalcular status
+          this.recalculateInstallmentStatus(installment);
+          await queryRunner.manager.save(installment);
+        }
+      }
+
+      // Path B (fallback): Si queda monto por revertir, buscar cuotas de atrás hacia adelante
+      if (remainingToRevert > 0) {
+        const installments = await queryRunner.manager.find(
+          FinancingInstallments,
+          {
+            where: {
+              financing: { id: financingId },
+            },
+            order: { expectedPaymentDate: 'DESC' },
+          },
+        );
+
+        for (const installment of installments) {
+          if (remainingToRevert <= 0) break;
+          if (Number(installment.lateFeeAmountPaid || 0) <= 0) continue;
+
+          const lateFeeToRevert = Math.min(
+            remainingToRevert,
+            Number(installment.lateFeeAmountPaid),
+          );
+
+          if (lateFeeToRevert > 0) {
+            installment.lateFeeAmountPaid = Number(
+              (Number(installment.lateFeeAmountPaid) - lateFeeToRevert).toFixed(2),
+            );
+            installment.lateFeeAmountPending = Number(
+              (Number(installment.lateFeeAmountPending) + lateFeeToRevert).toFixed(2),
+            );
+            remainingToRevert = Number(
+              (remainingToRevert - lateFeeToRevert).toFixed(2),
+            );
+          }
+
+          // Recalcular status
+          this.recalculateInstallmentStatus(installment);
+          await queryRunner.manager.save(installment);
         }
       }
     } catch (error) {
       throw new BadRequestException(
         'Error al revertir las moras: ' + error.message,
       );
+    }
+  }
+
+  private recalculateInstallmentStatus(
+    installment: FinancingInstallments,
+  ): void {
+    const hasPrincipalPending = Number(installment.coutePending ?? 0) > 0;
+    const hasLateFeePending =
+      Number(installment.lateFeeAmountPending ?? 0) > 0;
+
+    if (hasLateFeePending) {
+      installment.status = StatusFinancingInstallments.EXPIRED;
+    } else if (hasPrincipalPending) {
+      const now = new Date();
+      const expectedDate = new Date(installment.expectedPaymentDate);
+      installment.status =
+        expectedDate < now
+          ? StatusFinancingInstallments.EXPIRED
+          : StatusFinancingInstallments.PENDING;
+    } else {
+      installment.status = StatusFinancingInstallments.PAID;
     }
   }
 
@@ -1023,29 +1000,6 @@ export class PaymentsService {
       throw new BadRequestException(
         `Solo se pueden anular pagos en estado APPROVED o COMPLETED. Estado actual: ${payment.status}`,
       );
-    }
-
-    // Validar metadata según tipo de pago
-    if (payment.relatedEntityType === 'financingInstallments') {
-      if (
-        !payment.metadata?.installmentsBackup &&
-        !payment.metadata?.['Cuotas afectadas']
-      ) {
-        throw new BadRequestException(
-          'El pago no tiene información de respaldo de cuotas. No se puede anular.',
-        );
-      }
-    }
-
-    if (payment.relatedEntityType === 'lateFee') {
-      if (
-        !payment.metadata?.installmentsBackup &&
-        !payment.metadata?.['Moras afectadas']
-      ) {
-        throw new BadRequestException(
-          'El pago no tiene información de respaldo de moras. No se puede anular.',
-        );
-      }
     }
 
     // Ejecutar la anulación en una transacción
