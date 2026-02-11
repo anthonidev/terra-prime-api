@@ -362,6 +362,7 @@ export class FinancingInstallmentsService {
       await this.paymentsService.isValidPaymentConfig(
         'financingInstallments',
         financingId,
+        true,
       );
 
       return await this.transactionService.runInTransaction(
@@ -485,6 +486,7 @@ export class FinancingInstallmentsService {
       await this.paymentsService.isValidPaymentConfig(
         'financingInstallments',
         financingId,
+        true,
       );
 
       const installmentsToPay = await this.financingInstallmentsRepository.find({
@@ -601,6 +603,7 @@ export class FinancingInstallmentsService {
     await this.paymentsService.isValidPaymentConfig(
       'financingInstallments',
       financingId,
+      true,
     );
 
     const installmentsToPay = await this.financingInstallmentsRepository.find({
@@ -1342,7 +1345,7 @@ export class FinancingInstallmentsService {
 
       const financingId = installment.financing.id;
 
-      await this.paymentsService.isValidPaymentConfig('lateFee', financingId);
+      await this.paymentsService.isValidPaymentConfig('lateFee', financingId, true);
 
       return await this.transactionService.runInTransaction(
         async (queryRunner) => {
@@ -1443,7 +1446,7 @@ export class FinancingInstallmentsService {
     if (amountPaid <= 0)
       throw new BadRequestException('El monto a pagar debe ser mayor a cero.');
 
-    await this.paymentsService.isValidPaymentConfig('lateFee', financingId);
+    await this.paymentsService.isValidPaymentConfig('lateFee', financingId, true);
 
     // Buscar cuotas con moras pendientes
     const installmentsWithLateFees =
@@ -1529,7 +1532,7 @@ export class FinancingInstallmentsService {
     if (amountPaid <= 0)
       throw new BadRequestException('El monto a pagar debe ser mayor a cero.');
 
-    await this.paymentsService.isValidPaymentConfig('lateFee', financingId);
+    await this.paymentsService.isValidPaymentConfig('lateFee', financingId, true);
 
     const installmentsWithLateFees =
       await this.getInstallmentsWithPendingLateFees(financingId);

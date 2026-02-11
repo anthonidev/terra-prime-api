@@ -3620,7 +3620,7 @@ export class SalesService {
     if (amountPaid <= 0)
       throw new BadRequestException('El monto a pagar debe ser mayor a cero.');
 
-    await this.paymentsService.isValidPaymentConfig('reservation', saleId);
+    await this.paymentsService.isValidPaymentConfig('reservation', saleId, true);
 
     const sale = await this.findOneById(saleId);
 

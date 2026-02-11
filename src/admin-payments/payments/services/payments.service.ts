@@ -182,6 +182,7 @@ export class PaymentsService {
       const paymentConfig = await this.isValidPaymentConfig(
         relatedEntityType,
         relatedEntityId,
+        true,
       );
 
       // Crear pago directamente como APPROVED
@@ -291,6 +292,7 @@ export class PaymentsService {
       const paymentConfig = await this.isValidPaymentConfig(
         relatedEntityType,
         relatedEntityId,
+        true,
       );
 
       // Crear pago directamente como APPROVED
@@ -1603,12 +1605,13 @@ export class PaymentsService {
   async isValidPaymentConfig(
     relatedEntityType: string,
     relatedEntityId: string,
+    isAutoApproved = false,
   ) {
     let paymentConfig;
     let sale;
     if (relatedEntityType === 'sale') {
       sale = await this.salesService.findOneById(relatedEntityId);
-      if (sale.status === StatusSale.PENDING_APPROVAL)
+      if (!isAutoApproved && sale.status === StatusSale.PENDING_APPROVAL)
         throw new BadRequestException(
           `El pago porque tiene un pago pendiente en curso.`,
         );
@@ -1617,7 +1620,7 @@ export class PaymentsService {
     }
     if (relatedEntityType === 'financing') {
       sale = await this.salesService.findOneByIdFinancing(relatedEntityId);
-      if (sale.status === StatusSale.PENDING_APPROVAL)
+      if (!isAutoApproved && sale.status === StatusSale.PENDING_APPROVAL)
         throw new BadRequestException(
           `El pago porque tiene un pago pendiente en curso.`,
         );
@@ -1628,32 +1631,36 @@ export class PaymentsService {
       paymentConfig = await this.paymentConfigService.findOneByCode(
         'FINANCING_INSTALLMENTS_PAYMENT',
       );
-      const pendingPayment = await this.paymentRepository.findOne({
-        where: {
-          relatedEntityType,
-          relatedEntityId,
-          status: StatusPayment.PENDING,
-        },
-      });
-      if (pendingPayment)
-        throw new BadRequestException(
-          `El pago de cuotas no se puede realizar porque tiene un pago pendiente en curso.`,
-        );
+      if (!isAutoApproved) {
+        const pendingPayment = await this.paymentRepository.findOne({
+          where: {
+            relatedEntityType,
+            relatedEntityId,
+            status: StatusPayment.PENDING,
+          },
+        });
+        if (pendingPayment)
+          throw new BadRequestException(
+            `El pago de cuotas no se puede realizar porque tiene un pago pendiente en curso.`,
+          );
+      }
     }
 
     if (relatedEntityType === 'reservation') {
       sale = await this.salesService.findOneById(relatedEntityId);
-      if (sale.status === StatusSale.RESERVATION_PENDING_APPROVAL)
-        throw new BadRequestException(
-          `La reserva ya tiene un pago pendiente de aprobación.`,
-        );
-      if (
-        sale.status !== StatusSale.RESERVATION_PENDING &&
-        sale.status !== StatusSale.RESERVATION_IN_PAYMENT
-      )
-        throw new BadRequestException(
-          `La reserva no está en estado pendiente de pago.`,
-        );
+      if (!isAutoApproved) {
+        if (sale.status === StatusSale.RESERVATION_PENDING_APPROVAL)
+          throw new BadRequestException(
+            `La reserva ya tiene un pago pendiente de aprobación.`,
+          );
+        if (
+          sale.status !== StatusSale.RESERVATION_PENDING &&
+          sale.status !== StatusSale.RESERVATION_IN_PAYMENT
+        )
+          throw new BadRequestException(
+            `La reserva no está en estado pendiente de pago.`,
+          );
+      }
       paymentConfig = await this.paymentConfigService.findOneByCode(
         'RESERVATION_PAYMENT',
       );
@@ -1662,17 +1669,19 @@ export class PaymentsService {
     if (relatedEntityType === 'lateFee') {
       paymentConfig =
         await this.paymentConfigService.findOneByCode('LATE_FEE_PAYMENT');
-      const pendingPayment = await this.paymentRepository.findOne({
-        where: {
-          relatedEntityType,
-          relatedEntityId,
-          status: StatusPayment.PENDING,
-        },
-      });
-      if (pendingPayment)
-        throw new BadRequestException(
-          `El pago de moras no se puede realizar porque tiene un pago pendiente en curso.`,
-        );
+      if (!isAutoApproved) {
+        const pendingPayment = await this.paymentRepository.findOne({
+          where: {
+            relatedEntityType,
+            relatedEntityId,
+            status: StatusPayment.PENDING,
+          },
+        });
+        if (pendingPayment)
+          throw new BadRequestException(
+            `El pago de moras no se puede realizar porque tiene un pago pendiente en curso.`,
+          );
+      }
     }
 
     return paymentConfig;
