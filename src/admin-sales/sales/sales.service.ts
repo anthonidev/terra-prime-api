@@ -3526,11 +3526,11 @@ export class SalesService {
   }
 
   // ============================================================
-  // PAGO DE CUOTA ESPECÍFICA AUTO-APROBADO (ADM)
+  // PAGO DE CUOTAS ESPECÍFICAS AUTO-APROBADO (ADM)
   // ============================================================
 
-  async paidSpecificInstallmentAutoApproved(
-    installmentId: string,
+  async paidSpecificInstallmentsAutoApproved(
+    installmentIds: string[],
     amountPaid: number,
     paymentDetails: CreateDetailPaymentDto[],
     files: Express.Multer.File[],
@@ -3539,8 +3539,8 @@ export class SalesService {
     numberTicket?: string,
     observation?: string,
   ) {
-    return await this.financingInstallmentsService.paySpecificInstallmentAutoApproved(
-      installmentId,
+    return await this.financingInstallmentsService.paySpecificInstallmentsAutoApproved(
+      installmentIds,
       amountPaid,
       paymentDetails,
       files,
@@ -3699,11 +3699,11 @@ export class SalesService {
   }
 
   // ============================================================
-  // PAGO DE MORA DE CUOTA ESPECÍFICA AUTO-APROBADO (ADM)
+  // PAGO DE MORAS DE CUOTAS ESPECÍFICAS AUTO-APROBADO (ADM)
   // ============================================================
 
-  async paidSpecificInstallmentLateFeeAutoApproved(
-    installmentId: string,
+  async paidSpecificInstallmentsLateFeeAutoApproved(
+    installmentIds: string[],
     amountPaid: number,
     paymentDetails: CreateDetailPaymentDto[],
     files: Express.Multer.File[],
@@ -3712,8 +3712,8 @@ export class SalesService {
     numberTicket?: string,
     observation?: string,
   ) {
-    return await this.financingInstallmentsService.paySpecificInstallmentLateFeeAutoApproved(
-      installmentId,
+    return await this.financingInstallmentsService.paySpecificInstallmentsLateFeeAutoApproved(
+      installmentIds,
       amountPaid,
       paymentDetails,
       files,

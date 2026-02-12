@@ -26,7 +26,9 @@
     "resolve:positive-amount": "ts-node scripts/resolve-positive-amounts.ts",
     "resolve:other-cases": "ts-node scripts/resolve-other-cases.ts",
     "resolve:all": "ts-node scripts/resolve-all.ts",
-    "payments-meta:fix": "ts-node scripts/fix-payments-metadata.ts"
+    "payments-meta:fix": "ts-node scripts/fix-payments-metadata.ts",
+    "fix:initial": "ts-node scripts/fix-initial-amount.ts",
+    "find:data": "ts-node scripts/find-missing-clients.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.815.0",

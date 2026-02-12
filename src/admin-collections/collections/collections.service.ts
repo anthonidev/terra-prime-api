@@ -600,15 +600,15 @@ export class CollectionsService {
     );
   }
 
-  async paidSpecificInstallment(
-    installmentId: string,
+  async paidSpecificInstallments(
+    installmentIds: string[],
     amountPaid: number,
     paymentDetails: CreateDetailPaymentDto[],
     files: Express.Multer.File[],
     userId: string,
   ): Promise<PaymentResponse> {
-    return await this.financingInstallmentsService.paySpecificInstallment(
-      installmentId,
+    return await this.financingInstallmentsService.paySpecificInstallments(
+      installmentIds,
       amountPaid,
       paymentDetails,
       files,
@@ -616,15 +616,15 @@ export class CollectionsService {
     );
   }
 
-  async paidSpecificInstallmentLateFee(
-    installmentId: string,
+  async paidSpecificInstallmentsLateFee(
+    installmentIds: string[],
     amountPaid: number,
     paymentDetails: CreateDetailPaymentDto[],
     files: Express.Multer.File[],
     userId: string,
   ): Promise<PaymentResponse> {
-    return await this.financingInstallmentsService.paySpecificInstallmentLateFee(
-      installmentId,
+    return await this.financingInstallmentsService.paySpecificInstallmentsLateFee(
+      installmentIds,
       amountPaid,
       paymentDetails,
       files,

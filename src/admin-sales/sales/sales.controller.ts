@@ -45,6 +45,7 @@ import { UpdateReservationPeriodDto } from './dto/update-reservation-period.dto'
 import { UpdateFinancingInstallmentsDto } from './dto/update-financing-installments.dto';
 import { CreateFinancingAmendmentDto } from './dto/create-financing-amendment.dto';
 import { PaidInstallmentsAutoApprovedDto } from './dto/paid-installments-auto-approved.dto';
+import { PaidSpecificInstallmentsAutoApprovedDto } from './dto/paid-specific-installments-auto-approved.dto';
 import { AdjustLateFeeDto } from './dto/adjust-late-fee.dto';
 import { Response } from 'express';
 
@@ -353,13 +354,12 @@ export class SalesController {
     );
   }
 
-  @Post('financing/installment/paid-approved/:installmentId')
+  @Post('financing/installments/paid-approved-specific')
   @Roles('ADM')
   @UseInterceptors(FilesInterceptor('files'))
   @UsePipes(new ValidationPipe({ transform: true }))
-  async paidSpecificInstallmentAutoApproved(
-    @Param('installmentId', ParseUUIDPipe) installmentId: string,
-    @Body() paidInstallmentsDto: PaidInstallmentsAutoApprovedDto,
+  async paidSpecificInstallmentsAutoApproved(
+    @Body() paidInstallmentsDto: PaidSpecificInstallmentsAutoApprovedDto,
     @GetUser() user: User,
     @UploadedFiles(
       new ParseFilePipeBuilder()
@@ -376,8 +376,8 @@ export class SalesController {
     )
     files: Array<Express.Multer.File>,
   ) {
-    return this.salesService.paidSpecificInstallmentAutoApproved(
-      installmentId,
+    return this.salesService.paidSpecificInstallmentsAutoApproved(
+      paidInstallmentsDto.installmentIds,
       paidInstallmentsDto.amountPaid,
       paidInstallmentsDto.payments,
       files,
@@ -493,13 +493,12 @@ export class SalesController {
     );
   }
 
-  @Post('financing/installment/late-fee/paid-approved/:installmentId')
+  @Post('financing/installments/late-fee/paid-approved-specific')
   @Roles('ADM')
   @UseInterceptors(FilesInterceptor('files'))
   @UsePipes(new ValidationPipe({ transform: true }))
-  async paidSpecificInstallmentLateFeeAutoApproved(
-    @Param('installmentId', ParseUUIDPipe) installmentId: string,
-    @Body() paidLateFeeDto: PaidInstallmentsAutoApprovedDto,
+  async paidSpecificInstallmentsLateFeeAutoApproved(
+    @Body() paidLateFeeDto: PaidSpecificInstallmentsAutoApprovedDto,
     @GetUser() user: User,
     @UploadedFiles(
       new ParseFilePipeBuilder()
@@ -516,8 +515,8 @@ export class SalesController {
     )
     files: Array<Express.Multer.File>,
   ) {
-    return this.salesService.paidSpecificInstallmentLateFeeAutoApproved(
-      installmentId,
+    return this.salesService.paidSpecificInstallmentsLateFeeAutoApproved(
+      paidLateFeeDto.installmentIds,
       paidLateFeeDto.amountPaid,
       paidLateFeeDto.payments,
       files,

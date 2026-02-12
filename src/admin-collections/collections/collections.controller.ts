@@ -25,6 +25,7 @@ import { GetUser } from 'src/auth/decorators/get-user.decorator';
 import { User } from 'src/user/entities/user.entity';
 import { PaidInstallmentsDto } from './dto/paid-installments.dto';
 import { PaidSpecificInstallmentDto } from './dto/paid-specific-installment.dto';
+import { PaidSpecificInstallmentsDto } from './dto/paid-specific-installments.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { FindPaymentsDto } from 'src/admin-payments/payments/dto/find-payments.dto';
 import { CollectorStatisticsFiltersDto } from './dto/collector-statistics-filters.dto';
@@ -131,13 +132,12 @@ export class CollectionsController {
     );
   }
 
-  @Post('financing/installment/paid/:installmentId')
+  @Post('financing/installments/paid-specific')
   @Roles('COB', 'SCO')
   @UseInterceptors(FilesInterceptor('files'))
   @UsePipes(new ValidationPipe({ transform: true }))
-  paidSpecificInstallment(
-    @Param('installmentId') installmentId: string,
-    @Body() paidSpecificInstallmentDto: PaidSpecificInstallmentDto,
+  paidSpecificInstallments(
+    @Body() paidSpecificInstallmentsDto: PaidSpecificInstallmentsDto,
     @GetUser() user: User,
     @UploadedFiles(
       new ParseFilePipeBuilder()
@@ -154,22 +154,21 @@ export class CollectionsController {
     )
     files: Array<Express.Multer.File>,
   ) {
-    return this.collectionsService.paidSpecificInstallment(
-      installmentId,
-      paidSpecificInstallmentDto.amountPaid,
-      paidSpecificInstallmentDto.payments,
+    return this.collectionsService.paidSpecificInstallments(
+      paidSpecificInstallmentsDto.installmentIds,
+      paidSpecificInstallmentsDto.amountPaid,
+      paidSpecificInstallmentsDto.payments,
       files,
       user.id,
     );
   }
 
-  @Post('financing/installment/late-fee/paid/:installmentId')
+  @Post('financing/installments/late-fee/paid-specific')
   @Roles('COB', 'SCO')
   @UseInterceptors(FilesInterceptor('files'))
   @UsePipes(new ValidationPipe({ transform: true }))
-  paidSpecificInstallmentLateFee(
-    @Param('installmentId') installmentId: string,
-    @Body() paidSpecificInstallmentDto: PaidSpecificInstallmentDto,
+  paidSpecificInstallmentsLateFee(
+    @Body() paidSpecificInstallmentsDto: PaidSpecificInstallmentsDto,
     @GetUser() user: User,
     @UploadedFiles(
       new ParseFilePipeBuilder()
@@ -186,10 +185,10 @@ export class CollectionsController {
     )
     files: Array<Express.Multer.File>,
   ) {
-    return this.collectionsService.paidSpecificInstallmentLateFee(
-      installmentId,
-      paidSpecificInstallmentDto.amountPaid,
-      paidSpecificInstallmentDto.payments,
+    return this.collectionsService.paidSpecificInstallmentsLateFee(
+      paidSpecificInstallmentsDto.installmentIds,
+      paidSpecificInstallmentsDto.amountPaid,
+      paidSpecificInstallmentsDto.payments,
       files,
       user.id,
     );
