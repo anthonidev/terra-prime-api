@@ -50,9 +50,10 @@ export class FinancingService {
       ...restData,
       initialAmountPaid: 0,
       initialAmountPending: initialToPay,
-      financingInstallments: financingInstallments.map((financingInstallment) => {
+      financingInstallments: financingInstallments.map((financingInstallment, index) => {
         const { couteAmount, expectedPaymentDate } = financingInstallment;
         return {
+          numberCuote: index + 1,
           couteAmount: couteAmount,
           coutePending: couteAmount,
           coutePaid: 0,
@@ -336,8 +337,9 @@ export class FinancingService {
       }
 
       // Crear nuevas cuotas
-      const newInstallments = financingInstallments.map((installment) => ({
+      const newInstallments = financingInstallments.map((installment, index) => ({
         ...installment,
+        numberCuote: index + 1,
         coutePending: installment.couteAmount,
         coutePaid: 0,
         financing: { id },
