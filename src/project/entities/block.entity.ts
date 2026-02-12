@@ -11,7 +11,6 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-import { Transform } from 'class-transformer';
 import { Lot } from './lot.entity';
 import { Stage } from './stage.entity';
 @Entity('blocks')
@@ -20,7 +19,6 @@ export class Block {
   @PrimaryGeneratedColumn('uuid')
   id: string;
   @Column()
-  @Transform(({ value }) => value?.trim())
   name: string;
   @Column('bool', {
     default: true,

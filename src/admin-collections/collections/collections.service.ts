@@ -616,6 +616,22 @@ export class CollectionsService {
     );
   }
 
+  async paidSpecificInstallmentLateFee(
+    installmentId: string,
+    amountPaid: number,
+    paymentDetails: CreateDetailPaymentDto[],
+    files: Express.Multer.File[],
+    userId: string,
+  ): Promise<PaymentResponse> {
+    return await this.financingInstallmentsService.paySpecificInstallmentLateFee(
+      installmentId,
+      amountPaid,
+      paymentDetails,
+      files,
+      userId,
+    );
+  }
+
   async paidLateFees(
     financingId: string,
     amountPaid: number,

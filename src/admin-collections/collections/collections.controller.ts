@@ -163,6 +163,38 @@ export class CollectionsController {
     );
   }
 
+  @Post('financing/installment/late-fee/paid/:installmentId')
+  @Roles('COB', 'SCO')
+  @UseInterceptors(FilesInterceptor('files'))
+  @UsePipes(new ValidationPipe({ transform: true }))
+  paidSpecificInstallmentLateFee(
+    @Param('installmentId') installmentId: string,
+    @Body() paidSpecificInstallmentDto: PaidSpecificInstallmentDto,
+    @GetUser() user: User,
+    @UploadedFiles(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({
+          fileType: /(jpg|jpeg|png|webp)$/,
+        })
+        .addMaxSizeValidator({
+          maxSize: 1024 * 1024 * 2,
+        })
+        .build({
+          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+          fileIsRequired: false,
+        }),
+    )
+    files: Array<Express.Multer.File>,
+  ) {
+    return this.collectionsService.paidSpecificInstallmentLateFee(
+      installmentId,
+      paidSpecificInstallmentDto.amountPaid,
+      paidSpecificInstallmentDto.payments,
+      files,
+      user.id,
+    );
+  }
+
   @Post('financing/late-fees/paid/:financingId')
   @Roles('COB', 'SCO', 'ADM')
   @UseInterceptors(FilesInterceptor('files'))

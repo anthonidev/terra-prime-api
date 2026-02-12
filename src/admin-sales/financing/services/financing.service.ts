@@ -407,6 +407,7 @@ export class FinancingService {
       await this.paymentsService.isValidPaymentConfig(
         'financing',
         financingId,
+        true,
       );
 
       const financing = await this.financingRepository.findOne({

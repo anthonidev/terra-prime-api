@@ -45,6 +45,7 @@ import { UpdateReservationPeriodDto } from './dto/update-reservation-period.dto'
 import { UpdateFinancingInstallmentsDto } from './dto/update-financing-installments.dto';
 import { CreateFinancingAmendmentDto } from './dto/create-financing-amendment.dto';
 import { PaidInstallmentsAutoApprovedDto } from './dto/paid-installments-auto-approved.dto';
+import { AdjustLateFeeDto } from './dto/adjust-late-fee.dto';
 import { Response } from 'express';
 
 @Controller('sales')
@@ -352,6 +353,41 @@ export class SalesController {
     );
   }
 
+  @Post('financing/installment/paid-approved/:installmentId')
+  @Roles('ADM')
+  @UseInterceptors(FilesInterceptor('files'))
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async paidSpecificInstallmentAutoApproved(
+    @Param('installmentId', ParseUUIDPipe) installmentId: string,
+    @Body() paidInstallmentsDto: PaidInstallmentsAutoApprovedDto,
+    @GetUser() user: User,
+    @UploadedFiles(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({
+          fileType: /(jpg|jpeg|png|webp)$/,
+        })
+        .addMaxSizeValidator({
+          maxSize: 1024 * 1024 * 2,
+        })
+        .build({
+          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+          fileIsRequired: false,
+        }),
+    )
+    files: Array<Express.Multer.File>,
+  ) {
+    return this.salesService.paidSpecificInstallmentAutoApproved(
+      installmentId,
+      paidInstallmentsDto.amountPaid,
+      paidInstallmentsDto.payments,
+      files,
+      user.id,
+      paidInstallmentsDto.dateOperation,
+      paidInstallmentsDto.numberTicket,
+      paidInstallmentsDto.observation,
+    );
+  }
+
   @Post('financing/initial-amount/paid-approved/:financingId')
   @Roles('ADM')
   @UseInterceptors(FilesInterceptor('files'))
@@ -454,6 +490,56 @@ export class SalesController {
       paidLateFeesDto.dateOperation,
       paidLateFeesDto.numberTicket,
       paidLateFeesDto.observation,
+    );
+  }
+
+  @Post('financing/installment/late-fee/paid-approved/:installmentId')
+  @Roles('ADM')
+  @UseInterceptors(FilesInterceptor('files'))
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async paidSpecificInstallmentLateFeeAutoApproved(
+    @Param('installmentId', ParseUUIDPipe) installmentId: string,
+    @Body() paidLateFeeDto: PaidInstallmentsAutoApprovedDto,
+    @GetUser() user: User,
+    @UploadedFiles(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({
+          fileType: /(jpg|jpeg|png|webp)$/,
+        })
+        .addMaxSizeValidator({
+          maxSize: 1024 * 1024 * 2,
+        })
+        .build({
+          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+          fileIsRequired: false,
+        }),
+    )
+    files: Array<Express.Multer.File>,
+  ) {
+    return this.salesService.paidSpecificInstallmentLateFeeAutoApproved(
+      installmentId,
+      paidLateFeeDto.amountPaid,
+      paidLateFeeDto.payments,
+      files,
+      user.id,
+      paidLateFeeDto.dateOperation,
+      paidLateFeeDto.numberTicket,
+      paidLateFeeDto.observation,
+    );
+  }
+
+  @Patch('financing/installment/:installmentId/late-fee/adjust')
+  @Roles('ADM')
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async adjustInstallmentLateFee(
+    @Param('installmentId', ParseUUIDPipe) installmentId: string,
+    @Body() adjustLateFeeDto: AdjustLateFeeDto,
+    @GetUser() user: User,
+  ) {
+    return this.salesService.adjustInstallmentLateFee(
+      installmentId,
+      adjustLateFeeDto,
+      user.id,
     );
   }
 }

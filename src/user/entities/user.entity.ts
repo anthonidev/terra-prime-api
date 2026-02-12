@@ -10,7 +10,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Role } from './role.entity';
-import { Exclude, Transform } from 'class-transformer';
+import { Exclude } from 'class-transformer';
 import { Sale } from 'src/admin-sales/sales/entities/sale.entity';
 import { Reservation } from 'src/admin-sales/reservations/entities/reservation.entity';
 import { Lead } from 'src/lead/entities/lead.entity';
@@ -23,7 +23,6 @@ export class User {
   id: string;
 
   @Column({ unique: true })
-  @Transform(({ value }) => value?.toLowerCase().trim())
   email: string;
 
   @Column('text', {
@@ -41,13 +40,11 @@ export class User {
   @Column('text', {
     nullable: false,
   })
-  @Transform(({ value }) => value?.trim())
   firstName: string;
 
   @Column('text', {
     nullable: false,
   })
-  @Transform(({ value }) => value?.trim())
   lastName: string;
 
   @Column({

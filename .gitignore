@@ -65,3 +65,6 @@ reporte_resolucion_minimos.txt
 reporte_resolucion_otros.txt
 reporte_resolucion_positivos.txt
 reporte_resolucion.txt
+
+.claude/
+.agents/

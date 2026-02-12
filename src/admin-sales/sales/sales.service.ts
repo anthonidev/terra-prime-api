@@ -106,6 +106,7 @@ import {
   AmendmentInstallmentStatus,
 } from './dto/create-financing-amendment.dto';
 import Decimal from 'decimal.js';
+import { AdjustLateFeeDto } from './dto/adjust-late-fee.dto';
 
 // SERVICIO ACTUALIZADO - UN SOLO ENDPOINT PARA VENTA/RESERVA
 
@@ -561,12 +562,6 @@ export class SalesService {
 
     if (userId) {
       queryBuilder.andWhere('vendor.id = :userId', { userId });
-    } else {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      queryBuilder.andWhere('sale.createdAt >= :thirtyDaysAgo', {
-        thirtyDaysAgo,
-      });
     }
 
     if (status) {
@@ -908,15 +903,31 @@ export class SalesService {
       installmentPayments.push(...huInstallmentPayments);
     }
 
-    // 4. Pagos de reserva
-    let reservationPayments = [];
-    if (sale.fromReservation || sale.reservationAmount > 0) {
-      reservationPayments =
+    // 4. Pagos de moras
+    const lateFeePayments = [];
+    if (sale.financing) {
+      const financingLateFeePayments =
         await this.paymentsService.findPaymentsByRelatedEntity(
-          'reservation',
-          saleId,
+          'lateFee',
+          sale.financing.id,
         );
+      lateFeePayments.push(...financingLateFeePayments);
     }
+    if (sale.urbanDevelopment?.financing) {
+      const huLateFeePayments =
+        await this.paymentsService.findPaymentsByRelatedEntity(
+          'lateFee',
+          sale.urbanDevelopment.financing.id,
+        );
+      lateFeePayments.push(...huLateFeePayments);
+    }
+
+    // 5. Pagos de reserva
+    const reservationPayments =
+      await this.paymentsService.findPaymentsByRelatedEntity(
+        'reservation',
+        saleId,
+      );
 
     // Combinar todos los pagos
     const allPayments = [
@@ -924,6 +935,7 @@ export class SalesService {
       ...financingPayments,
       ...reservationPayments,
       ...installmentPayments,
+      ...lateFeePayments,
     ].sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -1049,6 +1061,7 @@ export class SalesService {
           lateFeeAmountPending: Number(inst.lateFeeAmountPending || 0),
           lateFeeAmountPaid: Number(inst.lateFeeAmountPaid || 0),
           status: inst.status,
+          isParked: inst.isParked,
         }));
 
       return {
@@ -3004,6 +3017,7 @@ export class SalesService {
         stage: string;
         project: string;
       };
+      currency: string | null;
     };
     financing: {
       id: string;
@@ -3077,7 +3091,7 @@ export class SalesService {
           .leftJoin('block.stage', 'stage')
           .addSelect(['stage.name'])
           .leftJoin('stage.project', 'project')
-          .addSelect(['project.name'])
+          .addSelect(['project.name', 'project.currency'])
           .leftJoin('sale.financing', 'financing')
           .addSelect([
             'financing.id',
@@ -3189,6 +3203,7 @@ export class SalesService {
           stage: saleData.lot.block.stage.name,
           project: saleData.lot.block.stage.project.name,
         },
+        currency: saleData.lot?.block?.stage?.project?.currency || null,
       },
       financing: {
         id: saleData.financing.id,
@@ -3286,7 +3301,6 @@ export class SalesService {
     // 3. Calcular totales ANTES de cualquier cambio (usando Decimal.js para precisión)
     const existingInstallments = sale.financing.financingInstallments || [];
 
-    // Usar Decimal.js para cálculos precisos
     let decTotalCouteAmount = new Decimal(0);
     let decTotalPaid = new Decimal(0);
     let decTotalPending = new Decimal(0);
@@ -3307,7 +3321,6 @@ export class SalesService {
       );
     }
 
-    // Convertir a objeto con valores numéricos redondeados
     const totals = {
       totalCouteAmount: decTotalCouteAmount.toDecimalPlaces(2).toNumber(),
       totalPaid: decTotalPaid.toDecimalPlaces(2).toNumber(),
@@ -3317,8 +3330,7 @@ export class SalesService {
       totalLateFeePaid: decTotalLateFeePaid.toDecimalPlaces(2).toNumber(),
     };
 
-    // 4. Calcular el monto que deben sumar las nuevas cuotas (usando Decimal.js)
-    // total = (totalCouteAmount + totalLateFee) + additionalAmount - totalPaid - totalLateFeePaid
+    // 4. Calcular el monto que deben sumar las nuevas cuotas
     const decExpectedNewTotal = decTotalCouteAmount
       .plus(decTotalLateFee)
       .plus(dto.additionalAmount)
@@ -3360,7 +3372,6 @@ export class SalesService {
     let decSumNewInstallments = new Decimal(0);
     for (const inst of dto.installments) {
       if (paidInstallmentAmount > 0 && inst.numberCuote === 1) {
-        // La primera cuota es la pagada, no se suma al pendiente
         continue;
       }
       decSumNewInstallments = decSumNewInstallments.plus(inst.amount);
@@ -3380,7 +3391,7 @@ export class SalesService {
       );
     }
 
-    // 9. Generar Excel con historial
+    // 9. Generar Excel y subir a S3 en paralelo con la preparación de datos
     const excelWorkbook = await createAmendmentHistoryExcel(
       sale,
       sale.financing,
@@ -3401,16 +3412,10 @@ export class SalesService {
     let historyId: string;
 
     await this.transactionService.runInTransaction(async (queryRunner) => {
-      const financingInstallmentsRepo = queryRunner.manager.getRepository(
-        FinancingInstallments,
-      );
-      const financingRepo = queryRunner.manager.getRepository(Financing);
-      const historyRepo = queryRunner.manager.getRepository(
-        FinancingAmendmentHistory,
-      );
+      const manager = queryRunner.manager;
 
       // 10.1 Guardar historial de la adenda
-      const history = historyRepo.create({
+      const history = manager.create(FinancingAmendmentHistory, {
         saleId,
         financingId,
         fileUrl,
@@ -3436,20 +3441,23 @@ export class SalesService {
         financing: sale.financing,
       });
 
-      const savedHistory = await historyRepo.save(history);
+      const savedHistory = await manager.save(FinancingAmendmentHistory, history);
       historyId = savedHistory.id;
 
-      // 10.2 Eliminar TODAS las cuotas existentes
-      for (const inst of existingInstallments) {
-        await financingInstallmentsRepo.remove(inst);
-      }
+      // 10.2 Eliminar TODAS las cuotas existentes con un solo DELETE
+      await manager
+        .createQueryBuilder()
+        .delete()
+        .from(FinancingInstallments)
+        .where('"financingId" = :financingId', { financingId })
+        .execute();
 
-      // 10.3 Crear las nuevas cuotas
-      for (const inst of dto.installments) {
+      // 10.3 Crear las nuevas cuotas con bulk insert
+      const newInstallments = dto.installments.map((inst) => {
         const isPaidInstallment =
           paidInstallmentAmount > 0 && inst.numberCuote === 1;
 
-        const newInstallment = financingInstallmentsRepo.create({
+        return manager.create(FinancingInstallments, {
           numberCuote: inst.numberCuote,
           couteAmount: inst.amount,
           coutePaid: isPaidInstallment ? inst.amount : 0,
@@ -3463,11 +3471,11 @@ export class SalesService {
             : StatusFinancingInstallments.PENDING,
           financing: sale.financing,
         });
+      });
 
-        await financingInstallmentsRepo.save(newInstallment);
-      }
+      await manager.save(FinancingInstallments, newInstallments);
 
-      // 10.4 Actualizar el financiamiento
+      // 10.4 Actualizar el financiamiento (update directo para evitar cascade)
       const amendmentEntry = {
         date: new Date().toISOString(),
         additionalAmount: dto.additionalAmount,
@@ -3479,13 +3487,13 @@ export class SalesService {
         historyId,
       };
 
-      sale.financing.quantityCoutes = dto.installments.length;
-      sale.financing.amendmentHistory = [
-        ...(sale.financing.amendmentHistory || []),
-        amendmentEntry,
-      ];
-
-      await financingRepo.save(sale.financing);
+      await manager.update(Financing, financingId, {
+        quantityCoutes: dto.installments.length,
+        amendmentHistory: [
+          ...(sale.financing.amendmentHistory || []),
+          amendmentEntry,
+        ],
+      });
     });
 
     // 11. Obtener la venta actualizada
@@ -3515,6 +3523,32 @@ export class SalesService {
           })),
       },
     };
+  }
+
+  // ============================================================
+  // PAGO DE CUOTA ESPECÍFICA AUTO-APROBADO (ADM)
+  // ============================================================
+
+  async paidSpecificInstallmentAutoApproved(
+    installmentId: string,
+    amountPaid: number,
+    paymentDetails: CreateDetailPaymentDto[],
+    files: Express.Multer.File[],
+    userId: string,
+    dateOperation: string,
+    numberTicket?: string,
+    observation?: string,
+  ) {
+    return await this.financingInstallmentsService.paySpecificInstallmentAutoApproved(
+      installmentId,
+      amountPaid,
+      paymentDetails,
+      files,
+      userId,
+      dateOperation,
+      numberTicket,
+      observation,
+    );
   }
 
   // ============================================================
@@ -3586,7 +3620,7 @@ export class SalesService {
     if (amountPaid <= 0)
       throw new BadRequestException('El monto a pagar debe ser mayor a cero.');
 
-    await this.paymentsService.isValidPaymentConfig('reservation', saleId);
+    await this.paymentsService.isValidPaymentConfig('reservation', saleId, true);
 
     const sale = await this.findOneById(saleId);
 
@@ -3661,6 +3695,48 @@ export class SalesService {
       dateOperation,
       numberTicket,
       observation,
+    );
+  }
+
+  // ============================================================
+  // PAGO DE MORA DE CUOTA ESPECÍFICA AUTO-APROBADO (ADM)
+  // ============================================================
+
+  async paidSpecificInstallmentLateFeeAutoApproved(
+    installmentId: string,
+    amountPaid: number,
+    paymentDetails: CreateDetailPaymentDto[],
+    files: Express.Multer.File[],
+    userId: string,
+    dateOperation: string,
+    numberTicket?: string,
+    observation?: string,
+  ) {
+    return await this.financingInstallmentsService.paySpecificInstallmentLateFeeAutoApproved(
+      installmentId,
+      amountPaid,
+      paymentDetails,
+      files,
+      userId,
+      dateOperation,
+      numberTicket,
+      observation,
+    );
+  }
+
+  // ============================================================
+  // AJUSTE MANUAL DE MORA DE CUOTA (ADM)
+  // ============================================================
+
+  async adjustInstallmentLateFee(
+    installmentId: string,
+    dto: AdjustLateFeeDto,
+    userId: string,
+  ) {
+    return await this.financingInstallmentsService.adjustInstallmentLateFee(
+      installmentId,
+      dto,
+      userId,
     );
   }
 }
