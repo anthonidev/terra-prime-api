@@ -163,7 +163,7 @@ export class PaymentsService {
   ): Promise<PaymentResponse> {
     const payment = await this.paymentRepository.findOne({
       where: { id: paymentId },
-      relations: ['user', 'paymentConfig', 'details'],
+      relations: ['user', 'paymentConfig'],
     });
 
     if (!payment) {

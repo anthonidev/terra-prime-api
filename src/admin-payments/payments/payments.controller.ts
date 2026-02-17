@@ -135,7 +135,7 @@ export class PaymentsController {
   }
 
   @Post(':id/add-detail')
-  @Roles('FAC', 'ADM')
+  @Roles('FAC', 'ADM', 'JVE', 'COB')
   @UseInterceptors(FileInterceptor('file'))
   @UsePipes(new ValidationPipe({ transform: true }))
   async addDetailToPayment(

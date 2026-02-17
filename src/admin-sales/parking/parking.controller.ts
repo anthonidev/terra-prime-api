@@ -23,7 +23,7 @@ export class ParkingController {
   constructor(private readonly parkingService: ParkingService) {}
 
   @Post()
-  @Roles('SYS')
+  @Roles('SYS', 'JVE', 'VEN')
   create(@Body() createParkingDto: CreateParkingDto) {
     return this.parkingService.create(createParkingDto);
   }
@@ -41,13 +41,13 @@ export class ParkingController {
   }
 
   @Patch(':id')
-  @Roles('SYS')
+  @Roles('SYS', 'JVE', 'VEN')
   update(@Param('id') id: string, @Body() updateParkingDto: UpdateParkingDto) {
     return this.parkingService.update(id, updateParkingDto);
   }
 
   @Delete(':id')
-  @Roles('SYS')
+  @Roles('SYS', 'JVE', 'VEN')
   remove(@Param('id') id: string) {
     return this.parkingService.remove(id);
   }
