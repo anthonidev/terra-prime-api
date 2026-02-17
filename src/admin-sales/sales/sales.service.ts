@@ -1802,8 +1802,8 @@ export class SalesService {
     console.log('initialAmount:', initialAmount);
     console.log('reservationAmount:', reservationAmount);
     console.log(
-      'Principal a financiar (totalAmount - initial - reservation):',
-      totalAmount - initialAmount - reservationAmount,
+      'Principal a financiar (totalAmount - initial):',
+      totalAmount - initialAmount,
     );
     console.log('Suma de cuotas enviadas:', sumOfInstallmentAmounts);
 
@@ -2788,12 +2788,11 @@ export class SalesService {
     const initialAmount = sale.financing.initialAmount; // NO editable
     const reservationAmount = sale.reservationAmount || 0;
 
-    // 10. Calcular el monto que debe cubrir el financiamiento
+    // 10. Calcular el monto que debe cubrir el financiamiento (la reserva es parte de la inicial)
     const amountToFinance = Number(
       (
         Number(totalAmount) -
-        Number(initialAmount) -
-        Number(reservationAmount)
+        Number(initialAmount)
       ).toFixed(2),
     );
 

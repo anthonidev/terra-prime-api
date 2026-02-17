@@ -43,8 +43,8 @@ export class FinancingService {
       : this.financingRepository;
     const { financingInstallments, ...restData } = createFinancingDto;
 
-    // Calcular el monto pendiente de la inicial
-    const initialToPay = Number((Number(restData.initialAmount) - Number(reservationAmount || 0)).toFixed(2));
+    // Calcular el monto pendiente de la inicial (la reserva se registrará como pago al aprobarse)
+    const initialToPay = Number(Number(restData.initialAmount).toFixed(2));
 
     const financing = repository.create({
       ...restData,
@@ -74,7 +74,7 @@ export class FinancingService {
     includeDecimals: boolean = true,
   ): CreateFinancingInstallmentsDto[] {
 
-    const principal = totalAmount - initialAmount - reservationAmount;
+    const principal = totalAmount - initialAmount;
 
     const installments: CreateFinancingInstallmentsDto[] = [];
 
@@ -422,12 +422,9 @@ export class FinancingService {
 
       const sale = await this.salesService.findOneByIdFinancing(financingId);
 
-      // Calcular el pendiente real de la cuota inicial
+      // Calcular el pendiente real de la cuota inicial (la reserva ya se refleja en initialAmountPaid)
       const initialToPay = Number(
-        (
-          Number(financing.initialAmount) -
-          Number(sale.reservationAmount || 0)
-        ).toFixed(2),
+        Number(financing.initialAmount).toFixed(2),
       );
       const currentPaid = Number(financing.initialAmountPaid || 0);
       const realPending = Number((initialToPay - currentPaid).toFixed(2));

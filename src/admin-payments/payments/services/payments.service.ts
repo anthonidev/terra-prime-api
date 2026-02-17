@@ -1758,6 +1758,23 @@ export class PaymentsService {
         },
       );
 
+      // Si la venta tiene financiamiento, reflejar el pago de reserva en initialAmountPaid
+      if (sale.financing) {
+        const newInitialPaid = Number(
+          (
+            Number(sale.financing.initialAmountPaid || 0) +
+            Number(payment.amount)
+          ).toFixed(2),
+        );
+        await queryRunner.manager.update(
+          'financing',
+          { id: sale.financing.id },
+          {
+            initialAmountPaid: newInitialPaid,
+          },
+        );
+      }
+
       // Determinar nuevo estado
       let newStatus: StatusSale;
       if (newPending <= 0) {
@@ -1854,11 +1871,9 @@ export class PaymentsService {
           `No se encontró el financiamiento con ID ${payment.relatedEntityId}`,
         );
 
-      // Calcular monto inicial a pagar (initialAmount - reservationAmount si existe)
+      // Calcular monto inicial a pagar (la reserva ya se refleja en initialAmountPaid)
       const initialToPay = Number(
-        (
-          Number(financing.initialAmount) - Number(sale.reservationAmount || 0)
-        ).toFixed(2),
+        Number(financing.initialAmount).toFixed(2),
       );
 
       // Actualizar montos
