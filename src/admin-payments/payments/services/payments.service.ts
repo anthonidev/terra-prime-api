@@ -6,7 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { QueryRunner, Repository } from 'typeorm';
+import { In, QueryRunner, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Payment } from '../entities/payment.entity';
 import { TransactionService } from 'src/common/services/transaction.service';
@@ -36,6 +36,7 @@ import { BulkCreatePaymentsDto } from '../dto/bulk-create-payments.dto';
 import { InvoicesService } from 'src/invoices/invoices.service';
 import { FinancingInstallments } from 'src/admin-sales/financing/entities/financing-installments.entity';
 import { StatusFinancingInstallments } from 'src/admin-sales/financing/enums/status-financing-installments.enum';
+import { AddDetailToPaymentDto } from '../dto/add-detail-to-payment.dto';
 
 @Injectable()
 export class PaymentsService {
@@ -148,6 +149,285 @@ export class PaymentsService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Agrega un voucher adicional a un payment existente de tipo cuotas o moras
+   * y aplica SOLO el monto adicional a las cuotas/moras pendientes
+   */
+  async addDetailToPayment(
+    paymentId: number,
+    dto: AddDetailToPaymentDto,
+    file: Express.Multer.File,
+    userId: string,
+  ): Promise<PaymentResponse> {
+    const payment = await this.paymentRepository.findOne({
+      where: { id: paymentId },
+      relations: ['user', 'paymentConfig', 'details'],
+    });
+
+    if (!payment) {
+      throw new NotFoundException(`Pago con ID ${paymentId} no encontrado`);
+    }
+
+    if (
+      payment.status === StatusPayment.REJECTED ||
+      payment.status === StatusPayment.CANCELLED
+    ) {
+      throw new BadRequestException(
+        'No se pueden agregar vouchers a pagos rechazados o anulados',
+      );
+    }
+
+    if (
+      payment.relatedEntityType !== 'financingInstallments' &&
+      payment.relatedEntityType !== 'lateFee'
+    ) {
+      throw new BadRequestException(
+        'Solo se pueden agregar vouchers a pagos de cuotas o moras',
+      );
+    }
+
+    let uploadedDetail: { detailId: number; urlKey: string } | null = null;
+
+    return await this.transactionService.runInTransaction(
+      async (queryRunner) => {
+        try {
+          const financingId = payment.relatedEntityId;
+
+          if (payment.relatedEntityType === 'financingInstallments') {
+            // Buscar cuotas PENDING/EXPIRED del financing
+            const installmentsToPay = await queryRunner.manager.find(
+              FinancingInstallments,
+              {
+                where: {
+                  financing: { id: financingId },
+                  status: In([
+                    StatusFinancingInstallments.PENDING,
+                    StatusFinancingInstallments.EXPIRED,
+                  ]),
+                },
+                order: { expectedPaymentDate: 'ASC' },
+              },
+            );
+
+            // Calcular total pendiente de cuotas (solo principal)
+            const totalPendingAmount = parseFloat(
+              installmentsToPay
+                .reduce((sum, inst) => {
+                  return (
+                    sum +
+                    parseFloat(Number(inst.coutePending ?? 0).toFixed(2))
+                  );
+                }, 0)
+                .toFixed(2),
+            );
+
+            if (dto.amount > totalPendingAmount) {
+              throw new BadRequestException(
+                `El monto adicional (${dto.amount.toFixed(2)}) excede el pendiente de cuotas (${totalPendingAmount.toFixed(2)})`,
+              );
+            }
+
+            // Crear el PaymentDetail con upload a S3
+            const detailDto = {
+              bankName: dto.bankName,
+              transactionReference: dto.transactionReference,
+              codeOperation: dto.codeOperation,
+              transactionDate: dto.transactionDate,
+              amount: dto.amount,
+              fileIndex: 0,
+            } as any;
+
+            const savedDetail = await this.paymentsDetailService.create(
+              payment.id,
+              detailDto,
+              file,
+              queryRunner,
+            );
+            uploadedDetail = {
+              detailId: savedDetail.id,
+              urlKey: savedDetail.urlKey,
+            };
+
+            // Actualizar payment.amount
+            payment.amount = Number(
+              (Number(payment.amount) + dto.amount).toFixed(2),
+            );
+
+            // Aplicar SOLO el monto adicional a las cuotas
+            const affectedDetails =
+              await this.financingInstallmentsService.calculateAmountInCoutesWithDetails(
+                installmentsToPay,
+                dto.amount,
+                queryRunner,
+              );
+
+            // Acumular metadata de cuotas afectadas
+            const existingAffected =
+              (payment.metadata?.['Cuotas afectadas'] as Record<
+                string,
+                any
+              >) || {};
+
+            for (const detail of affectedDetails) {
+              const key = `Cuota ${detail.numberCuote ?? 'S/N'}`;
+              if (existingAffected[key]) {
+                existingAffected[key]['Monto aplicado'] = Number(
+                  (
+                    Number(existingAffected[key]['Monto aplicado'] || 0) +
+                    detail.amountApplied
+                  ).toFixed(2),
+                );
+                existingAffected[key]['Pendiente después de este pago'] =
+                  detail.pendingAfterPayment;
+                existingAffected[key]['Modo'] = detail.mode;
+              } else {
+                existingAffected[key] = {
+                  Modo: detail.mode,
+                  'Monto aplicado': detail.amountApplied,
+                  'Pendiente después de este pago': detail.pendingAfterPayment,
+                };
+              }
+            }
+
+            payment.metadata = {
+              ...payment.metadata,
+              'Cuotas afectadas': existingAffected,
+            };
+          } else {
+            // lateFee
+            const installmentsWithLateFees =
+              await this.financingInstallmentsService.getInstallmentsWithPendingLateFees(
+                financingId,
+              );
+
+            const totalLateFeesPending = parseFloat(
+              installmentsWithLateFees
+                .reduce((sum, inst) => {
+                  return sum + Number(inst.lateFeeAmountPending ?? 0);
+                }, 0)
+                .toFixed(2),
+            );
+
+            if (dto.amount > totalLateFeesPending) {
+              throw new BadRequestException(
+                `El monto adicional (${dto.amount.toFixed(2)}) excede el pendiente de moras (${totalLateFeesPending.toFixed(2)})`,
+              );
+            }
+
+            // Crear el PaymentDetail con upload a S3
+            const detailDto = {
+              bankName: dto.bankName,
+              transactionReference: dto.transactionReference,
+              codeOperation: dto.codeOperation,
+              transactionDate: dto.transactionDate,
+              amount: dto.amount,
+              fileIndex: 0,
+            } as any;
+
+            const savedDetail = await this.paymentsDetailService.create(
+              payment.id,
+              detailDto,
+              file,
+              queryRunner,
+            );
+            uploadedDetail = {
+              detailId: savedDetail.id,
+              urlKey: savedDetail.urlKey,
+            };
+
+            // Actualizar payment.amount
+            payment.amount = Number(
+              (Number(payment.amount) + dto.amount).toFixed(2),
+            );
+
+            // Aplicar SOLO el monto adicional a las moras
+            const affectedDetails =
+              await this.financingInstallmentsService.calculateLateFeePaymentWithDetails(
+                installmentsWithLateFees,
+                dto.amount,
+                queryRunner,
+              );
+
+            // Acumular metadata de moras afectadas
+            const existingAffected =
+              (payment.metadata?.['Moras afectadas'] as Record<
+                string,
+                any
+              >) || {};
+
+            for (const detail of affectedDetails) {
+              const key = `Cuota ${detail.numberCuote ?? 'S/N'}`;
+              if (existingAffected[key]) {
+                existingAffected[key]['Mora aplicada'] = Number(
+                  (
+                    Number(existingAffected[key]['Mora aplicada'] || 0) +
+                    detail.amountApplied
+                  ).toFixed(2),
+                );
+                existingAffected[key][
+                  'Mora pendiente después de este pago'
+                ] = detail.pendingAfterPayment;
+                existingAffected[key]['Modo'] = detail.mode;
+              } else {
+                existingAffected[key] = {
+                  Modo: detail.mode,
+                  'Mora aplicada': detail.amountApplied,
+                  'Mora pendiente después de este pago':
+                    detail.pendingAfterPayment,
+                };
+              }
+            }
+
+            payment.metadata = {
+              ...payment.metadata,
+              'Moras afectadas': existingAffected,
+            };
+          }
+
+          // Guardar payment actualizado
+          const updatedPayment = await queryRunner.manager.save(payment);
+
+          // Recargar details para la respuesta
+          const freshPayment = await queryRunner.manager
+            .getRepository(Payment)
+            .findOne({
+              where: { id: updatedPayment.id },
+              relations: ['details'],
+            });
+
+          return {
+            ...formatPaymentsResponse(updatedPayment),
+            vouchers: (freshPayment?.details || []).map((detail) => ({
+              id: detail.id,
+              url: detail.url,
+              amount: detail.amount,
+              bankName: detail.bankName,
+              transactionReference: detail.transactionReference,
+              codeOperation: detail.codeOperation,
+              transactionDate: detail.transactionDate,
+              isActive: detail.isActive,
+            })),
+          };
+        } catch (error) {
+          // Rollback S3 si se subió un archivo
+          if (uploadedDetail) {
+            try {
+              await this.paymentsDetailService.delete(
+                uploadedDetail.urlKey,
+                uploadedDetail.detailId,
+              );
+            } catch (deleteErr) {
+              console.error(
+                `Error al eliminar detalle de pago ${uploadedDetail.detailId} y archivo S3 ${uploadedDetail.urlKey} durante el rollback: ${deleteErr.message}`,
+              );
+            }
+          }
+          throw error;
+        }
+      },
+    );
   }
 
   /**

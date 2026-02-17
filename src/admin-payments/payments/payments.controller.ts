@@ -9,7 +9,13 @@ import {
   UseGuards,
   Query,
   ParseIntPipe,
+  UseInterceptors,
+  UploadedFile,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ParseFilePipeBuilder } from '@nestjs/common';
 import { UpdatePaymentDto } from './dto/update-payment.dto';
 import { UpdateDetailPaymentDto } from './dto/update-detail-payment.dto';
 import { UpdateCodeOperationDto } from './dto/update-code-operation.dto';
@@ -26,6 +32,7 @@ import { FindPaymentsDto } from './dto/find-payments.dto';
 import { CompletePaymentDto } from './dto/complete-payment.dto';
 import { BulkCreatePaymentsDto } from './dto/bulk-create-payments.dto';
 import { CancelInstallmentDto } from './dto/cancel-installment.dto';
+import { AddDetailToPaymentDto } from './dto/add-detail-to-payment.dto';
 
 @Controller('payments')
 // @UseGuards(JwtAuthGuard)
@@ -124,6 +131,30 @@ export class PaymentsController {
     return this.paymentsDetailService.updateCodeOperation(
       id,
       updateCodeOperationDto,
+    );
+  }
+
+  @Post(':id/add-detail')
+  @Roles('FAC', 'ADM')
+  @UseInterceptors(FileInterceptor('file'))
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async addDetailToPayment(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() addDetailDto: AddDetailToPaymentDto,
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({ fileType: /(jpg|jpeg|png|webp)$/i })
+        .addMaxSizeValidator({ maxSize: 5 * 1024 * 1024 })
+        .build({ errorHttpStatusCode: 400 }),
+    )
+    file: Express.Multer.File,
+    @GetUser() user: User,
+  ) {
+    return this.paymentsService.addDetailToPayment(
+      id,
+      addDetailDto,
+      file,
+      user.id,
     );
   }
 

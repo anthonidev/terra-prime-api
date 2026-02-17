@@ -721,7 +721,7 @@ export class FinancingInstallmentsService {
   /**
    * Calcula el pago en cuotas y retorna los detalles de las cuotas afectadas
    */
-  private async calculateAmountInCoutesWithDetails(
+  async calculateAmountInCoutesWithDetails(
     installmentsToPay: FinancingInstallments[],
     remainingAmount: number,
     queryRunner: QueryRunner,
@@ -1722,7 +1722,7 @@ export class FinancingInstallmentsService {
   /**
    * Calcula el pago de moras y retorna los detalles
    */
-  private async calculateLateFeePaymentWithDetails(
+  async calculateLateFeePaymentWithDetails(
     installmentsWithLateFees: FinancingInstallments[],
     remainingAmount: number,
     queryRunner: QueryRunner,
