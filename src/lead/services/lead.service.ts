@@ -88,11 +88,12 @@ export class LeadService {
   }
   async createOrUpdateLead(
     createUpdateDto: CreateUpdateLeadDto,
-  ): Promise<LeadWithParticipantsResponse> {
+  ): Promise<{ data: LeadWithParticipantsResponse; isNewLead: boolean }> {
     const { document, documentType, isNewLead, sourceId } = createUpdateDto;
     let lead = await this.leadRepository.findOne({
       where: { document, documentType },
     });
+    const leadIsNew = !lead;
 
     if (isNewLead) {
       if (lead)
@@ -174,7 +175,7 @@ export class LeadService {
     await this.leadVisitRepository.save(visit);
     
     const leadSaved = await this.findOneById(lead.id);
-    return formatLeadWithParticipants(leadSaved);
+    return { data: formatLeadWithParticipants(leadSaved, false), isNewLead: leadIsNew };
   }
 
   async updateLead(id: string, updateDto: CreateUpdateLeadDto)
@@ -207,7 +208,7 @@ export class LeadService {
     }
     await this.leadRepository.update(lead.id, updateData);
     const leadWithParticipants = await this.findOneById(lead.id);
-    return formatLeadWithParticipants(leadWithParticipants);
+    return formatLeadWithParticipants(leadWithParticipants, false);
   }
 
   async findAll(filters: FindLeadsDto)
@@ -358,7 +359,7 @@ export class LeadService {
         'visits.generalDirector',
       ]
     });
-    return leads.map(formatLeadWithParticipants);
+    return leads.map((lead) => formatLeadWithParticipants(lead));
   }
 
   async findAllByUser(userId: string): Promise<LeadWithParticipantsResponse[]> {
@@ -393,7 +394,7 @@ export class LeadService {
         'visits.generalDirector',
       ]
     });
-    return leads.map(formatLeadWithParticipants);
+    return leads.map((lead) => formatLeadWithParticipants(lead));
   }
 
   // asignar leads a un vendedor:
@@ -525,11 +526,8 @@ export class LeadService {
   async findOneById(id: string): Promise<Lead> {
     const lead = await this.leadRepository.findOne({
       where: { id },
-      relations: [
-        'source',
-        'ubigeo',
-        'vendor'
-      ]
+      order: { visits: { createdAt: 'DESC' } },
+      relations: ['source', 'ubigeo', 'vendor', 'visits'],
     });
 
     if (!lead)

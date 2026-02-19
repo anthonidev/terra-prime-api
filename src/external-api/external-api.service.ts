@@ -73,7 +73,7 @@ export class ExternalApiService {
 
   async createOrUpdateLead(
       createUpdateDto: CreateUpdateLeadDto,
-    ): Promise<LeadWithParticipantsResponse> {
+    ): Promise<{ data: LeadWithParticipantsResponse; isNewLead: boolean }> {
     return await this.leadService.createOrUpdateLead(createUpdateDto);
   }
 

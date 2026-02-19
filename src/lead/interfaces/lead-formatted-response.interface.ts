@@ -52,6 +52,7 @@ export interface LeadWithParticipantsResponse {
   isInOffice: boolean;
   interestProjects?: string[];
   metadata?: Record<string, any>;
+  companions?: FormattedCompanion[] | null;
   reportPdfUrl?: string | null;
   visits: FormattedVisit[];
   source: FormattedSource | null;

@@ -51,13 +51,15 @@ export const formatVendor = (vendor: User | null | undefined) => {
   };
 };
 
-export const formatVisit = (visit: LeadVisit) => {
-  const { liner, ...visitData } = visit;
-  return {
-    ...visitData,
-    companions: visit.companions ?? null,
-  };
-};
+export const formatVisit = (visit: LeadVisit) => ({
+  id: visit.id,
+  arrivalTime: visit.arrivalTime,
+  departureTime: visit.departureTime ?? null,
+  observations: visit.observations ?? null,
+  companions: visit.companions ?? null,
+  reportPdfUrl: visit.reportPdfUrl ?? null,
+  createdAt: visit.createdAt,
+});
 
 // Helper para formatear array de visitas
 export const formatVisits = (visits: LeadVisit[] | null | undefined) => {
@@ -65,7 +67,7 @@ export const formatVisits = (visits: LeadVisit[] | null | undefined) => {
   return visits.map(visit => formatVisit(visit));
 };
 
-export const formatLeadWithParticipants = (lead: Lead) => {
+export const formatLeadWithParticipants = (lead: Lead, includeVisits = true) => {
   const {
     source,
     ubigeo,
@@ -79,10 +81,13 @@ export const formatLeadWithParticipants = (lead: Lead) => {
 
   return {
     ...leadData,
-    visits: formatVisits(visits),
+    ...(includeVisits && { visits: formatVisits(visits) }),
     source: formatSource(source),
     ubigeo: formatUbigeo(ubigeo),
     vendor: formatVendor(vendor),
+    // Datos de la última visita
+    companions: lastVisit?.companions ?? null,
+    reportPdfUrl: lastVisit?.reportPdfUrl ?? null,
     // Participantes desde la última visita
     liner: formatParticipant(lastVisit?.linerParticipant),
     telemarketingSupervisor: formatParticipant(lastVisit?.telemarketingSupervisor),
@@ -96,6 +101,5 @@ export const formatLeadWithParticipants = (lead: Lead) => {
     postSale: formatParticipant(lastVisit?.postSale),
     closer: formatParticipant(lastVisit?.closer),
     generalDirector: formatParticipant(lastVisit?.generalDirector),
-    reportPdfUrl: lastVisit?.reportPdfUrl || null,
   };
 };

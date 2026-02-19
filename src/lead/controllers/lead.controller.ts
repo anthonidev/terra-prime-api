@@ -69,14 +69,13 @@ export class LeadController {
   @Roles('SYS', 'REC', 'JVE')
   async createOrUpdateLead(@Body() createUpdateDto: CreateUpdateLeadDto) {
     try {
-      const lead = await this.leadService.createOrUpdateLead(createUpdateDto);
-      const isNewLead = lead.visits.length === 1;
+      const { data, isNewLead } = await this.leadService.createOrUpdateLead(createUpdateDto);
       return {
         success: true,
         message: isNewLead
           ? 'Se ha registrado un nuevo lead y su visita'
           : 'Se ha actualizado el lead y registrado una nueva visita',
-        data: lead,
+        data,
       };
     } catch (error) {
       if (error instanceof HttpException) {
