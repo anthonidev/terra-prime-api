@@ -392,32 +392,36 @@ function createClientSheet(workbook: ExcelJS.Workbook, sale: Sale): void {
     });
   }
 
-  // ============ ACOMPAÑANTE ============
-  if (lead?.companionFullName || lead?.companionDni) {
+  // ============ ACOMPAÑANTES ============
+  const companions = lead?.companions ?? [];
+  if (companions.length > 0) {
     rowNum++;
     sheet.mergeCells(`A${rowNum}:D${rowNum}`);
-    sheet.getRow(rowNum).getCell(1).value = 'ACOMPAÑANTE';
+    sheet.getRow(rowNum).getCell(1).value = 'ACOMPAÑANTES';
     applyRowStyle(sheet.getRow(rowNum), STYLES.sectionTitle, 1, 4);
     sheet.getRow(rowNum).height = 25;
     rowNum++;
 
-    const companionData = [
-      ['Nombre', safeValue(lead?.companionFullName), 'DNI', safeValue(lead?.companionDni)],
-      ['Parentesco', safeValue(lead?.companionRelationship), '', ''],
-    ];
+    companions.forEach((companion, index) => {
+      const label = companions.length > 1 ? `Acompañante ${index + 1}` : 'Acompañante';
+      const companionData = [
+        [label, safeValue(companion.fullName), 'DNI', safeValue(companion.dni)],
+        ['Parentesco', safeValue(companion.relationship), '', ''],
+      ];
 
-    companionData.forEach((rowData) => {
-      const row = sheet.getRow(rowNum);
-      row.getCell(1).value = rowData[0];
-      row.getCell(1).font = { bold: true, size: 10 };
-      row.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
-      row.getCell(2).value = rowData[1];
-      row.getCell(3).value = rowData[2];
-      row.getCell(3).font = { bold: true, size: 10 };
-      row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
-      row.getCell(4).value = rowData[3];
-      for (let i = 1; i <= 4; i++) setCellBorder(row.getCell(i));
-      rowNum++;
+      companionData.forEach((rowData) => {
+        const row = sheet.getRow(rowNum);
+        row.getCell(1).value = rowData[0];
+        row.getCell(1).font = { bold: true, size: 10 };
+        row.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+        row.getCell(2).value = rowData[1];
+        row.getCell(3).value = rowData[2];
+        row.getCell(3).font = { bold: true, size: 10 };
+        row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+        row.getCell(4).value = rowData[3];
+        for (let i = 1; i <= 4; i++) setCellBorder(row.getCell(i));
+        rowNum++;
+      });
     });
   }
 }

@@ -1,6 +1,7 @@
 // src/admin-sales/financing/dto/calculate-amortization.dto.ts
-import { IsBoolean, IsDateString, IsNotEmpty, IsNumber, IsOptional, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsNotEmpty, IsNumber, IsOptional, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
+import { InterestRateSectionDto } from './interest-rate-section.dto';
 
 export class CalculateAmortizationDto {
   @IsNotEmpty({ message: 'El monto total de financiación es requerido' })
@@ -18,17 +19,10 @@ export class CalculateAmortizationDto {
   @Type(() => Number)
   reservationAmount?: number = 0;
 
-  @IsNotEmpty({ message: 'El porcentaje de interés es requerido' })
-  @IsNumber({}, { message: 'El porcentaje de interés debe ser un número' })
-  @Type(() => Number)
-  @Min(0, { message: 'El porcentaje de interés debe ser mayor o igual a 0' })
-  interestRate: number;
-
-  @IsNotEmpty({ message: 'La cantidad de cuotas es requerido' })
-  @IsNumber({}, { message: 'La cantidad de cuotas debe ser un número' })
-  @Type(() => Number)
-  @Min(1, { message: 'La cantidad de cuotas debe ser mayor a 1' })
-  numberOfPayments: number;
+  @IsArray({ message: 'Las secciones de interés deben ser un array' })
+  @ValidateNested({ each: true })
+  @Type(() => InterestRateSectionDto)
+  interestRateSections: InterestRateSectionDto[];
 
   @IsNotEmpty({ message: 'La fecha de pago inicial es requerido' })
   @IsDateString({}, { message: 'La fecha de pago inicial debe ser válida' })

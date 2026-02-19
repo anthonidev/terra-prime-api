@@ -22,6 +22,7 @@ export interface FinancingDetail {
   initialAmountPaid: number;
   initialAmountPending: number;
   interestRate: number;
+  interestRateSections?: Array<{ startInstallment: number; endInstallment: number; interestRate: number }>;
   quantityCoutes: number;
   totalCouteAmount: number;
   totalPaid: number;

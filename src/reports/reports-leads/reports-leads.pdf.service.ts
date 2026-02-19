@@ -211,8 +211,8 @@ export class ReportsLeadsPdfService {
     lead: Lead,
     startY: number,
   ): number {
-    const hasCompanion = !!(lead.companionFullName || lead.companionDni);
-    const rows = hasCompanion ? 5 : 4;
+    const companions = lead.companions ?? [];
+    const rows = 4 + companions.length;
     const cardH = this.CARD_PAD + 20 + rows * this.ROW_H + this.CARD_PAD;
 
     this.drawCard(doc, startY, cardH);
@@ -251,11 +251,12 @@ export class ReportsLeadsPdfService {
     this.drawField(doc, 'Distrito', distrito, col2, y);
     y += this.ROW_H;
 
-    if (hasCompanion) {
-      this.drawField(doc, 'Acompañante', lead.companionFullName || '', col1, y);
-      this.drawField(doc, 'DNI Acompañante', lead.companionDni || '', col2, y);
+    companions.forEach((companion, index) => {
+      const label = companions.length > 1 ? `Acompañante ${index + 1}` : 'Acompañante';
+      this.drawField(doc, label, companion.fullName || '', col1, y);
+      this.drawField(doc, 'DNI', companion.dni || '', col2, y);
       y += this.ROW_H;
-    }
+    });
 
     return startY + cardH + this.GAP;
   }

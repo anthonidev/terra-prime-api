@@ -41,6 +41,7 @@ import { FinancingType } from '../financing/enums/financing-type.enum';
 import { FinancingService } from '../financing/services/financing.service';
 import { CalculateAmortizationDto } from '../financing/dto/calculate-amortizacion-dto';
 import { CreateFinancingInstallmentsDto } from '../financing/dto/create-financing-installments.dto';
+import { InterestRateSectionDto } from '../financing/dto/interest-rate-section.dto';
 import { GuarantorsService } from '../guarantors/guarantors.service';
 import { Guarantor } from '../guarantors/entities/guarantor.entity';
 import { CreateGuarantorDto } from '../guarantors/dto/create-guarantor.dto';
@@ -181,8 +182,34 @@ export class SalesService {
 
         // Asignar los arrays separados al DTO
         createSaleDto.financingInstallments = lotInstallments;
-        createSaleDto.financingInstallmentsHu =
-          huInstallments.length > 0 ? huInstallments : undefined;
+
+        // Si los installments de HU extraídos del combined son insuficientes
+        // (ej: lot=12 meses, HU=24 meses → combined sólo tiene 12 filas si el frontend
+        // no incluye los meses exclusivos de HU), regenerar desde el backend.
+        const expectedHuCount = createSaleDto.quantityHuCuotes;
+        if (
+          expectedHuCount &&
+          createSaleDto.firstPaymentDateHu &&
+          createSaleDto.totalAmountUrbanDevelopment > 0 &&
+          huInstallments.length < expectedHuCount
+        ) {
+          const huSections: InterestRateSectionDto[] = [
+            { startInstallment: 1, endInstallment: expectedHuCount, interestRate: 0 },
+          ];
+          createSaleDto.financingInstallmentsHu =
+            this.financingService.generateAmortizationTable(
+              createSaleDto.totalAmountUrbanDevelopment,
+              createSaleDto.initialAmountUrbanDevelopment || 0,
+              0,
+              huSections,
+              undefined,
+              createSaleDto.firstPaymentDateHu,
+              true,
+            );
+        } else {
+          createSaleDto.financingInstallmentsHu =
+            huInstallments.length > 0 ? huInstallments : undefined;
+        }
       }
 
       const {
@@ -247,11 +274,16 @@ export class SalesService {
           async (queryRunner, data) => {
             const {
               initialAmount,
-              interestRate,
+              interestRateSections,
               quantitySaleCoutes,
               totalAmount,
               financingInstallments,
             } = data;
+
+            // Derivar quantitySaleCoutes de las secciones si no se provee
+            const derivedQuantity = interestRateSections
+              ? Math.max(...interestRateSections.map(s => s.endInstallment))
+              : quantitySaleCoutes;
 
             // Log para debug
             console.log('=== VALIDACIÓN DE VENTA ===');
@@ -265,10 +297,10 @@ export class SalesService {
 
             this.isValidFinancingDataSale(
               totalAmount,
-              data.reservationAmount || 0, // Usar reservationAmount del DTO
+              data.reservationAmount || 0,
               initialAmount,
-              interestRate,
-              quantitySaleCoutes,
+              interestRateSections,
+              derivedQuantity,
               financingInstallments,
               data.totalAmountUrbanDevelopment,
               data.quantityHuCuotes,
@@ -279,8 +311,8 @@ export class SalesService {
             const financingData = {
               financingType: FinancingType.CREDITO,
               initialAmount,
-              interestRate,
-              quantityCoutes: quantitySaleCoutes,
+              interestRateSections,
+              quantityCoutes: derivedQuantity,
               financingInstallments: financingInstallments,
             };
 
@@ -1071,6 +1103,7 @@ export class SalesService {
         initialAmountPaid: Number(financing.initialAmountPaid || 0),
         initialAmountPending: Number(financing.initialAmountPending || 0),
         interestRate: Number(financing.interestRate || 0),
+        interestRateSections: financing.interestRateSections ?? null,
         quantityCoutes: Number(financing.quantityCoutes),
         totalCouteAmount: parseFloat(totals.totalCouteAmount.toFixed(2)),
         totalPaid: parseFloat(totals.totalPaid.toFixed(2)),
@@ -1663,8 +1696,8 @@ export class SalesService {
       calculateAmortizationDto.totalAmount,
       calculateAmortizationDto.initialAmount,
       calculateAmortizationDto.reservationAmount,
-      calculateAmortizationDto.interestRate,
-      calculateAmortizationDto.numberOfPayments,
+      calculateAmortizationDto.interestRateSections,
+      undefined,
       calculateAmortizationDto.firstPaymentDate,
       calculateAmortizationDto.includeDecimals ?? true,
       calculateAmortizationDto.totalAmountHu,
@@ -1740,11 +1773,14 @@ export class SalesService {
     saleDto: CreateSaleDto | UpdateSaleDto,
   ) {
     // Las cuotas de HU ahora vienen desde el frontend, no se calculan aquí
+    const huQuantity = saleDto.quantityHuCuotes || 0;
     return {
       financingType: FinancingType.CREDITO,
       initialAmount: saleDto.initialAmountUrbanDevelopment || 0,
-      interestRate: 0,
-      quantityCoutes: saleDto.quantityHuCuotes,
+      interestRateSections: [
+        { startInstallment: 1, endInstallment: huQuantity, interestRate: 0 },
+      ] as InterestRateSectionDto[],
+      quantityCoutes: huQuantity,
       initialPaymentDate: saleDto.firstPaymentDateHu,
       financingInstallments: saleDto.financingInstallmentsHu || [],
     };
@@ -1771,7 +1807,7 @@ export class SalesService {
     totalAmount: number,
     reservationAmount: number,
     initialAmount: number,
-    interestRate: number,
+    interestRateSections: InterestRateSectionDto[],
     quantitySaleCoutes: number,
     financingInstallments: CreateFinancingInstallmentsDto[],
     totalAmountHu?: number,
@@ -1780,12 +1816,20 @@ export class SalesService {
     firstPaymentDateHu?: string,
   ): void {
     // Validaciones básicas del lote
-    if (interestRate === undefined || interestRate === null)
-      throw new BadRequestException('El porcentaje de interés es requerido');
+    if (!interestRateSections || interestRateSections.length === 0)
+      throw new BadRequestException('Las secciones de interés son requeridas');
     if (!quantitySaleCoutes)
       throw new BadRequestException('La cantidad de cuotas es requerido');
     if (!financingInstallments)
       throw new BadRequestException('Las cuotas de financiación es requerida');
+
+    // Validar que quantitySaleCoutes coincida con max(section.endInstallment)
+    const maxEndInstallment = Math.max(...interestRateSections.map(s => s.endInstallment));
+    if (quantitySaleCoutes !== maxEndInstallment)
+      throw new BadRequestException(
+        `La cantidad de cuotas (${quantitySaleCoutes}) debe coincidir con el tramo final de secciones de interés (${maxEndInstallment}).`,
+      );
+
     if (financingInstallments.length !== quantitySaleCoutes)
       throw new BadRequestException(
         `El número de cuotas enviadas (${financingInstallments.length}) no coincide con la cantidad de cuotas esperada (${quantitySaleCoutes}).`,
@@ -1812,8 +1856,8 @@ export class SalesService {
         totalAmount,
         initialAmount,
         reservationAmount,
-        interestRate,
-        quantitySaleCoutes,
+        interestRateSections,
+        undefined,
         financingInstallments[0]?.expectedPaymentDate.toString(),
         true,
       );
@@ -1854,13 +1898,16 @@ export class SalesService {
       );
 
       // Generar amortización de HU (sin inicial, sin interés)
+      const huSections: InterestRateSectionDto[] = [
+        { startInstallment: 1, endInstallment: quantityHuCoutes, interestRate: 0 },
+      ];
       const calculatedHuAmortization =
         this.financingService.generateAmortizationTable(
           totalAmountHu,
           0, // Sin inicial
           0, // Sin reserva
-          0, // Sin interés
-          quantityHuCoutes,
+          huSections,
+          undefined,
           firstPaymentDateHu ||
             financingInstallmentsHu[0]?.expectedPaymentDate.toString(),
           true,
@@ -2056,8 +2103,32 @@ export class SalesService {
 
         // Asignar los arrays separados al DTO
         updateSaleDto.financingInstallments = lotInstallments;
-        updateSaleDto.financingInstallmentsHu =
-          huInstallments.length > 0 ? huInstallments : undefined;
+
+        // Si los installments de HU extraídos del combined son insuficientes, regenerar.
+        const expectedHuCountUpd = updateSaleDto.quantityHuCuotes;
+        if (
+          expectedHuCountUpd &&
+          updateSaleDto.firstPaymentDateHu &&
+          updateSaleDto.totalAmountUrbanDevelopment > 0 &&
+          huInstallments.length < expectedHuCountUpd
+        ) {
+          const huSectionsUpd: InterestRateSectionDto[] = [
+            { startInstallment: 1, endInstallment: expectedHuCountUpd, interestRate: 0 },
+          ];
+          updateSaleDto.financingInstallmentsHu =
+            this.financingService.generateAmortizationTable(
+              updateSaleDto.totalAmountUrbanDevelopment,
+              updateSaleDto.initialAmountUrbanDevelopment || 0,
+              0,
+              huSectionsUpd,
+              undefined,
+              updateSaleDto.firstPaymentDateHu,
+              true,
+            );
+        } else {
+          updateSaleDto.financingInstallmentsHu =
+            huInstallments.length > 0 ? huInstallments : undefined;
+        }
       }
 
       // Buscar la venta existente con todas sus relaciones
@@ -2148,6 +2219,9 @@ export class SalesService {
           oldType === SaleType.DIRECT_PAYMENT &&
           newType === SaleType.FINANCED
         ) {
+          const derivedQty = updateSaleDto.interestRateSections
+            ? Math.max(...updateSaleDto.interestRateSections.map(s => s.endInstallment))
+            : updateSaleDto.quantitySaleCoutes;
           // Validar datos de financiamiento
           this.isValidFinancingDataSale(
             updateSaleDto.totalAmount || existingSale.totalAmount,
@@ -2155,8 +2229,8 @@ export class SalesService {
               existingSale.reservationAmount ||
               0,
             updateSaleDto.initialAmount,
-            updateSaleDto.interestRate,
-            updateSaleDto.quantitySaleCoutes,
+            updateSaleDto.interestRateSections,
+            derivedQty,
             updateSaleDto.financingInstallments,
             updateSaleDto.totalAmountUrbanDevelopment ||
               existingSale.urbanDevelopment?.amount,
@@ -2168,8 +2242,8 @@ export class SalesService {
           const financingData = {
             financingType: FinancingType.CREDITO,
             initialAmount: updateSaleDto.initialAmount,
-            interestRate: updateSaleDto.interestRate,
-            quantityCoutes: updateSaleDto.quantitySaleCoutes,
+            interestRateSections: updateSaleDto.interestRateSections,
+            quantityCoutes: derivedQty,
             financingInstallments: updateSaleDto.financingInstallments,
           };
           const newFinancing = await this.financingService.create(
@@ -2197,10 +2271,13 @@ export class SalesService {
           oldType === SaleType.FINANCED &&
           newType === SaleType.FINANCED &&
           (updateSaleDto.initialAmount !== undefined ||
-            updateSaleDto.interestRate !== undefined ||
+            updateSaleDto.interestRateSections !== undefined ||
             updateSaleDto.quantitySaleCoutes !== undefined ||
             updateSaleDto.financingInstallments !== undefined)
         ) {
+          const derivedQty2 = updateSaleDto.interestRateSections
+            ? Math.max(...updateSaleDto.interestRateSections.map(s => s.endInstallment))
+            : updateSaleDto.quantitySaleCoutes;
           // Validar datos de financiamiento
           this.isValidFinancingDataSale(
             updateSaleDto.totalAmount || existingSale.totalAmount,
@@ -2208,8 +2285,8 @@ export class SalesService {
               existingSale.reservationAmount ||
               0,
             updateSaleDto.initialAmount,
-            updateSaleDto.interestRate,
-            updateSaleDto.quantitySaleCoutes,
+            updateSaleDto.interestRateSections,
+            derivedQty2,
             updateSaleDto.financingInstallments,
             updateSaleDto.totalAmountUrbanDevelopment ||
               existingSale.urbanDevelopment?.amount,
@@ -2223,8 +2300,8 @@ export class SalesService {
               existingSale.financing.id,
               {
                 initialAmount: updateSaleDto.initialAmount,
-                interestRate: updateSaleDto.interestRate,
-                quantityCoutes: updateSaleDto.quantitySaleCoutes,
+                interestRateSections: updateSaleDto.interestRateSections,
+                quantityCoutes: derivedQty2,
                 financingInstallments: updateSaleDto.financingInstallments,
               },
               queryRunner,
@@ -2234,8 +2311,8 @@ export class SalesService {
             const financingData = {
               financingType: FinancingType.CREDITO,
               initialAmount: updateSaleDto.initialAmount,
-              interestRate: updateSaleDto.interestRate,
-              quantityCoutes: updateSaleDto.quantitySaleCoutes,
+              interestRateSections: updateSaleDto.interestRateSections,
+              quantityCoutes: derivedQty2,
               financingInstallments: updateSaleDto.financingInstallments,
             };
             const newFinancing = await this.financingService.create(
@@ -3099,6 +3176,7 @@ export class SalesService {
             'financing.initialAmountPaid',
             'financing.initialAmountPending',
             'financing.interestRate',
+            'financing.interestRateSections',
             'financing.quantityCoutes',
           ])
           .where('sale.id = :saleId', { saleId })

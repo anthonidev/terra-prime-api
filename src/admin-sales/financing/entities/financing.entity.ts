@@ -73,6 +73,13 @@ export class Financing extends Timestamped {
   })
   interestRate: number;
 
+  @Column({ type: 'jsonb', nullable: true, default: null })
+  interestRateSections: Array<{
+    startInstallment: number;
+    endInstallment: number;
+    interestRate: number;
+  }>;
+
   @Column({
     type: 'numeric',
     nullable: false,

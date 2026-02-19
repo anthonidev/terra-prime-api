@@ -46,6 +46,7 @@ export function formatSaleResponse(sale: Sale) {
       id: sale.financing.id,
       initialAmount: sale.financing.initialAmount,
       interestRate: sale.financing.interestRate,
+      interestRateSections: sale.financing.interestRateSections ?? null,
       quantityCoutes: sale.financing.quantityCoutes,
       financingInstallments: (() => {
         const mappedInstallments = sale.financing.financingInstallments.map((installment) => {

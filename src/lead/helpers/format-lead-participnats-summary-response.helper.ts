@@ -12,9 +12,7 @@ export const formatLeadWithParticipantsSummary = (lead: Lead) => {
     vendor,
     visits,
     interestProjects,
-    companionFullName,
-    companionDni,
-    companionRelationship,
+    companions,
     metadata,
     ...leadData
   } = lead;

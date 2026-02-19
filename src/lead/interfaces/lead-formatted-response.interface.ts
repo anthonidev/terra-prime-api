@@ -1,4 +1,10 @@
 // Interfaces de componentes
+interface FormattedCompanion {
+  fullName: string;
+  dni?: string;
+  relationship?: string;
+}
+
 interface FormattedParticipant {
   firstName: string;
   lastName: string;
@@ -44,9 +50,7 @@ export interface LeadWithParticipantsResponse {
   isActive: boolean;
   isInOffice: boolean;
   interestProjects?: string[];
-  companionFullName?: string;
-  companionDni?: string;
-  companionRelationship?: string;
+  companions?: FormattedCompanion[];
   metadata?: Record<string, any>;
   reportPdfUrl?: string | null;
   visits: FormattedVisit[];

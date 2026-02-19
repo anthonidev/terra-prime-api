@@ -19,6 +19,7 @@ import { CreatePaymentDto } from 'src/admin-payments/payments/dto/create-payment
 import { MethodPayment } from 'src/admin-payments/payments/enums/method-payment.enum';
 import { PaymentResponse } from 'src/admin-payments/payments/interfaces/payment-response.interface';
 import { SalesService } from 'src/admin-sales/sales/sales.service';
+import { InterestRateSectionDto } from '../dto/interest-rate-section.dto';
 
 @Injectable()
 export class FinancingService {
@@ -41,13 +42,20 @@ export class FinancingService {
     const repository = queryRunner
       ? queryRunner.manager.getRepository(Financing)
       : this.financingRepository;
-    const { financingInstallments, ...restData } = createFinancingDto;
+    const { financingInstallments, interestRateSections, ...restData } = createFinancingDto;
+
+    // Calcular promedio ponderado de tasas y guardar secciones
+    const computedInterestRate = interestRateSections
+      ? this.calculateWeightedAverageRate(interestRateSections)
+      : (restData.interestRate ?? 0);
 
     // Calcular el monto pendiente de la inicial (la reserva se registrará como pago al aprobarse)
     const initialToPay = Number(Number(restData.initialAmount).toFixed(2));
 
     const financing = repository.create({
       ...restData,
+      interestRate: computedInterestRate,
+      interestRateSections: interestRateSections ?? null,
       initialAmountPaid: 0,
       initialAmountPending: initialToPay,
       financingInstallments: financingInstallments.map((financingInstallment, index) => {
@@ -64,96 +72,119 @@ export class FinancingService {
     return await repository.save(financing);
   }
 
+  private calculateWeightedAverageRate(sections: InterestRateSectionDto[]): number {
+    const totalInstallments = Math.max(...sections.map(s => s.endInstallment));
+    const weightedSum = sections.reduce((sum, section) => {
+      const count = section.endInstallment - section.startInstallment + 1;
+      return sum + section.interestRate * count;
+    }, 0);
+    return parseFloat((weightedSum / totalInstallments).toFixed(6));
+  }
+
   generateAmortizationTable(
     totalAmount: number,
     initialAmount: number,
     reservationAmount: number,
-    interestRate: number,
-    numberOfPayments: number,
-    firstPaymentDate: string | Date,
+    interestRateSections: InterestRateSectionDto[] | number,
+    numberOfPayments?: number,
+    firstPaymentDate: string | Date = new Date(),
     includeDecimals: boolean = true,
   ): CreateFinancingInstallmentsDto[] {
 
-    const principal = totalAmount - initialAmount;
+    // Compatibilidad: si se pasa interestRate como número (legado), convertir a sección única
+    let sections: InterestRateSectionDto[];
+    let totalInstallments: number;
 
-    const installments: CreateFinancingInstallmentsDto[] = [];
-
-    const ratePerPeriod = interestRate / 100;
-
-    let calculatedMonthlyPayment: number;
-
-    if (ratePerPeriod === 0) {
-      calculatedMonthlyPayment = principal / numberOfPayments;
+    if (typeof interestRateSections === 'number') {
+      // Llamada legada con tasa única y numberOfPayments
+      totalInstallments = numberOfPayments!;
+      sections = [{ startInstallment: 1, endInstallment: totalInstallments, interestRate: interestRateSections }];
     } else {
-      calculatedMonthlyPayment =
-        (principal * ratePerPeriod) /
-        (1 - Math.pow(1 + ratePerPeriod, -numberOfPayments));
+      sections = [...interestRateSections].sort((a, b) => a.startInstallment - b.startInstallment);
+      totalInstallments = Math.max(...sections.map(s => s.endInstallment));
     }
 
-    // --- PARSEAR LA FECHA DE ENTRADA MANUALMENTE (MANTENER ESTO) ---
+    const principal = totalAmount - initialAmount;
+    const installments: CreateFinancingInstallmentsDto[] = [];
+
+    // Parsear la fecha de inicio
     let initialYear: number;
     let initialMonth: number; // 0-indexed
     let initialDay: number;
 
     if (typeof firstPaymentDate === 'string') {
-        const parts = firstPaymentDate.split('T')[0].split('-');
-        initialYear = parseInt(parts[0], 10);
-        initialMonth = parseInt(parts[1], 10) - 1; // Meses son 0-indexados en JS
-        initialDay = parseInt(parts[2], 10);
-    } else { // Si ya es un objeto Date
-        initialYear = firstPaymentDate.getFullYear();
-        initialMonth = firstPaymentDate.getMonth();
-        initialDay = firstPaymentDate.getDate();
+      const parts = firstPaymentDate.split('T')[0].split('-');
+      initialYear = parseInt(parts[0], 10);
+      initialMonth = parseInt(parts[1], 10) - 1;
+      initialDay = parseInt(parts[2], 10);
+    } else {
+      initialYear = firstPaymentDate.getFullYear();
+      initialMonth = firstPaymentDate.getMonth();
+      initialDay = firstPaymentDate.getDate();
     }
-    // Este es el día que intentaremos mantener
     const originalDay = initialDay;
 
-    for (let i = 0; i < numberOfPayments; i++) {
-      let currentCouteAmount: number;
+    let currentBalance = principal;
+    let installmentIndex = 0; // índice global de cuota (0-based)
 
-      if (includeDecimals) {
-        currentCouteAmount = parseFloat(calculatedMonthlyPayment.toFixed(2));
+    for (const section of sections) {
+      const sectionCount = section.endInstallment - section.startInstallment + 1;
+      const remainingInstallments = totalInstallments - section.startInstallment + 1;
+      const ratePerPeriod = section.interestRate / 100;
+
+      let sectionPayment: number;
+      if (ratePerPeriod === 0) {
+        sectionPayment = currentBalance / remainingInstallments;
       } else {
-        currentCouteAmount = Math.round(calculatedMonthlyPayment);
+        sectionPayment =
+          (currentBalance * ratePerPeriod) /
+          (1 - Math.pow(1 + ratePerPeriod, -remainingInstallments));
       }
 
-      const paymentDate = new Date(initialYear, initialMonth + i, originalDay);
+      for (let j = 0; j < sectionCount; j++) {
+        const i = installmentIndex;
 
-      const targetMonth = (initialMonth + i) % 12; // El mes esperado (0-11)
-      const targetYear = initialYear + Math.floor((initialMonth + i) / 12); // El año esperado
-
-      if (paymentDate.getMonth() !== targetMonth || paymentDate.getFullYear() !== targetYear || paymentDate.getDate() !== originalDay) {
+        // Calcular fecha
+        const paymentDate = new Date(initialYear, initialMonth + i, originalDay);
+        const targetMonth = (initialMonth + i) % 12;
+        const targetYear = initialYear + Math.floor((initialMonth + i) / 12);
+        if (
+          paymentDate.getMonth() !== targetMonth ||
+          paymentDate.getFullYear() !== targetYear ||
+          paymentDate.getDate() !== originalDay
+        ) {
           const lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
           paymentDate.setDate(lastDayOfTargetMonth);
-          paymentDate.setFullYear(targetYear); // Asegurarse del año correcto
-          paymentDate.setMonth(targetMonth);   // Asegurarse del mes correcto
-      }
-      // Formatear la fecha a YYYY-MM-DD
-      const year = paymentDate.getFullYear();
-      const month = (paymentDate.getMonth() + 1).toString().padStart(2, '0');
-      const day = paymentDate.getDate().toString().padStart(2, '0');
-      const formattedDate = `${year}-${month}-${day}`;
+          paymentDate.setFullYear(targetYear);
+          paymentDate.setMonth(targetMonth);
+        }
+        const year = paymentDate.getFullYear();
+        const month = (paymentDate.getMonth() + 1).toString().padStart(2, '0');
+        const day = paymentDate.getDate().toString().padStart(2, '0');
+        const formattedDate = `${year}-${month}-${day}`;
 
-      installments.push({
-        couteAmount: currentCouteAmount,
-        expectedPaymentDate: formattedDate,
-      });
+        const couteAmount = includeDecimals
+          ? parseFloat(sectionPayment.toFixed(2))
+          : Math.round(sectionPayment);
+
+        installments.push({ couteAmount, expectedPaymentDate: formattedDate });
+
+        // Actualizar saldo
+        const interest = currentBalance * ratePerPeriod;
+        const principalPaid = sectionPayment - interest;
+        currentBalance -= principalPaid;
+
+        installmentIndex++;
+      }
     }
 
-    // --- Lógica de ajuste final en la última cuota ---
-    // Ajustar solo errores de redondeo, no cambiar el monto total esperado
-    if (numberOfPayments > 0) {
-      const sumOfCalculatedInstallments = installments.reduce((sum, inst) => sum + inst.couteAmount, 0);
-
-      // El monto total esperado es la cuota teórica multiplicada por el número de pagos
-      const expectedTotal = calculatedMonthlyPayment * numberOfPayments;
-
-      const adjustmentNeeded = expectedTotal - sumOfCalculatedInstallments;
-
-      // Si hay diferencia por redondeos (pequeña), ajustar la última cuota
-      if (Math.abs(adjustmentNeeded) > 0.001) {
-        const lastCouteAmount = installments[numberOfPayments - 1].couteAmount;
-        installments[numberOfPayments - 1].couteAmount = parseFloat((lastCouteAmount + adjustmentNeeded).toFixed(2));
+    // Ajuste de redondeo en la última cuota del array completo
+    if (installments.length > 0) {
+      // El total esperado = principal (sin interés usamos suma directa)
+      // Para el ajuste de redondeo: ajustamos si el saldo residual es muy pequeño
+      if (Math.abs(currentBalance) > 0.001 && Math.abs(currentBalance) < 1.5) {
+        const last = installments[installments.length - 1];
+        last.couteAmount = parseFloat((last.couteAmount + currentBalance).toFixed(2));
       }
     }
 
@@ -164,9 +195,9 @@ export class FinancingService {
     totalAmount: number,
     initialAmount: number,
     reservationAmount: number,
-    interestRate: number,
-    numberOfPayments: number,
-    firstPaymentDate: string | Date,
+    interestRateSections: InterestRateSectionDto[] | number,
+    numberOfPayments?: number,
+    firstPaymentDate: string | Date = new Date(),
     includeDecimals: boolean = true,
     totalAmountHu?: number,
     numberOfPaymentsHu?: number,
@@ -177,7 +208,7 @@ export class FinancingService {
       totalAmount,
       initialAmount,
       reservationAmount,
-      interestRate,
+      interestRateSections,
       numberOfPayments,
       firstPaymentDate,
       includeDecimals,
@@ -187,12 +218,15 @@ export class FinancingService {
     let huInstallments: CreateFinancingInstallmentsDto[] = [];
     if (totalAmountHu && numberOfPaymentsHu && firstPaymentDateHu) {
       // HU no tiene inicial ni interés
+      const huSections: InterestRateSectionDto[] = [
+        { startInstallment: 1, endInstallment: numberOfPaymentsHu, interestRate: 0 },
+      ];
       huInstallments = this.generateAmortizationTable(
         totalAmountHu,
         0, // Sin inicial
         0, // Sin reserva
-        0, // Sin interés
-        numberOfPaymentsHu,
+        huSections,
+        undefined,
         firstPaymentDateHu,
         includeDecimals,
       );
@@ -316,11 +350,20 @@ export class FinancingService {
       );
     }
 
-    const { financingInstallments, ...restData } = updateData;
+    const { financingInstallments, interestRateSections, ...restData } = updateData;
+
+    // Calcular promedio ponderado si se actualizan secciones
+    if (interestRateSections) {
+      restData.interestRate = this.calculateWeightedAverageRate(interestRateSections);
+    }
 
     // Actualizar campos básicos del financiamiento
-    if (Object.keys(restData).length > 0) {
-      await repository.update(id, restData);
+    const fieldsToUpdate: Record<string, any> = { ...restData };
+    if (interestRateSections !== undefined) {
+      fieldsToUpdate.interestRateSections = interestRateSections;
+    }
+    if (Object.keys(fieldsToUpdate).length > 0) {
+      await repository.update(id, fieldsToUpdate);
     }
 
     // Si se proporcionan nuevas cuotas, eliminar las antiguas y crear las nuevas

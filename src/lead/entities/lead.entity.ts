@@ -72,25 +72,10 @@ export class Lead {
   interestProjects?: string[];
 
   @Column({
-    type: 'varchar',
-    length: 200,
+    type: 'json',
     nullable: true,
   })
-  companionFullName?: string;
-
-  @Column({
-    type: 'varchar',
-    length: 20,
-    nullable: true,
-  })
-  companionDni?: string;
-
-  @Column({
-    type: 'varchar',
-    length: 50,
-    nullable: true,
-  })
-  companionRelationship?: string;
+  companions?: { fullName: string; dni?: string; relationship?: string }[];
 
   @Column({
     type: 'json',

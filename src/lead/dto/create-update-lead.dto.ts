@@ -13,9 +13,34 @@ import {
   ArrayMaxSize,
   IsObject,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { DocumentType } from '../enums/document-type.enum';
+
+export class CompanionDto {
+  @IsString({ message: 'El nombre del acompañante es una cadena de texto' })
+  @MaxLength(200, { message: 'El nombre del acompañante no puede tener más de 200 caracteres' })
+  @Matches(/^[a-zA-ZÀ-ÿ\s]+$/, {
+    message: 'El nombre del acompañante solo debe contener letras y espacios',
+  })
+  @Transform(({ value }) => value?.trim())
+  fullName: string;
+
+  @IsOptional()
+  @IsString({ message: 'El DNI del acompañante es una cadena de texto' })
+  @MaxLength(20, { message: 'El DNI del acompañante no puede tener más de 20 caracteres' })
+  dni?: string;
+
+  @IsOptional()
+  @IsString({ message: 'El parentesco del acompañante es una cadena de texto' })
+  @MaxLength(50, { message: 'El parentesco no puede tener más de 50 caracteres' })
+  @Matches(/^[a-zA-ZÀ-ÿ\s]+$/, {
+    message: 'El parentesco solo debe contener letras y espacios',
+  })
+  @Transform(({ value }) => value?.trim())
+  relationship?: string;
+}
 
 export class CreateUpdateLeadDto {
   @IsString()
@@ -62,29 +87,23 @@ export class CreateUpdateLeadDto {
   })
   interestProjects?: string[];
 
-  // Campos del acompañante - Verdaderamente opcionales
-  @ValidateIf((obj) => obj.companionFullName !== undefined && obj.companionFullName !== null && obj.companionFullName !== '')
-  @IsString({ message: 'El nombre del acompañante es una cadena de texto' })
-  @MaxLength(200, { message: 'El nombre del acompañante no puede tener más de 200 caracteres' })
-  @Matches(/^[a-zA-ZÀ-ÿ\s]+$/, {
-    message: 'El nombre del acompañante solo debe contener letras y espacios',
+  // Acompañantes - array de objetos, verdaderamente opcional
+  @IsOptional()
+  @IsArray({ message: 'Los acompañantes deben ser un array' })
+  @ValidateNested({ each: true, message: 'Cada acompañante debe ser un objeto válido' })
+  @Type(() => CompanionDto)
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : undefined;
+      } catch {
+        return undefined;
+      }
+    }
+    return Array.isArray(value) ? value : undefined;
   })
-  @Transform(({ value }) => value?.trim())
-  @IsOptional()
-  companionFullName?: string;
-
-  @ValidateIf((obj) => obj.companionDni !== undefined && obj.companionDni !== null && obj.companionDni !== '')
-  @IsString({ message: 'El DNI del acompañante es una cadena de texto' })
-  @MaxLength(20, { message: 'El DNI del acompañante no puede tener más de 20 caracteres' })
-  @IsOptional()
-  companionDni?: string;
-
-  @ValidateIf((obj) => obj.companionRelationship !== undefined && obj.companionRelationship !== null && obj.companionRelationship !== '')
-  @IsString({ message: 'La relación del acompañante es una cadena de texto' })
-  @MaxLength(50, { message: 'El parentesco no puede tener más de 50 caracteres' })
-  @Transform(({ value }) => value?.trim())
-  @IsOptional()
-  companionRelationship?: string;
+  companions?: CompanionDto[];
 
   // Metadata - Verdaderamente opcional
   @ValidateIf((obj) => obj.metadata !== undefined && obj.metadata !== null)

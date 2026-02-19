@@ -46,6 +46,7 @@ export interface SaleResponse {
     initialAmountPaid?: number;
     initialAmountPending?: number;
     interestRate: number;
+    interestRateSections?: Array<{ startInstallment: number; endInstallment: number; interestRate: number }>;
     quantityCoutes: number;
     // AGREGAR ESTO:
     financingInstallments: {

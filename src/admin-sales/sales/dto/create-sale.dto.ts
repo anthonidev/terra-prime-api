@@ -5,6 +5,7 @@ import { MethodPayment } from "src/admin-payments/payments/enums/method-payment.
 import { CreateDetailPaymentDto } from "src/admin-payments/payments/dto/create-detail-payment.dto";
 import { CreateFinancingInstallmentsDto } from "src/admin-sales/financing/dto/create-financing-installments.dto";
 import { CombinedInstallmentDto } from "src/admin-sales/financing/dto/combined-installment.dto";
+import { InterestRateSectionDto } from "src/admin-sales/financing/dto/interest-rate-section.dto";
 
 export class CreateSaleDto {
 	@IsUUID('4', { message: 'El identificador del lote tiene que ser un UUID válido' })
@@ -77,7 +78,10 @@ export class CreateSaleDto {
   initialAmount?: number;
 
 	@IsOptional()
-  interestRate?: number;
+  @IsArray({ message: 'Las secciones de interés deben ser un array' })
+  @ValidateNested({ each: true })
+  @Type(() => InterestRateSectionDto)
+  interestRateSections?: InterestRateSectionDto[];
 
 	@IsOptional()
   quantitySaleCoutes?: number;
