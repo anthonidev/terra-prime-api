@@ -53,7 +53,10 @@ export const formatVendor = (vendor: User | null | undefined) => {
 
 export const formatVisit = (visit: LeadVisit) => {
   const { liner, ...visitData } = visit;
-  return visitData;
+  return {
+    ...visitData,
+    companions: visit.companions ?? null,
+  };
 };
 
 // Helper para formatear array de visitas

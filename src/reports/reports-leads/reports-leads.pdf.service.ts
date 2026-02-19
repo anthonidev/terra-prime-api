@@ -90,7 +90,7 @@ export class ReportsLeadsPdfService {
       .fill();
 
     let y = this.addHeader(doc);
-    y = this.addPersonalDataSection(doc, lead, y);
+    y = this.addPersonalDataSection(doc, lead, leadVisit, y);
     y = this.addProjectSection(doc, lead, y);
     y = this.addFinancialSection(doc, lead, y);
     y = this.addSourceSection(doc, lead, y);
@@ -209,9 +209,10 @@ export class ReportsLeadsPdfService {
   private addPersonalDataSection(
     doc: PDFKit.PDFDocument,
     lead: Lead,
+    leadVisit: LeadVisit,
     startY: number,
   ): number {
-    const companions = lead.companions ?? [];
+    const companions = leadVisit?.companions ?? [];
     const rows = 4 + companions.length;
     const cardH = this.CARD_PAD + 20 + rows * this.ROW_H + this.CARD_PAD;
 

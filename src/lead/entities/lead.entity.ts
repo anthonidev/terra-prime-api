@@ -75,11 +75,5 @@ export class Lead {
     type: 'json',
     nullable: true,
   })
-  companions?: { fullName: string; dni?: string; relationship?: string }[];
-
-  @Column({
-    type: 'json',
-    nullable: true,
-  })
   metadata?: Record<string, any>;
 }

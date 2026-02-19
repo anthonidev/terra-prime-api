@@ -103,19 +103,20 @@ export class LeadService {
     delete createUpdateDto.isNewLead;
 
     if (lead) {
-      const { 
-        firstName, 
-        lastName, 
-        document, 
-        documentType, 
-        sourceId, 
-        ubigeoId, 
-        ...updateFields 
+      const {
+        firstName,
+        lastName,
+        document,
+        documentType,
+        sourceId,
+        ubigeoId,
+        companions: _companions, // se guarda en la visita, no en el lead
+        ...updateFields
       } = createUpdateDto;
-      
-      const updateData: Partial<Lead> = { 
-        ...updateFields, 
-        isInOffice: true 
+
+      const updateData: Partial<Lead> = {
+        ...updateFields,
+        isInOffice: true
       };
       
       if (sourceId) {
@@ -168,6 +169,7 @@ export class LeadService {
     const visit = this.leadVisitRepository.create({
       lead,
       arrivalTime: new Date(),
+      companions: createUpdateDto.companions ?? null,
     });
     await this.leadVisitRepository.save(visit);
     
@@ -185,7 +187,7 @@ export class LeadService {
     if (!lead)
       throw new NotFoundException(`Lead con ID ${id} no encontrado`);
     
-    const { sourceId, ubigeoId, isNewLead, ...updateFields } = updateDto;
+    const { sourceId, ubigeoId, isNewLead, companions: _companions, ...updateFields } = updateDto;
     const updateData: Partial<Lead> = { ...updateFields };
     
     if (updateDto.sourceId) {

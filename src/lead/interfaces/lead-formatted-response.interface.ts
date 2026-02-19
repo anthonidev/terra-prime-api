@@ -34,6 +34,7 @@ interface FormattedVisit {
   arrivalTime: Date;
   departureTime: Date | null;
   observations: string | null;
+  companions?: { fullName: string; dni?: string; relationship?: string }[] | null;
 }
 
 // Interface para formatLeadWithParticipants
@@ -50,7 +51,6 @@ export interface LeadWithParticipantsResponse {
   isActive: boolean;
   isInOffice: boolean;
   interestProjects?: string[];
-  companions?: FormattedCompanion[];
   metadata?: Record<string, any>;
   reportPdfUrl?: string | null;
   visits: FormattedVisit[];

@@ -60,6 +60,11 @@ export class LeadVisit {
   @UpdateDateColumn({ select: false })
   updatedAt: Date;
 
+  // ========== ACOMPAÑANTES ==========
+
+  @Column({ type: 'json', nullable: true })
+  companions?: { fullName: string; dni?: string; relationship?: string }[];
+
   // ========== REPORTE PDF ==========
 
   @Column({

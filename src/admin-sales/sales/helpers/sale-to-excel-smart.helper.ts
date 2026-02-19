@@ -393,7 +393,7 @@ function createClientSheet(workbook: ExcelJS.Workbook, sale: Sale): void {
   }
 
   // ============ ACOMPAÑANTES ============
-  const companions = lead?.companions ?? [];
+  const companions = sale.leadVisit?.companions ?? [];
   if (companions.length > 0) {
     rowNum++;
     sheet.mergeCells(`A${rowNum}:D${rowNum}`);
