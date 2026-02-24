@@ -168,10 +168,11 @@ export class SalesService {
             });
           }
 
-          // Agregar cuota de HU si existe
+          // Agregar cuota de HU si existe y es mayor a 0
           if (
             combined.huInstallmentAmount !== null &&
-            combined.huInstallmentAmount !== undefined
+            combined.huInstallmentAmount !== undefined &&
+            combined.huInstallmentAmount > 0
           ) {
             huInstallments.push({
               couteAmount: combined.huInstallmentAmount,
@@ -1851,6 +1852,12 @@ export class SalesService {
     );
     console.log('Suma de cuotas enviadas:', sumOfInstallmentAmounts);
 
+    // Detectar si las cuotas enviadas usan decimales o enteros
+    const allInteger = financingInstallments.every(
+      (inst) => Number.isInteger(inst.couteAmount),
+    );
+    const includeDecimals = !allInteger;
+
     const calculatedAmortization =
       this.financingService.generateAmortizationTable(
         totalAmount,
@@ -1859,7 +1866,7 @@ export class SalesService {
         interestRateSections,
         undefined,
         financingInstallments[0]?.expectedPaymentDate.toString(),
-        true,
+        includeDecimals,
       );
 
     const expectedTotalAmortizedAmount = calculatedAmortization.reduce(
@@ -1901,6 +1908,12 @@ export class SalesService {
       const huSections: InterestRateSectionDto[] = [
         { startInstallment: 1, endInstallment: quantityHuCoutes, interestRate: 0 },
       ];
+      // Detectar si las cuotas de HU enviadas usan decimales o enteros
+      const allIntegerHu = financingInstallmentsHu.every(
+        (inst) => Number.isInteger(inst.couteAmount),
+      );
+      const includeDecimalsHu = !allIntegerHu;
+
       const calculatedHuAmortization =
         this.financingService.generateAmortizationTable(
           totalAmountHu,
@@ -1910,7 +1923,7 @@ export class SalesService {
           undefined,
           firstPaymentDateHu ||
             financingInstallmentsHu[0]?.expectedPaymentDate.toString(),
-          true,
+          includeDecimalsHu,
         );
 
       const expectedTotalHuAmount = calculatedHuAmortization.reduce(
@@ -2089,10 +2102,11 @@ export class SalesService {
             });
           }
 
-          // Agregar cuota de HU si existe
+          // Agregar cuota de HU si existe y es mayor a 0
           if (
             combined.huInstallmentAmount !== null &&
-            combined.huInstallmentAmount !== undefined
+            combined.huInstallmentAmount !== undefined &&
+            combined.huInstallmentAmount > 0
           ) {
             huInstallments.push({
               couteAmount: combined.huInstallmentAmount,

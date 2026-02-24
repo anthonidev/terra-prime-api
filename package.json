@@ -28,7 +28,8 @@
     "resolve:all": "ts-node scripts/resolve-all.ts",
     "payments-meta:fix": "ts-node scripts/fix-payments-metadata.ts",
     "fix:initial": "ts-node scripts/fix-initial-amount.ts",
-    "find:data": "ts-node scripts/find-missing-clients.ts"
+    "find:data": "ts-node scripts/find-missing-clients.ts",
+    "find:parking": "ts-node scripts/find-parking-sales.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.815.0",
