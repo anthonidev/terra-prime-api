@@ -45,16 +45,23 @@ async function main() {
 
   for (const row of dataRows) {
     const document = String(row[0] ?? '').trim();
-    const thirdCol = String(row[2] ?? '').trim().toUpperCase();
+    const thirdCol = String(row[2] ?? '')
+      .trim()
+      .toUpperCase();
 
     if (!document) continue;
 
     if (thirdCol.startsWith('COCHERA')) {
-      parkingClients.push({ document, description: String(row[2] ?? '').trim() });
+      parkingClients.push({
+        document,
+        description: String(row[2] ?? '').trim(),
+      });
     }
   }
 
-  console.log(`Clientes con cochera encontrados en Excel: ${parkingClients.length}\n`);
+  console.log(
+    `Clientes con cochera encontrados en Excel: ${parkingClients.length}\n`,
+  );
 
   if (parkingClients.length === 0) {
     console.log('No se encontraron clientes con cochera en el archivo.');
@@ -66,7 +73,8 @@ async function main() {
   console.log('Conexión a base de datos establecida.\n');
 
   // 4. Buscar ventas de cada cliente por número de documento
-  const results: { document: string; description: string; saleId: string }[] = [];
+  const results: { document: string; description: string; saleId: string }[] =
+    [];
   const notFound: { document: string; description: string }[] = [];
 
   for (const client of parkingClients) {
