@@ -9,17 +9,14 @@ import { CreateSaleDto } from "src/admin-sales/sales/dto/create-sale.dto";
 import { PaginationDto } from "src/common/dto/paginationDto";
 import { ExternalApiResponseInterceptor } from "./interceptors/external-api-response.interceptor";
 import { FilesInterceptor } from "@nestjs/platform-express";
-import { Roles } from "src/auth/decorators/roles.decorator";
 import { CreatePaymentSaleDto } from "src/admin-sales/sales/dto/create-payment-sale.dto";
-import { User } from "src/user/entities/user.entity";
-import { GetUser } from "src/auth/decorators/get-user.decorator";
-import { PaidInstallmentsDto } from "src/admin-collections/collections/dto/paid-installments.dto";
+import { envs } from "src/config/envs";
 
 @Controller('external')
-@UseGuards(ApiKeyGuard) 
+@UseGuards(ApiKeyGuard)
 @UseInterceptors(ExternalApiResponseInterceptor)
 export class ExternalApiController {
-  private readonly EXTERNAL_USER_ID = '3f9f5e47-bfe5-4e85-b9b2-f4cd20e5e3a4';
+  private readonly EXTERNAL_USER_ID = envs.externalUserId;
   constructor(private readonly externalApiService: ExternalApiService) {}
 
   @Get('projects')
@@ -90,7 +87,6 @@ export class ExternalApiController {
   }
 
   @Post('payments/sale/:id')
-  @Roles('JVE', 'VEN')
   @UseInterceptors(FilesInterceptor('files'))
   @UsePipes(new ValidationPipe({ transform: true }))
   async createPaymentSale(
@@ -114,37 +110,6 @@ export class ExternalApiController {
     return this.externalApiService.createPaymentSale(
       id,
       createPaymentSaleDto,
-      files,
-      this.EXTERNAL_USER_ID,
-    );
-  }
-
-  @Post('financing/installments/paid/:financingId')
-  @Roles('COB', 'SCO')
-  @UseInterceptors(FilesInterceptor('files'))
-  @UsePipes(new ValidationPipe({ transform: true }))
-  paidInstallments(
-    @Param('financingId') financingId: string,
-    @Body() paidInstallmentsDto: PaidInstallmentsDto,
-      @UploadedFiles(
-        new ParseFilePipeBuilder()
-          .addFileTypeValidator({
-            fileType: /(jpg|jpeg|png|webp)$/,
-          })
-          .addMaxSizeValidator({
-            maxSize: 1024 * 1024 * 2,
-          })
-          .build({
-            errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
-            fileIsRequired: false,
-          }),
-      )
-      files: Array<Express.Multer.File>,
-  ) {
-    return this.externalApiService.paidInstallments(
-      financingId,
-      paidInstallmentsDto.amountPaid,
-      paidInstallmentsDto.payments,
       files,
       this.EXTERNAL_USER_ID,
     );

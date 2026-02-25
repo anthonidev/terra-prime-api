@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { CreateDetailPaymentDto } from 'src/admin-payments/payments/dto/create-detail-payment.dto';
 import { PaymentResponse } from 'src/admin-payments/payments/interfaces/payment-response.interface';
 import { CreateClientDto } from 'src/admin-sales/clients/dto/create-client.dto';
-import { FinancingInstallmentsService } from 'src/admin-sales/financing/services/financing-installments.service';
 import { CombinedAmortizationResponse } from 'src/admin-sales/financing/interfaces/combined-amortization-response.interface';
 import { CreateGuarantorDto } from 'src/admin-sales/guarantors/dto/create-guarantor.dto';
 import { CreatePaymentSaleDto } from 'src/admin-sales/sales/dto/create-payment-sale.dto';
@@ -15,7 +13,6 @@ import { CreateSecondaryClientDto } from 'src/admin-sales/secondary-client/dto/c
 import { PaginationDto } from 'src/common/dto/paginationDto';
 import { Paginated } from 'src/common/interfaces/paginated.interface';
 import { CreateUpdateLeadDto } from 'src/lead/dto/create-update-lead.dto';
-import { Lead } from 'src/lead/entities/lead.entity';
 import { LeadWithParticipantsResponse } from 'src/lead/interfaces/lead-formatted-response.interface';
 import { LeadService } from 'src/lead/services/lead.service';
 import { LotDetailResponseDto } from 'src/project/dto/lot.dto';
@@ -39,7 +36,6 @@ export class ExternalApiService {
     private readonly lotService: LotService,
     private readonly salesService: SalesService,
     private readonly leadService: LeadService,
-    private readonly financingInstallmentsService: FinancingInstallmentsService,
   ) {}
 
   async getProjects(): Promise<ProjectListResponseDto> {
@@ -64,7 +60,7 @@ export class ExternalApiService {
   ): Promise<Paginated<LotDetailResponseDto>> {
     return await this.lotService.findLotsByProjectId(projectId, findAllLotsDto);
   }
-  
+
   calculeAmortization(
     calculateAmortizationDto: CalculateAmortizationDto,
   ): CombinedAmortizationResponse {
@@ -118,15 +114,5 @@ export class ExternalApiService {
       files,
       userId,
     );
-  }
-
-  async paidInstallments(
-    financingId: string,
-    amountPaid: number,
-    paymentDetails: CreateDetailPaymentDto[],
-    files: Express.Multer.File[],
-    userId: string,
-  ): Promise<PaymentResponse> {
-    return await this.financingInstallmentsService.payInstallments(financingId, amountPaid, paymentDetails, files, userId);
   }
 }

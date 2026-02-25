@@ -30,6 +30,8 @@ interface Envvars {
 
   NUBEFACT_BASE_URL: string;
   NUBEFACT_TOKEN: string;
+
+  EXTERNAL_USER_ID: string;
 }
 const envVarsSchema = joi
   .object({
@@ -59,6 +61,8 @@ const envVarsSchema = joi
 
     NUBEFACT_BASE_URL: joi.string().uri().optional(),
     NUBEFACT_TOKEN: joi.string().optional(),
+
+    EXTERNAL_USER_ID: joi.string().uuid().required(),
   })
   .unknown(true);
 const { error, value } = envVarsSchema.validate(
@@ -98,4 +102,6 @@ export const envs = {
 
   nubefactBaseUrl: envVars.NUBEFACT_BASE_URL,
   nubefactToken: envVars.NUBEFACT_TOKEN,
+
+  externalUserId: envVars.EXTERNAL_USER_ID,
 };

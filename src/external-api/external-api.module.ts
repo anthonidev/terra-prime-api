@@ -5,7 +5,6 @@ import { ApiKeyGuard } from './guards/api-key.guard';
 import { ProjectModule } from 'src/project/project.module';
 import { SalesModule } from 'src/admin-sales/sales/sales.module';
 import { LeadModule } from 'src/lead/lead.module';
-import { FinancingModule } from 'src/admin-sales/financing/financing.module';
 import { NexusApiService } from './nexus-api.service';
 import { CommonModule } from 'src/common/common.module';
 
@@ -14,7 +13,6 @@ import { CommonModule } from 'src/common/common.module';
     ProjectModule,
     forwardRef(() => SalesModule),
     LeadModule,
-    forwardRef(() => FinancingModule),
     CommonModule,
   ],
   controllers: [ExternalApiController],
