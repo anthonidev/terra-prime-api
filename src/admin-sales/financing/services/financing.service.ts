@@ -11,7 +11,13 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Financing } from '../entities/financing.entity';
 import { QueryRunner, Repository } from 'typeorm';
 import { CreateFinancingInstallmentsDto } from '../dto/create-financing-installments.dto';
-import { CombinedAmortizationResponse, CombinedInstallment } from '../interfaces/combined-amortization-response.interface';
+import {
+  CombinedAmortizationResponseDto,
+  CombinedInstallmentResponseDto,
+  ParkingCombinedInstallmentDto,
+  ParkingAmortizationMetaDto,
+} from '../dto/combined-amortization-response.dto';
+import { ParkingAmortizationInputDto } from '../dto/parking-amortization-input.dto';
 import { PaymentsService } from 'src/admin-payments/payments/services/payments.service';
 import { TransactionService } from 'src/common/services/transaction.service';
 import { CreateDetailPaymentDto } from 'src/admin-payments/payments/dto/create-detail-payment.dto';
@@ -202,7 +208,8 @@ export class FinancingService {
     totalAmountHu?: number,
     numberOfPaymentsHu?: number,
     firstPaymentDateHu?: string | Date,
-  ): CombinedAmortizationResponse {
+    parkings?: ParkingAmortizationInputDto[],
+  ): CombinedAmortizationResponseDto {
     // 1. Generar cuotas del lote
     const lotInstallments = this.generateAmortizationTable(
       totalAmount,
@@ -232,29 +239,58 @@ export class FinancingService {
       );
     }
 
-    // 3. Combinar ambos arrays sincronizando por fecha
-    const combinedInstallments: CombinedInstallment[] = [];
+    // 3. Generar cuotas de cada parking
+    const parkingInstallmentArrays: CreateFinancingInstallmentsDto[][] = [];
+    if (parkings && parkings.length > 0) {
+      for (const parking of parkings) {
+        const parkingTable = this.generateAmortizationTable(
+          parking.totalAmount,
+          parking.initialAmount,
+          0,
+          parking.interestRateSections,
+          undefined,
+          parking.firstPaymentDate,
+          includeDecimals,
+        );
+        parkingInstallmentArrays.push(parkingTable);
+      }
+    }
 
-    // Crear un mapa para acceder rápidamente a las cuotas de HU por fecha
+    // 4. Construir mapas por fecha para lote y HU
     const huMap = new Map<string, { amount: number; number: number }>();
     huInstallments.forEach((hu, index) => {
       huMap.set(hu.expectedPaymentDate, { amount: hu.couteAmount, number: index + 1 });
     });
 
-    // Crear un mapa para las cuotas de lote
     const lotMap = new Map<string, { amount: number; number: number }>();
     lotInstallments.forEach((lot, index) => {
       lotMap.set(lot.expectedPaymentDate, { amount: lot.couteAmount, number: index + 1 });
     });
 
-    // Obtener todas las fechas únicas ordenadas
-    const allDates = new Set<string>([
-      ...lotInstallments.map(i => i.expectedPaymentDate),
-      ...huInstallments.map(i => i.expectedPaymentDate),
-    ]);
-    const sortedDates = Array.from(allDates).sort();
+    // Construir mapas por fecha para cada parking
+    const parkingMaps: Map<string, { amount: number; number: number }>[] =
+      parkingInstallmentArrays.map((parkingArr) => {
+        const map = new Map<string, { amount: number; number: number }>();
+        parkingArr.forEach((inst, index) => {
+          map.set(inst.expectedPaymentDate, { amount: inst.couteAmount, number: index + 1 });
+        });
+        return map;
+      });
 
-    // Para cada fecha, crear el installment combinado
+    // 5. Obtener todas las fechas únicas ordenadas
+    const allDatesSet = new Set<string>([
+      ...lotInstallments.map((i) => i.expectedPaymentDate),
+      ...huInstallments.map((i) => i.expectedPaymentDate),
+    ]);
+    for (const parkingArr of parkingInstallmentArrays) {
+      for (const inst of parkingArr) {
+        allDatesSet.add(inst.expectedPaymentDate);
+      }
+    }
+    const sortedDates = Array.from(allDatesSet).sort();
+
+    // 6. Combinar por fecha
+    const combinedInstallments: CombinedInstallmentResponseDto[] = [];
     for (const date of sortedDates) {
       const lotData = lotMap.get(date);
       const huData = huMap.get(date);
@@ -264,29 +300,66 @@ export class FinancingService {
       const huInstallmentAmount = huData ? huData.amount : null;
       const huInstallmentNumber = huData ? huData.number : null;
 
-      const totalInstallmentAmount = (lotInstallmentAmount || 0) + (huInstallmentAmount || 0);
+      const parkingInstallmentsRow: ParkingCombinedInstallmentDto[] = parkingMaps.map(
+        (pMap, idx) => {
+          const pData = pMap.get(date);
+          return {
+            parkingIndex: idx,
+            amount: pData ? pData.amount : null,
+            installmentNumber: pData ? pData.number : null,
+          };
+        },
+      );
+
+      const totalParkingInstallmentAmount = parkingInstallmentsRow.reduce(
+        (sum, p) => sum + (p.amount || 0),
+        0,
+      );
+
+      const totalInstallmentAmount =
+        (lotInstallmentAmount || 0) +
+        (huInstallmentAmount || 0) +
+        totalParkingInstallmentAmount;
 
       combinedInstallments.push({
         lotInstallmentAmount,
         lotInstallmentNumber,
         huInstallmentAmount,
         huInstallmentNumber,
+        parkingInstallments: parkingInstallmentsRow,
+        totalParkingInstallmentAmount: parseFloat(totalParkingInstallmentAmount.toFixed(2)),
         expectedPaymentDate: date,
         totalInstallmentAmount: parseFloat(totalInstallmentAmount.toFixed(2)),
       });
     }
 
-    // 4. Calcular metadata
+    // 7. Calcular metadata
     const lotTotalAmount = lotInstallments.reduce((sum, inst) => sum + inst.couteAmount, 0);
     const huTotalAmount = huInstallments.reduce((sum, inst) => sum + inst.couteAmount, 0);
+
+    const parkingsMeta: ParkingAmortizationMetaDto[] = parkingInstallmentArrays.map(
+      (parkingArr, idx) => ({
+        parkingIndex: idx,
+        installmentsCount: parkingArr.length,
+        totalAmount: parseFloat(
+          parkingArr.reduce((sum, inst) => sum + inst.couteAmount, 0).toFixed(2),
+        ),
+      }),
+    );
+
+    const parkingsTotalAmount = parseFloat(
+      parkingsMeta.reduce((sum, p) => sum + p.totalAmount, 0).toFixed(2),
+    );
 
     const meta = {
       lotInstallmentsCount: lotInstallments.length,
       lotTotalAmount: parseFloat(lotTotalAmount.toFixed(2)),
       huInstallmentsCount: huInstallments.length,
       huTotalAmount: parseFloat(huTotalAmount.toFixed(2)),
+      parkings: parkingsMeta,
+      parkingsTotalAmount,
       totalInstallmentsCount: combinedInstallments.length,
-      totalAmount: parseFloat((lotTotalAmount + huTotalAmount).toFixed(2)),
+      totalAmount: parseFloat((lotTotalAmount + huTotalAmount + parkingsTotalAmount).toFixed(2)),
     };
 
     return {

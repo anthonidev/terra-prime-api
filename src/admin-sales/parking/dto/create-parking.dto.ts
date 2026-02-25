@@ -19,10 +19,6 @@ export class CreateParkingDto {
   projectId: string;
 
   @IsOptional()
-  @IsEnum(CurrencyType)
-  currency?: CurrencyType;
-
-  @IsOptional()
   @IsEnum(LotStatus)
   status?: LotStatus;
 }
@@ -33,7 +29,6 @@ export class CreateParkingResponseDto {
   area: number;
   price: number;
   status: string;
-  currency: string;
   projectId: string;
   projectName: string;
   createdAt: Date;

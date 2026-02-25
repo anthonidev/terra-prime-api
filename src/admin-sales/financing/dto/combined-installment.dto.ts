@@ -1,4 +1,18 @@
-import { IsDateString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
+import { IsArray, IsDateString, IsInt, IsNotEmpty, IsNumber, IsOptional, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class ParkingInstallmentDto {
+  @IsInt()
+  parkingIndex: number;
+
+  @IsOptional()
+  @IsNumber()
+  amount?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  installmentNumber?: number | null;
+}
 
 export class CombinedInstallmentDto {
   @IsOptional()
@@ -24,4 +38,14 @@ export class CombinedInstallmentDto {
   @IsOptional()
   @IsNumber({}, { message: 'El monto total de la cuota debe ser un número' })
   totalInstallmentAmount?: number;
+
+  @IsOptional()
+  @IsNumber()
+  totalParkingInstallmentAmount?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ParkingInstallmentDto)
+  parkingInstallments?: ParkingInstallmentDto[];
 }

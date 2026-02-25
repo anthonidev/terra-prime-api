@@ -92,7 +92,11 @@ import { FinancingInstallmentsService } from '../financing/services/financing-in
 import { LeadWithParticipantsResponse } from 'src/lead/interfaces/lead-formatted-response.interface';
 import { Lead } from 'src/lead/entities/lead.entity';
 import { AdminTokenService } from 'src/project/services/admin-token.service';
-import { CombinedAmortizationResponse } from '../financing/interfaces/combined-amortization-response.interface';
+import { CombinedAmortizationResponseDto } from '../financing/dto/combined-amortization-response.dto';
+import { SaleParkingService } from '../sale-parking/sale-parking.service';
+import { ParkingService } from '../parking/parking.service';
+import { CreateSaleParkingDto } from './dto/create-sale-parking.dto';
+import { CreateFinancingDto } from '../financing/dto/create-financing.dto';
 import * as XLSX from 'xlsx';
 import { transformSaleToExcelRows } from './helpers/sale-to-excel.helper';
 import { createSmartExcelWorkbook } from './helpers/sale-to-excel-smart.helper';
@@ -141,6 +145,9 @@ export class SalesService {
     private readonly participantsService: ParticipantsService,
     private readonly adminTokenService: AdminTokenService,
     private readonly awsS3Service: AwsS3Service,
+    @Inject(forwardRef(() => SaleParkingService))
+    private readonly saleParkingService: SaleParkingService,
+    private readonly parkingService: ParkingService,
   ) {}
 
   async create(
@@ -210,6 +217,46 @@ export class SalesService {
         } else {
           createSaleDto.financingInstallmentsHu =
             huInstallments.length > 0 ? huInstallments : undefined;
+        }
+
+        // Extraer cuotas de parkings del combinado
+        if (createSaleDto.parkings && createSaleDto.parkings.length > 0) {
+          const parkingInstallmentArrays: CreateFinancingInstallmentsDto[][] =
+            createSaleDto.parkings.map(() => []);
+
+          for (const combined of createSaleDto.combinedInstallments) {
+            if (!combined.parkingInstallments) continue;
+            for (const pi of combined.parkingInstallments) {
+              if (pi.amount !== null && pi.amount !== undefined) {
+                parkingInstallmentArrays[pi.parkingIndex].push({
+                  couteAmount: pi.amount,
+                  expectedPaymentDate: combined.expectedPaymentDate,
+                });
+              }
+            }
+          }
+
+          // Si las cuotas extraídas son insuficientes, regenerar desde parámetros del parking
+          createSaleDto.financingInstallmentsParking = createSaleDto.parkings.map(
+            (parkingDto, idx) => {
+              const extracted = parkingInstallmentArrays[idx];
+              if (extracted.length < parkingDto.quantityCuotes) {
+                const sections: InterestRateSectionDto[] =
+                  parkingDto.interestRateSections ||
+                  [{ startInstallment: 1, endInstallment: parkingDto.quantityCuotes, interestRate: 0 }];
+                return this.financingService.generateAmortizationTable(
+                  parkingDto.totalAmount,
+                  parkingDto.initialAmount || 0,
+                  0,
+                  sections,
+                  undefined,
+                  parkingDto.firstPaymentDate,
+                  true,
+                );
+              }
+              return extracted;
+            },
+          );
         }
       }
 
@@ -399,6 +446,41 @@ export class SalesService {
           createSaleDto,
           queryRunner,
         );
+
+        // Manejar parkings si corresponde
+        if (createSaleDto.parkings && createSaleDto.parkings.length > 0) {
+          for (let i = 0; i < createSaleDto.parkings.length; i++) {
+            const parkingDto = createSaleDto.parkings[i];
+            this.isValidParkingDataSale(parkingDto);
+            const financingDataParking = this.calculateAndCreateFinancingParking(
+              parkingDto,
+              createSaleDto.financingInstallmentsParking?.[i] || [],
+            );
+            const financingParking = await this.financingService.create(
+              financingDataParking,
+              queryRunner,
+              0,
+            );
+            await this.saleParkingService.create(
+              {
+                saleId: savedSale.id,
+                financingId: financingParking.id,
+                parkingId: parkingDto.parkingId,
+                amount: parkingDto.totalAmount,
+                initialAmount: parkingDto.initialAmount || 0,
+              },
+              queryRunner,
+            );
+            const parkingStatus = savedSale.fromReservation
+              ? LotStatus.RESERVED
+              : LotStatus.SOLD;
+            await this.parkingService.updateStatus(
+              parkingDto.parkingId,
+              parkingStatus,
+              queryRunner,
+            );
+          }
+        }
 
         return savedSale;
       },
@@ -1047,8 +1129,11 @@ export class SalesService {
         `La venta con ID ${id} no se encuentra registrada`,
       );
 
-    // Obtener resumen de pagos
-    const paymentsSummary = await this.getPaymentsSummaryForSale(id);
+    // Obtener resumen de pagos y parkings en paralelo
+    const [paymentsSummary, saleParkings] = await Promise.all([
+      this.getPaymentsSummaryForSale(id),
+      this.saleParkingService.findBySaleId(id),
+    ]);
 
     // Helper para construir FinancingDetail
     const buildFinancingDetail = (
@@ -1177,6 +1262,7 @@ export class SalesService {
               : undefined,
           }
         : undefined,
+      saleParking: saleParkings.length > 0 ? saleParkings : undefined,
       guarantor: formattedSale.guarantor,
       liner: formattedSale.liner,
       telemarketingSupervisor: formattedSale.telemarketingSupervisor,
@@ -1691,8 +1777,8 @@ export class SalesService {
 
   calculateAmortization(
     calculateAmortizationDto: CalculateAmortizationDto,
-  ): CombinedAmortizationResponse {
-    // Usar el nuevo método combinado que incluye lote + HU
+  ): CombinedAmortizationResponseDto {
+    // Usar el nuevo método combinado que incluye lote + HU + parkings
     return this.financingService.generateCombinedAmortizationTable(
       calculateAmortizationDto.totalAmount,
       calculateAmortizationDto.initialAmount,
@@ -1704,6 +1790,7 @@ export class SalesService {
       calculateAmortizationDto.totalAmountHu,
       calculateAmortizationDto.numberOfPaymentsHu,
       calculateAmortizationDto.firstPaymentDateHu,
+      calculateAmortizationDto.parkings,
     );
   }
 
@@ -1754,6 +1841,53 @@ export class SalesService {
       throw new BadRequestException(
         'El número de cuotas de la habilitación urbana es requerida',
       );
+  }
+
+  private isValidParkingDataSale(parkingDto: CreateSaleParkingDto): void {
+    if (!parkingDto.parkingId)
+      throw new BadRequestException('El ID de la cochera es requerido');
+    if (!parkingDto.totalAmount || parkingDto.totalAmount <= 0)
+      throw new BadRequestException(
+        'El monto total de la cochera debe ser mayor a cero',
+      );
+    if (!parkingDto.quantityCuotes || parkingDto.quantityCuotes < 1)
+      throw new BadRequestException(
+        'El número de cuotas de la cochera debe ser al menos 1',
+      );
+    if (!parkingDto.firstPaymentDate)
+      throw new BadRequestException(
+        'La fecha de primer pago de la cochera es requerida',
+      );
+  }
+
+  private calculateAndCreateFinancingParking(
+    parkingDto: CreateSaleParkingDto,
+    installments: CreateFinancingInstallmentsDto[],
+  ): CreateFinancingDto {
+    const sections: InterestRateSectionDto[] =
+      parkingDto.interestRateSections ||
+      [{ startInstallment: 1, endInstallment: parkingDto.quantityCuotes, interestRate: 0 }];
+
+    const resolvedInstallments =
+      installments.length > 0
+        ? installments
+        : this.financingService.generateAmortizationTable(
+            parkingDto.totalAmount,
+            parkingDto.initialAmount || 0,
+            0,
+            sections,
+            undefined,
+            parkingDto.firstPaymentDate,
+            true,
+          );
+
+    return {
+      financingType: FinancingType.CREDITO,
+      initialAmount: parkingDto.initialAmount || 0,
+      interestRateSections: sections,
+      quantityCoutes: parkingDto.quantityCuotes,
+      financingInstallments: resolvedInstallments,
+    };
   }
 
   private async validateReservationData(

@@ -21,10 +21,6 @@ export class UpdateParkingDto {
   price?: number;
 
   @IsOptional()
-  @IsEnum(CurrencyType)
-  currency?: CurrencyType;
-
-  @IsOptional()
   @IsEnum(LotStatus)
   status?: LotStatus;
 }

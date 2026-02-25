@@ -18,6 +18,8 @@ import { ParticipantsModule } from '../participants/participants.module';
 import { Payment } from 'src/admin-payments/payments/entities/payment.entity';
 import { FinancingAmendmentHistory } from '../financing/entities/financing-amendment-history.entity';
 import { FilesModule } from 'src/files/files.module';
+import { SaleParkingModule } from '../sale-parking/sale-parking.module';
+import { ParkingModule } from '../parking/parking.module';
 
 @Module({
   imports: [
@@ -35,7 +37,8 @@ import { FilesModule } from 'src/files/files.module';
     PaymentsModule,
     SecondaryClientModule,
     ParticipantsModule,
-    
+    forwardRef(() => SaleParkingModule),
+    ParkingModule,
   ],
   controllers: [SalesController],
   providers: [SalesService],

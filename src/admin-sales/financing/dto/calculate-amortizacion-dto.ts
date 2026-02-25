@@ -2,6 +2,7 @@
 import { IsArray, IsBoolean, IsDateString, IsNotEmpty, IsNumber, IsOptional, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { InterestRateSectionDto } from './interest-rate-section.dto';
+import { ParkingAmortizationInputDto } from './parking-amortization-input.dto';
 
 export class CalculateAmortizationDto {
   @IsNotEmpty({ message: 'El monto total de financiación es requerido' })
@@ -47,4 +48,11 @@ export class CalculateAmortizationDto {
   @IsOptional()
   @IsDateString({}, { message: 'La fecha de pago inicial de HU debe ser válida' })
   firstPaymentDateHu?: string;
+
+  // Parkings - Opcionales (igual que HU)
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ParkingAmortizationInputDto)
+  parkings?: ParkingAmortizationInputDto[];
 }

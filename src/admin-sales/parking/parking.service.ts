@@ -29,7 +29,7 @@ export class ParkingService {
 
   async create(createParkingDto: CreateParkingDto): Promise<CreateParkingResponseDto> {
     try {
-      const { name, area, price, projectId, currency, status } = createParkingDto;
+      const { name, area, price, projectId, status } = createParkingDto;
 
       const project = await this.projectRepository.findOne({
         where: { id: projectId },
@@ -52,7 +52,6 @@ export class ParkingService {
         area,
         price,
         project: { id: projectId },
-        ...(currency && { currency }),
         ...(status && { status }),
       });
 
@@ -195,7 +194,6 @@ export class ParkingService {
       if (updateParkingDto.name !== undefined) parking.name = updateParkingDto.name;
       if (updateParkingDto.area !== undefined) parking.area = updateParkingDto.area;
       if (updateParkingDto.price !== undefined) parking.price = updateParkingDto.price;
-      if (updateParkingDto.currency !== undefined) parking.currency = updateParkingDto.currency;
       if (updateParkingDto.status !== undefined) parking.status = updateParkingDto.status;
 
       await this.parkingRepository.save(parking);

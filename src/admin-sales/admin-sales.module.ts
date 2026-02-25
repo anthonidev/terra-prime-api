@@ -12,6 +12,7 @@ import { ParticipantsModule } from './participants/participants.module';
 import { RadicationModule } from './radication/radication.module';
 import { SaleFilesModule } from './sale-files/sale-files.module';
 import { ParkingModule } from './parking/parking.module';
+import { SaleParkingModule } from './sale-parking/sale-parking.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ParkingModule } from './parking/parking.module';
     RadicationModule,
     SaleFilesModule,
     ParkingModule,
+    SaleParkingModule,
   ]
 })
 export class AdminSalesModule {}

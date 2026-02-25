@@ -6,6 +6,7 @@ import { CreateDetailPaymentDto } from "src/admin-payments/payments/dto/create-d
 import { CreateFinancingInstallmentsDto } from "src/admin-sales/financing/dto/create-financing-installments.dto";
 import { CombinedInstallmentDto } from "src/admin-sales/financing/dto/combined-installment.dto";
 import { InterestRateSectionDto } from "src/admin-sales/financing/dto/interest-rate-section.dto";
+import { CreateSaleParkingDto } from "./create-sale-parking.dto";
 
 export class CreateSaleDto {
 	@IsUUID('4', { message: 'El identificador del lote tiene que ser un UUID válido' })
@@ -124,6 +125,13 @@ export class CreateSaleDto {
 	// Campos internos generados por el backend (no enviados por el frontend)
 	financingInstallments?: CreateFinancingInstallmentsDto[];
 	financingInstallmentsHu?: CreateFinancingInstallmentsDto[];
+	financingInstallmentsParking?: CreateFinancingInstallmentsDto[][];
+
+	@IsOptional()
+	@IsArray()
+	@ValidateNested({ each: true })
+	@Type(() => CreateSaleParkingDto)
+	parkings?: CreateSaleParkingDto[];
 
 	@IsOptional()
   @IsNumber({}, { message: 'El monto de reserva debe ser un número válido' })

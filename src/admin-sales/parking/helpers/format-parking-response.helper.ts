@@ -10,7 +10,6 @@ export const formatParkingResponse = (
     area: parking.area,
     price: parking.price,
     status: parking.status,
-    currency: parking.currency,
     projectId: parking.project.id,
     projectName: parking.project.name,
     createdAt: parking.createdAt,

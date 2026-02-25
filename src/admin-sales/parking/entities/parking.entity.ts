@@ -35,13 +35,6 @@ export class Parking {
   })
   status: LotStatus;
 
-  @Column({
-    type: 'enum',
-    enum: CurrencyType,
-    default: CurrencyType.PEN,
-  })
-  currency: CurrencyType;
-
   @ManyToOne(() => Project, { nullable: false, onDelete: 'CASCADE' })
   project: Project;
 

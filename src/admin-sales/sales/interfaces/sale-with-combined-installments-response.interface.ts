@@ -1,5 +1,6 @@
 import { CurrencyType } from 'src/project/entities/project.entity';
 import { StatusPayment } from 'src/admin-payments/payments/enums/status-payments.enum';
+import { SaleParkingResponseDto } from 'src/admin-sales/sale-parking/dto/sale-parking-response.dto';
 
 export interface FinancingInstallmentDetail {
   id: string;
@@ -79,6 +80,8 @@ export interface SaleWithCombinedInstallmentsResponse {
     lot: FinancingDetail;
     hu?: FinancingDetail;
   };
+
+  saleParking?: SaleParkingResponseDto[];
 
   guarantor: {
     firstName: string;
