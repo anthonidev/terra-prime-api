@@ -32,6 +32,7 @@ import { Paginated } from 'src/common/interfaces/paginated.interface';
 import { CompletePaymentDto } from '../dto/complete-payment.dto';
 import { NexusApiService } from 'src/external-api/nexus-api.service';
 import { PaymentNotificationAction } from 'src/external-api/dto/payment-approved-notification.dto';
+import { envs } from 'src/config/envs';
 import { CreatePaymentWithUrlDto } from '../dto/create-payment-with-url.dto';
 import { BulkCreatePaymentsDto } from '../dto/bulk-create-payments.dto';
 import { InvoicesService } from 'src/invoices/invoices.service';
@@ -674,13 +675,8 @@ export class PaymentsService {
         const approvedPayment = await queryRunner.manager.save(payment);
         const statusResult = await this.updateStatusApprovedPayment(payment, queryRunner);
 
-        // Notificar a Nexus si el pago tiene bankName === 'NEXUS' en el primer item
-        if (
-          payment.details &&
-          payment.details.length > 0 &&
-          payment.details[0].bankName === 'NEXUS' &&
-          statusResult
-        ) {
+        // Notificar a Nexus si el pago fue registrado por el usuario externo
+        if (statusResult && payment.user?.id === envs.externalUserId) {
           await this.notifyNexusPaymentStatusChange(
             payment,
             reviewedById,
@@ -896,14 +892,8 @@ export class PaymentsService {
           await this.revertInstallmentsPayment(paymentId, queryRunner);
         }
 
-        // Notificar a Nexus si el pago tiene bankName === 'NEXUS'
-        if (
-          payment.details &&
-          payment.details.length > 0 &&
-          payment.details[0].bankName === 'NEXUS' &&
-          rejectedSaleId &&
-          rejectedNewStatus
-        ) {
+        // Notificar a Nexus si el pago fue registrado por el usuario externo
+        if (rejectedSaleId && rejectedNewStatus && payment.user?.id === envs.externalUserId) {
           await this.notifyNexusPaymentStatusChange(
             payment,
             reviewedById,
