@@ -31,6 +31,7 @@ import { PaymentAllResponse } from '../interfaces/payment-all-response.interface
 import { Paginated } from 'src/common/interfaces/paginated.interface';
 import { CompletePaymentDto } from '../dto/complete-payment.dto';
 import { NexusApiService } from 'src/external-api/nexus-api.service';
+import { PaymentNotificationAction } from 'src/external-api/dto/payment-approved-notification.dto';
 import { CreatePaymentWithUrlDto } from '../dto/create-payment-with-url.dto';
 import { BulkCreatePaymentsDto } from '../dto/bulk-create-payments.dto';
 import { InvoicesService } from 'src/invoices/invoices.service';
@@ -671,15 +672,21 @@ export class PaymentsService {
           Descripción: `Pago aprobado el ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString()}`,
         };
         const approvedPayment = await queryRunner.manager.save(payment);
-        await this.updateStatusApprovedPayment(payment, queryRunner);
+        const statusResult = await this.updateStatusApprovedPayment(payment, queryRunner);
 
         // Notificar a Nexus si el pago tiene bankName === 'NEXUS' en el primer item
         if (
           payment.details &&
           payment.details.length > 0 &&
-          payment.details[0].bankName === 'NEXUS'
+          payment.details[0].bankName === 'NEXUS' &&
+          statusResult
         ) {
-          await this.notifyNexusPaymentApproved(payment, reviewedById);
+          await this.notifyNexusPaymentStatusChange(
+            payment,
+            reviewedById,
+            statusResult.newStatus,
+            PaymentNotificationAction.APPROVED,
+          );
         }
 
         return {
@@ -714,6 +721,9 @@ export class PaymentsService {
         payment.reviewedBy = { id: reviewedById } as any;
         payment.reviewedAt = new Date();
         const canceledPayment = await queryRunner.manager.save(payment);
+
+        let rejectedSaleId: string | null = null;
+        let rejectedNewStatus: StatusSale | null = null;
 
         // ========== REVERTIR PAGO DE RESERVA ==========
         if (
@@ -762,6 +772,8 @@ export class PaymentsService {
             newStatus,
             queryRunner,
           );
+          rejectedSaleId = payment.relatedEntityId;
+          rejectedNewStatus = newStatus;
         }
 
         // ========== REVERTIR PAGO DE VENTA COMPLETA ==========
@@ -810,6 +822,8 @@ export class PaymentsService {
             newStatus,
             queryRunner,
           );
+          rejectedSaleId = payment.relatedEntityId;
+          rejectedNewStatus = newStatus;
         }
 
         // ========== REVERTIR PAGO INICIAL DE FINANCIAMIENTO ==========
@@ -870,6 +884,8 @@ export class PaymentsService {
             newStatus,
             queryRunner,
           );
+          rejectedSaleId = sale.id;
+          rejectedNewStatus = newStatus;
         }
 
         // ========== REVERTIR PAGOS DE CUOTAS ==========
@@ -878,6 +894,22 @@ export class PaymentsService {
           payment.relatedEntityId
         ) {
           await this.revertInstallmentsPayment(paymentId, queryRunner);
+        }
+
+        // Notificar a Nexus si el pago tiene bankName === 'NEXUS'
+        if (
+          payment.details &&
+          payment.details.length > 0 &&
+          payment.details[0].bankName === 'NEXUS' &&
+          rejectedSaleId &&
+          rejectedNewStatus
+        ) {
+          await this.notifyNexusPaymentStatusChange(
+            payment,
+            reviewedById,
+            rejectedNewStatus,
+            PaymentNotificationAction.REJECTED,
+          );
         }
 
         return {
@@ -1999,7 +2031,7 @@ export class PaymentsService {
     payment: Payment,
     queryRunner: QueryRunner,
     skipStatusValidation = false,
-  ) {
+  ): Promise<{ saleId: string; newStatus: StatusSale } | null> {
     let sale;
 
     // ========== PAGO DE RESERVA ==========
@@ -2070,6 +2102,8 @@ export class PaymentsService {
         newStatus,
         queryRunner,
       );
+
+      return { saleId: payment.relatedEntityId, newStatus };
     }
 
     // ========== PAGO DE VENTA COMPLETA (DIRECT PAYMENT) ==========
@@ -2123,6 +2157,8 @@ export class PaymentsService {
         newStatus,
         queryRunner,
       );
+
+      return { saleId: payment.relatedEntityId, newStatus };
     }
 
     // ========== PAGO INICIAL DE FINANCIAMIENTO ==========
@@ -2184,16 +2220,20 @@ export class PaymentsService {
       }
 
       await this.salesService.updateStatusSale(sale.id, newStatus, queryRunner);
+
+      return { saleId: sale.id, newStatus };
     }
 
+    return null;
   }
 
-  private async notifyNexusPaymentApproved(
+  private async notifyNexusPaymentStatusChange(
     payment: Payment,
     reviewedById: string,
+    saleStatus: string,
+    action: PaymentNotificationAction,
   ): Promise<void> {
     try {
-      // Obtener información del usuario que aprobó el pago
       const reviewer = await this.paymentRepository.manager.findOne('User', {
         where: { id: reviewedById },
         select: ['firstName', 'lastName', 'email'],
@@ -2213,25 +2253,27 @@ export class PaymentsService {
       const reviewerEmail = reviewer?.email || 'No disponible';
 
       const metadata = {
-        'Aprobación realizada por': `${reviewerName} (${reviewerEmail})`,
+        'Revisado por': `${reviewerName} (${reviewerEmail})`,
         Fecha: new Date().toLocaleString('es-PE', { timeZone: 'America/Lima' }),
         'Monto del pago': payment.amount,
       };
 
       await this.nexusApiService.notifyPaymentApproved({
         saleId,
+        saleStatus,
+        action,
         metadata,
       });
 
       this.logger.log(
-        `Notificación a Nexus exitosa para Payment ID: ${payment.id}, Sale ID: ${saleId}`,
+        `Notificación a Nexus exitosa (${action}) para Payment ID: ${payment.id}, Sale ID: ${saleId}, Status: ${saleStatus}`,
       );
     } catch (error) {
       this.logger.error(
-        `Error al notificar a Nexus sobre aprobación de pago. Payment ID: ${payment.id}. Error: ${error.message}`,
+        `Error al notificar a Nexus (${action}) para Payment ID: ${payment.id}. Error: ${error.message}`,
         error.stack,
       );
-      // No lanzamos el error para no afectar el flujo principal de aprobación
+      // No lanzamos el error para no afectar el flujo principal
     }
   }
 
