@@ -585,7 +585,7 @@ export class InvoicesService {
             unitPrice: 0, // Se calculará
             discount: 0,
             subtotal: 0, // Se calculará
-            igvType: IgvType.UNAFFECTED_ONEROUS_OPERATION, // Inafecto - SIN IGV para pago de cuotas
+            igvType: IgvType.EXONERATED_ONEROUS_OPERATION, // Exonerado - SIN IGV para pago de cuotas
             igv: 0,
             total: 0, // Se calculará
           });
@@ -665,7 +665,7 @@ export class InvoicesService {
         unitPrice: 0, // Se calculará
         discount: 0,
         subtotal: 0, // Se calculará
-        igvType: IgvType.UNAFFECTED_ONEROUS_OPERATION, // Inafecto - SIN IGV
+        igvType: IgvType.EXONERATED_ONEROUS_OPERATION, // Exonerado - SIN IGV
         igv: 0,
         total: 0, // Se calculará
       });
@@ -684,7 +684,7 @@ export class InvoicesService {
         unitPrice: 0, // Se calculará
         discount: 0,
         subtotal: 0, // Se calculará
-        igvType: IgvType.UNAFFECTED_ONEROUS_OPERATION, // Inafecto - SIN IGV
+        igvType: IgvType.EXONERATED_ONEROUS_OPERATION, // Exonerado - SIN IGV
         igv: 0,
         total: 0, // Se calculará
       });
@@ -703,7 +703,7 @@ export class InvoicesService {
         unitPrice: 0, // Se calculará
         discount: 0,
         subtotal: 0, // Se calculará
-        igvType: IgvType.UNAFFECTED_ONEROUS_OPERATION, // Inafecto - SIN IGV
+        igvType: IgvType.EXONERATED_ONEROUS_OPERATION, // Exonerado - SIN IGV
         igv: 0,
         total: 0, // Se calculará
       });
